@@ -50,4 +50,51 @@ export default function DashboardPage() {
               <div className="flex items-center gap-3 px-3 py-2.5 text-sm font-medium text-zinc-500 hover:text-white cursor-pointer">
                 <span>◉</span> Staff
               </div>
-              <div classNa
+              <div className="flex items-center gap-3 px-3 py-2.5 text-sm font-medium text-zinc-500 hover:text-white cursor-pointer">
+                <span>◬</span> Analytics
+              </div>
+            </>
+          )}
+        </nav>
+        <div className="px-6 py-4 border-t border-zinc-800 flex items-center gap-3">
+          <div className="w-9 h-9 bg-yellow-400 text-black flex items-center justify-center font-bold text-sm">
+            {user.name.split(" ").map((n) => n[0]).join("").slice(0, 2)}
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold truncate">{user.name}</p>
+            <p className="text-[10px] font-mono text-zinc-600 uppercase tracking-wide">{user.role}</p>
+          </div>
+          <button onClick={() => { localStorage.removeItem("currentUser"); router.push("/"); }} className="text-[11px] font-mono text-zinc-600 uppercase hover:text-red-500 transition-colors">
+            Exit
+          </button>
+        </div>
+      </aside>
+
+      <main className="flex-1 p-10">
+        <div className="flex justify-between items-end mb-8 pb-5 border-b border-zinc-800">
+          <div>
+            <h2 className="text-3xl font-black tracking-tight">{user.role === "Owner" ? "Command Center" : "My Tasks"}</h2>
+            <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mt-1">Welcome back, {user.name.split(" ")[0]} — system online</p>
+          </div>
+        </div>
+        <div className="grid grid-cols-4 gap-px bg-zinc-800 border border-zinc-800 mb-8">
+          {[
+            { label: "Total Tasks", value: "0", sub: "today", color: "" },
+            { label: "Completed", value: "0", sub: "0% rate", color: "text-green-400" },
+            { label: "In Progress", value: "0", sub: "active", color: "text-yellow-400" },
+            { label: "Overdue", value: "0", sub: "needs action", color: "text-red-500" },
+          ].map((s) => (
+            <div key={s.label} className="bg-[#131316] p-5">
+              <p className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-2">{s.label}</p>
+              <p className={`text-4xl font-black tracking-tight ${s.color}`}>{s.value}</p>
+              <p className="text-[11px] font-mono text-zinc-600 mt-1.5">{s.sub}</p>
+            </div>
+          ))}
+        </div>
+        <div className="bg-[#131316] border border-zinc-800 p-10 text-center">
+          <p className="text-zinc-600 font-mono text-sm uppercase tracking-widest">No tasks yet — database coming next</p>
+        </div>
+      </main>
+    </div>
+  );
+}
