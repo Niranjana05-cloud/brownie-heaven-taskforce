@@ -1,7 +1,12 @@
 "use client";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { supabase } from "@/lib/supabase";
+import { createClient } from '@supabase/supabase-js';
+
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+);
 
 type Staff = { id: string; name: string; role: string; report_time: string | null };
 type Task = { id: string; title: string; status: string; priority: string; due_at: string; assigned_to: string; assigned_by: string };
