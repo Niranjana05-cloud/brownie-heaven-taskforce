@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
 const STAFF = [
@@ -12,73 +12,42 @@ const STAFF = [
   { id: "bharani", name: "Bharani", role: "Auditor" },
 ];
 
-export default function LoginPage() {
-  const [selectedUser, setSelectedUser] = useState("nishant");
+export default function DashboardPage() {
   const router = useRouter();
+  const [user, setUser] = useState<{ id: string; name: string; role: string } | null>(null);
 
-  const handleLogin = () => {
-    localStorage.setItem("currentUser", selectedUser);
-    router.push("/dashboard");
-  };
+  useEffect(() => {
+    const userId = localStorage.getItem("currentUser");
+    if (!userId) { router.push("/"); return; }
+    const found = STAFF.find((s) => s.id === userId);
+    if (!found) { router.push("/"); return; }
+    setUser(found);
+  }, [router]);
 
-  return (
-    <div className="min-h-screen bg-black flex items-center justify-center relative overflow-hidden">
-      <div
-        className="absolute inset-0"
-        style={{
-          backgroundImage:
-            "linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px)",
-          backgroundSize: "50px 50px",
-        }}
-      />
-      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[600px] h-[400px] bg-yellow-400/8 blur-[100px]" />
-      <div className="relative z-10 w-[420px] bg-zinc-950 border border-zinc-800 p-12">
-        <div className="border-b border-zinc-800 pb-6 mb-8">
-          <h1 className="text-4xl font-black tracking-tight text-white">
-            TASK<span className="text-yellow-400">FORCE</span>
-          </h1>
-          <p className="mt-1 text-[11px] font-mono text-zinc-500 uppercase tracking-widest">
-            Brownie Heaven // Staff Accountability System
-          </p>
-        </div>
-        <div className="space-y-5">
-          <div>
-            <label className="block text-[11px] font-mono text-zinc-500 uppercase tracking-widest mb-2">
-              Select User
-            </label>
-            <select
-              value={selectedUser}
-              onChange={(e) => setSelectedUser(e.target.value)}
-              className="w-full bg-black border border-zinc-800 text-white px-4 py-3.5 focus:outline-none focus:border-yellow-400 transition-colors font-mono text-sm"
-            >
-              {STAFF.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name} — {s.role}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="block text-[11px] font-mono text-zinc-500 uppercase tracking-widest mb-2">
-              Access Code
-            </label>
-            <input
-              type="password"
-              defaultValue="123456"
-              className="w-full bg-black border border-zinc-800 text-white px-4 py-3.5 focus:outline-none focus:border-yellow-400 transition-colors"
-            />
-          </div>
-          <button
-            onClick={handleLogin}
-            className="w-full bg-yellow-400 text-black font-bold tracking-widest text-sm py-4 hover:opacity-90 transition-opacity uppercase mt-2"
-          >
-            Enter System →
-          </button>
-        </div>
-        <div className="mt-6 p-3 bg-yellow-400/5 border-l-2 border-yellow-400 text-xs text-zinc-400 leading-relaxed">
-          <strong className="text-white">BROWNIE HEAVEN.</strong> Internal use only. All actions are logged.
-        </div>
-      </div>
+  if (!user) return (
+    <div className="min-h-screen bg-black flex items-center justify-center">
+      <p className="text-zinc-500 font-mono text-sm uppercase tracking-widest">Loading...</p>
     </div>
   );
-}
+
+  return (
+    <div className="min-h-screen bg-[#0a0a0b] text-white flex">
+      <aside className="w-60 bg-[#131316] border-r border-zinc-800 flex flex-col">
+        <div className="px-6 py-6 border-b border-zinc-800">
+          <h1 className="text-xl font-black tracking-tight">TASK<span className="text-yellow-400">FORCE</span></h1>
+          <p className="text-[10px] font-mono text-zinc-600 uppercase tracking-widest mt-1">Brownie Heaven</p>
+        </div>
+        <nav className="flex-1 px-3 py-4">
+          <p className="text-[10px] font-mono text-zinc-600 uppercase tracking-widest px-3 pb-2">Workspace</p>
+          <div className="flex items-center gap-3 px-3 py-2.5 text-sm font-medium text-white bg-zinc-900 border-l-2 border-yellow-400">
+            <span>▣</span> Dashboard
+          </div>
+          <div className="flex items-center gap-3 px-3 py-2.5 text-sm font-medium text-zinc-500 hover:text-white cursor-pointer">
+            <span>≡</span> Tasks
+          </div>
+          {user.role === "Owner" && (
+            <>
+              <div className="flex items-center gap-3 px-3 py-2.5 text-sm font-medium text-zinc-500 hover:text-white cursor-pointer">
+                <span>◉</span> Staff
+              </div>
+              <div classNa
