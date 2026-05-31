@@ -1,172 +1,83 @@
 "use client";
-
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 
-const STAFF: Record<string, { name: string; role: string; initials: string }> = {
-  nishant: { name: "Nishant Vijayakumar", role: "Owner", initials: "NV" },
-  arun: { name: "Arun Kumar", role: "Manager", initials: "AK" },
-  nilani: { name: "Nilani Nallamuthu", role: "HR", initials: "NN" },
-  gowtham: { name: "Gowtham", role: "Purchase Manager", initials: "GO" },
-  vishnu: { name: "Vishnu", role: "Asst. Operation Manager", initials: "VI" },
-  ahila: { name: "Ahila", role: "Custom Cakes & Asst Ops", initials: "AH" },
-  bharani: { name: "Bharani", role: "Auditor", initials: "BH" },
-};
-
-const SAMPLE_TASKS = [
-  { id: 1, title: "Previous day sales review", time: "8:30 AM - 9:30 AM", status: "completed", priority: "high" },
-  { id: 2, title: "Outlet manager morning calls", time: "9:30 AM - 10:30 AM", status: "in_progress", priority: "high" },
-  { id: 3, title: "Online platform audit (Swiggy/Zomato)", time: "10:30 AM - 12:00 PM", status: "assigned", priority: "medium" },
-  { id: 4, title: "Outlet visit / sales push", time: "12:00 PM - 2:00 PM", status: "assigned", priority: "medium" },
-  { id: 5, title: "Midday sales run-rate review", time: "2:00 PM - 3:00 PM", status: "overdue", priority: "critical" },
-  { id: 6, title: "Evening peak readiness", time: "5:00 PM - 7:00 PM", status: "assigned", priority: "high" },
-  { id: 7, title: "End-of-day sales report", time: "9:30 PM - 10:30 PM", status: "assigned", priority: "critical" },
+const STAFF = [
+  { id: "nishant", name: "Nishant Vijayakumar", role: "Owner" },
+  { id: "arun", name: "Arun Kumar", role: "Manager" },
+  { id: "nilani", name: "Nilani Nallamuthu", role: "HR" },
+  { id: "gowtham", name: "Gowtham", role: "Purchase Manager" },
+  { id: "vishnu", name: "Vishnu", role: "Asst. Ops Manager" },
+  { id: "ahila", name: "Ahila", role: "Custom Cakes & Asst Ops" },
+  { id: "bharani", name: "Bharani", role: "Auditor" },
 ];
 
-export default function Dashboard() {
-  const [userId, setUserId] = useState<string | null>(null);
+export default function LoginPage() {
+  const [selectedUser, setSelectedUser] = useState("nishant");
   const router = useRouter();
 
-  useEffect(() => {
-    const stored = localStorage.getItem("currentUser");
-    if (!stored) {
-      router.push("/");
-      return;
-    }
-    setUserId(stored);
-  }, [router]);
-
-  if (!userId) return null;
-
-  const user = STAFF[userId];
-
-  const handleLogout = () => {
-    localStorage.removeItem("currentUser");
-    router.push("/");
+  const handleLogin = () => {
+    localStorage.setItem("currentUser", selectedUser);
+    router.push("/dashboard");
   };
 
-  const completed = SAMPLE_TASKS.filter((t) => t.status === "completed").length;
-  const inProgress = SAMPLE_TASKS.filter((t) => t.status === "in_progress").length;
-  const overdue = SAMPLE_TASKS.filter((t) => t.status === "overdue").length;
-  const total = SAMPLE_TASKS.length;
-
   return (
-    <div className="min-h-screen bg-black text-white grid grid-cols-[240px_1fr]">
-      <aside className="bg-zinc-950 border-r border-zinc-800 p-6 flex flex-col">
-        <div className="border-b border-zinc-800 pb-4 mb-4">
-          <div className="text-2xl font-black tracking-tight">
+    <div className="min-h-screen bg-black flex items-center justify-center relative overflow-hidden">
+      <div
+        className="absolute inset-0"
+        style={{
+          backgroundImage:
+            "linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px)",
+          backgroundSize: "50px 50px",
+        }}
+      />
+      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[600px] h-[400px] bg-yellow-400/8 blur-[100px]" />
+      <div className="relative z-10 w-[420px] bg-zinc-950 border border-zinc-800 p-12">
+        <div className="border-b border-zinc-800 pb-6 mb-8">
+          <h1 className="text-4xl font-black tracking-tight text-white">
             TASK<span className="text-yellow-400">FORCE</span>
-          </div>
-          <div className="text-[10px] font-mono text-zinc-600 uppercase tracking-widest mt-1">
-            Brownie Heaven
-          </div>
+          </h1>
+          <p className="mt-1 text-[11px] font-mono text-zinc-500 uppercase tracking-widest">
+            Brownie Heaven // Staff Accountability System
+          </p>
         </div>
-
-        <nav className="space-y-1 flex-1">
-          <div className="text-[10px] font-mono text-zinc-600 uppercase tracking-widest px-3 py-2">
-            Workspace
+        <div className="space-y-5">
+          <div>
+            <label className="block text-[11px] font-mono text-zinc-500 uppercase tracking-widest mb-2">
+              Select User
+            </label>
+            <select
+              value={selectedUser}
+              onChange={(e) => setSelectedUser(e.target.value)}
+              className="w-full bg-black border border-zinc-800 text-white px-4 py-3.5 focus:outline-none focus:border-yellow-400 transition-colors font-mono text-sm"
+            >
+              {STAFF.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name} — {s.role}
+                </option>
+              ))}
+            </select>
           </div>
-          <div className="bg-zinc-900 border-l-2 border-yellow-400 px-3 py-2.5 text-sm font-medium">
-            Dashboard
-          </div>
-          <div className="px-3 py-2.5 text-sm text-zinc-500 hover:text-white cursor-pointer">
-            Tasks
-          </div>
-          <div className="px-3 py-2.5 text-sm text-zinc-500 hover:text-white cursor-pointer">
-            Staff
-          </div>
-          <div className="px-3 py-2.5 text-sm text-zinc-500 hover:text-white cursor-pointer">
-            Analytics
-          </div>
-        </nav>
-
-        <div className="border-t border-zinc-800 pt-4 flex items-center gap-3">
-          <div className="w-9 h-9 bg-yellow-400 text-black flex items-center justify-center font-bold text-xs">
-            {user.initials}
-          </div>
-          <div className="flex-1 min-w-0">
-            <div className="text-sm font-semibold truncate">{user.name.split(" ")[0]}</div>
-            <div className="text-[10px] font-mono text-zinc-600 uppercase tracking-wider truncate">
-              {user.role}
-            </div>
+          <div>
+            <label className="block text-[11px] font-mono text-zinc-500 uppercase tracking-widest mb-2">
+              Access Code
+            </label>
+            <input
+              type="password"
+              defaultValue="123456"
+              className="w-full bg-black border border-zinc-800 text-white px-4 py-3.5 focus:outline-none focus:border-yellow-400 transition-colors"
+            />
           </div>
           <button
-            onClick={handleLogout}
-            className="text-[10px] font-mono text-zinc-600 hover:text-red-500 uppercase tracking-widest"
+            onClick={handleLogin}
+            className="w-full bg-yellow-400 text-black font-bold tracking-widest text-sm py-4 hover:opacity-90 transition-opacity uppercase mt-2"
           >
-            Exit
+            Enter System →
           </button>
         </div>
-      </aside>
-
-      <main className="p-10 overflow-y-auto">
-        <div className="border-b border-zinc-800 pb-5 mb-8 flex justify-between items-end">
-          <div>
-            <h1 className="text-4xl font-black tracking-tight">
-              {user.role === "Owner" ? "Command Center" : "My Tasks"}
-            </h1>
-            <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mt-1">
-              Welcome back, {user.name} // Live operational overview
-            </p>
-          </div>
-          {user.role === "Owner" && (
-            <button className="bg-yellow-400 text-black font-bold uppercase text-xs tracking-widest px-5 py-3 hover:opacity-90">
-              + Assign Task
-            </button>
-          )}
+        <div className="mt-6 p-3 bg-yellow-400/5 border-l-2 border-yellow-400 text-xs text-zinc-400 leading-relaxed">
+          <strong className="text-white">BROWNIE HEAVEN.</strong> Internal use only. All actions are logged.
         </div>
-
-        <div className="grid grid-cols-4 gap-px bg-zinc-800 border border-zinc-800 mb-8">
-          <Stat label="Total Tasks Today" value={total} sub="across all staff" />
-          <Stat label="Completed" value={completed} sub={`${Math.round((completed / total) * 100)}% completion`} color="text-green-400" />
-          <Stat label="In Progress" value={inProgress} sub="currently active" color="text-yellow-400" />
-          <Stat label="Overdue" value={overdue} sub={overdue > 0 ? "requires escalation" : "all clear"} color="text-red-500" />
-        </div>
-
-        <h2 className="text-xs font-bold uppercase tracking-widest text-zinc-500 mb-4">
-          Active Tasks
-        </h2>
-        <div className="bg-zinc-950 border border-zinc-800">
-          {SAMPLE_TASKS.map((task) => (
-            <TaskRow key={task.id} task={task} />
-          ))}
-        </div>
-      </main>
-    </div>
-  );
-}
-
-function Stat({ label, value, sub, color = "text-white" }: { label: string; value: number; sub: string; color?: string }) {
-  return (
-    <div className="bg-zinc-950 p-5">
-      <div className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-2">{label}</div>
-      <div className={`text-4xl font-black tracking-tight ${color}`}>{value}</div>
-      <div className="text-[11px] font-mono text-zinc-600 mt-1.5">{sub}</div>
-    </div>
-  );
-}
-
-function TaskRow({ task }: { task: typeof SAMPLE_TASKS[0] }) {
-  const statusStyles: Record<string, string> = {
-    completed: "bg-green-400/10 text-green-400",
-    in_progress: "bg-yellow-400/15 text-yellow-400",
-    assigned: "bg-zinc-900 text-zinc-400",
-    overdue: "bg-red-500/10 text-red-500",
-  };
-  const priorityDot: Record<string, string> = {
-    low: "bg-zinc-600",
-    medium: "bg-zinc-500",
-    high: "bg-yellow-400",
-    critical: "bg-red-500",
-  };
-  const isOverdue = task.status === "overdue";
-  return (
-    <div className={`grid grid-cols-[20px_1fr_180px_120px] items-center gap-4 px-5 py-4 border-b border-zinc-800 last:border-b-0 ${isOverdue ? "bg-red-500/5 border-l-2 border-l-red-500" : ""}`}>
-      <div className={`w-2 h-2 rounded-full ${priorityDot[task.priority]}`} />
-      <div className="font-medium text-sm">{task.title}</div>
-      <div className="font-mono text-xs text-zinc-500">{task.time}</div>
-      <div className={`text-[10px] font-mono font-bold uppercase tracking-widest px-2 py-1 text-center ${statusStyles[task.status]}`}>
-        {task.status.replace("_", " ")}
       </div>
     </div>
   );
