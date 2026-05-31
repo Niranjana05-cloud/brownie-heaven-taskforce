@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 
 const STAFF = [
@@ -12,110 +12,40 @@ const STAFF = [
   { id: "bharani", name: "Bharani", role: "Auditor" },
 ];
 
-export default function DashboardPage() {
+export default function LoginPage() {
+  const [selectedUser, setSelectedUser] = useState("nishant");
   const router = useRouter();
-  const [user, setUser] = useState<{ id: string; name: string; role: string } | null>(null);
 
-  useEffect(() => {
-    const userId = localStorage.getItem("currentUser");
-    if (!userId) { router.push("/"); return; }
-    const found = STAFF.find((s) => s.id === userId);
-    if (!found) { router.push("/"); return; }
-    setUser(found);
-  }, [router]);
-
-  if (!user) return (
-    <div className="min-h-screen bg-black flex items-center justify-center">
-      <p className="text-zinc-500 font-mono text-sm uppercase tracking-widest">Loading...</p>
-    </div>
-  );
+  const handleLogin = () => {
+    localStorage.setItem("currentUser", selectedUser);
+    router.push("/dashboard");
+  };
 
   return (
-    <div className="min-h-screen bg-[#0a0a0b] text-white flex">
-      {/* Sidebar */}
-      <aside className="w-60 bg-[#131316] border-r border-zinc-800 flex flex-col">
-        <div className="px-6 py-6 border-b border-zinc-800">
-          <h1 className="text-xl font-black tracking-tight">
-            TASK<span className="text-yellow-400">FORCE</span>
-          </h1>
-          <p className="text-[10px] font-mono text-zinc-600 uppercase tracking-widest mt-1">
-            Brownie Heaven
-          </p>
+    <div className="min-h-screen bg-black flex items-center justify-center relative overflow-hidden">
+      <div className="absolute inset-0" style={{ backgroundImage: "linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px)", backgroundSize: "50px 50px" }} />
+      <div className="relative z-10 w-[420px] bg-zinc-950 border border-zinc-800 p-12">
+        <div className="border-b border-zinc-800 pb-6 mb-8">
+          <h1 className="text-4xl font-black tracking-tight text-white">TASK<span className="text-yellow-400">FORCE</span></h1>
+          <p className="mt-1 text-[11px] font-mono text-zinc-500 uppercase tracking-widest">Brownie Heaven // Staff Accountability System</p>
         </div>
-        <nav className="flex-1 px-3 py-4">
-          <p className="text-[10px] font-mono text-zinc-600 uppercase tracking-widest px-3 pb-2">
-            Workspace
-          </p>
-          <div className="flex items-center gap-3 px-3 py-2.5 text-sm font-medium text-white bg-zinc-900 border-l-2 border-yellow-400">
-            <span>▣</span> Dashboard
-          </div>
-          <div className="flex items-center gap-3 px-3 py-2.5 text-sm font-medium text-zinc-500 hover:text-white cursor-pointer">
-            <span>≡</span> Tasks
-          </div>
-          {user.role === "Owner" && (
-            <>
-              <div className="flex items-center gap-3 px-3 py-2.5 text-sm font-medium text-zinc-500 hover:text-white cursor-pointer">
-                <span>◉</span> Staff
-              </div>
-              <div className="flex items-center gap-3 px-3 py-2.5 text-sm font-medium text-zinc-500 hover:text-white cursor-pointer">
-                <span>◬</span> Analytics
-              </div>
-            </>
-          )}
-        </nav>
-        <div className="px-6 py-4 border-t border-zinc-800 flex items-center gap-3">
-          <div className="w-9 h-9 bg-yellow-400 text-black flex items-center justify-center font-bold text-sm">
-            {user.name.split(" ").map((n) => n[0]).join("").slice(0, 2)}
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-semibold truncate">{user.name}</p>
-            <p className="text-[10px] font-mono text-zinc-600 uppercase tracking-wide">{user.role}</p>
-          </div>
-          <button
-            onClick={() => { localStorage.removeItem("currentUser"); router.push("/"); }}
-            className="text-[11px] font-mono text-zinc-600 uppercase hover:text-red-500 transition-colors"
-          >
-            Exit
-          </button>
-        </div>
-      </aside>
-
-      {/* Main */}
-      <main className="flex-1 p-10">
-        <div className="flex justify-between items-end mb-8 pb-5 border-b border-zinc-800">
+        <div className="space-y-5">
           <div>
-            <h2 className="text-3xl font-black tracking-tight">
-              {user.role === "Owner" ? "Command Center" : "My Tasks"}
-            </h2>
-            <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mt-1">
-              Welcome back, {user.name.split(" ")[0]} — system online
-            </p>
+            <label className="block text-[11px] font-mono text-zinc-500 uppercase tracking-widest mb-2">Select User</label>
+            <select value={selectedUser} onChange={(e) => setSelectedUser(e.target.value)} className="w-full bg-black border border-zinc-800 text-white px-4 py-3.5 focus:outline-none focus:border-yellow-400 transition-colors font-mono text-sm">
+              {STAFF.map((s) => <option key={s.id} value={s.id}>{s.name} — {s.role}</option>)}
+            </select>
           </div>
+          <div>
+            <label className="block text-[11px] font-mono text-zinc-500 uppercase tracking-widest mb-2">Access Code</label>
+            <input type="password" defaultValue="123456" className="w-full bg-black border border-zinc-800 text-white px-4 py-3.5 focus:outline-none focus:border-yellow-400 transition-colors" />
+          </div>
+          <button onClick={handleLogin} className="w-full bg-yellow-400 text-black font-bold tracking-widest text-sm py-4 hover:opacity-90 transition-opacity uppercase mt-2">Enter System →</button>
         </div>
-
-        {/* Stats */}
-        <div className="grid grid-cols-4 gap-px bg-zinc-800 border border-zinc-800 mb-8">
-          {[
-            { label: "Total Tasks", value: "0", sub: "today" },
-            { label: "Completed", value: "0", sub: "0% rate", color: "text-green-400" },
-            { label: "In Progress", value: "0", sub: "active", color: "text-yellow-400" },
-            { label: "Overdue", value: "0", sub: "needs action", color: "text-red-500" },
-          ].map((s) => (
-            <div key={s.label} className="bg-[#131316] p-5">
-              <p className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-2">{s.label}</p>
-              <p className={`text-4xl font-black tracking-tight ${s.color ?? ""}`}>{s.value}</p>
-              <p className="text-[11px] font-mono text-zinc-600 mt-1.5">{s.sub}</p>
-            </div>
-          ))}
+        <div className="mt-6 p-3 bg-yellow-400/5 border-l-2 border-yellow-400 text-xs text-zinc-400 leading-relaxed">
+          <strong className="text-white">BROWNIE HEAVEN.</strong> Internal use only. All actions are logged.
         </div>
-
-        {/* Empty state */}
-        <div className="bg-[#131316] border border-zinc-800 p-10 text-center">
-          <p className="text-zinc-600 font-mono text-sm uppercase tracking-widest">
-            No tasks yet — database coming next
-          </p>
-        </div>
-      </main>
+      </div>
     </div>
   );
 }
