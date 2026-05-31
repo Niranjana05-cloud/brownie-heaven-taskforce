@@ -20,7 +20,14 @@ export default function DashboardPage() {
   useEffect(() => {
     const stored = localStorage.getItem("currentUser");
     if (!stored) { router.push("/"); return; }
-    const parsed = JSON.parse(stored);
+   let parsed;
+try {
+  parsed = JSON.parse(stored);
+} catch {
+  localStorage.removeItem("currentUser");
+  router.push("/");
+  return;
+}
     setUser(parsed);
     fetchTasks(parsed);
   }, [router]);
