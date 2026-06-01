@@ -40,7 +40,19 @@ export default function DashboardPage() {
     const stored = localStorage.getItem("currentUser");
     if (!stored) { router.push("/"); return; }
     let parsed;
-    try { parsed = JSON.parse(stored); } catch { router.push("/"); return; }
+try { 
+  parsed = JSON.parse(stored);
+  if (typeof parsed === 'string') {
+    localStorage.removeItem("currentUser");
+    router.push("/");
+    return;
+  }
+} catch { 
+  localStorage.removeItem("currentUser");
+  router.push("/"); 
+  return; 
+}
+    
     setUser(parsed);
     fetchTasks(parsed);
   }, [router]);
