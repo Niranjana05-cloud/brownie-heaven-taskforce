@@ -313,7 +313,7 @@ export default function DashboardPage() {
             <span>▣</span> Dashboard
           </div>
           {hasReportDuty && (
-            <div onClick={() => { setActiveTab("my_reports"); setSidebarOpen(false); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "my_reports" ? "text-white bg-zinc-900 border-l-2 border-yellow-400" : "text-zinc-500 hover:text-white"}`}>
+            <div onClick={() => { setActiveTab("my_report"); setSidebarOpen(false); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "my_reports" ? "text-white bg-zinc-900 border-l-2 border-yellow-400" : "text-zinc-500 hover:text-white"}`}>
               <span>📋</span> My Report
               {!todayReport && <span className="ml-auto w-2 h-2 bg-yellow-400 rounded-full"></span>}
             </div>
