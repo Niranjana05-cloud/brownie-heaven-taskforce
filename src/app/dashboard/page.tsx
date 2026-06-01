@@ -126,7 +126,11 @@ export default function DashboardPage() {
     await supabase.from("tasks").update({ status, ...(status === "completed" ? { completed_at: new Date().toISOString() } : {}) }).eq("id", taskId);
     if (user) fetchTasks(user);
   };
-
+const deleteTask = async (taskId: string) => {
+  if (!confirm("Delete this task?")) return;
+  await supabase.from("tasks").delete().eq("id", taskId);
+  if (user) fetchTasks(user);
+};
   const submitForceAck = async (action: "complete" | "reason") => {
     if (!overdueTask) return;
     if (action === "reason") {
@@ -300,6 +304,9 @@ export default function DashboardPage() {
                           <>
                             {t.status === "assigned" && <button onClick={() => updateStatus(t.id, "in_progress")} className="text-[10px] font-mono uppercase tracking-widest px-2 py-1 border border-zinc-700 hover:border-yellow-400 hover:text-yellow-400 transition-colors">Start</button>}
                             <button onClick={() => updateStatus(t.id, "completed")} className="text-[10px] font-mono uppercase tracking-widest px-2 py-1 border border-zinc-700 hover:border-green-400 hover:text-green-400 transition-colors">Done</button>
+                            {user.role === "Owner" && (
+                            <button onClick={() => deleteTask(t.id)} className="text-[10px] font-mono uppercase tracking-widest px-2 py-1 border border-zinc-700 hover:border-red-500 hover:text-red-500 transition-colors">✕</button>
+                            )}
                           </>
                         )}
                       </div>
