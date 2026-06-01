@@ -43,6 +43,7 @@ export default function DashboardPage() {
   const [taskPriority, setTaskPriority] = useState("medium");
   const [taskDueHours, setTaskDueHours] = useState("4");
   const [taskOutlet, setTaskOutlet] = useState("");
+  const [outletFilter, setOutletFilter] = useState("all");
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
@@ -221,6 +222,15 @@ if (u.role !== "Owner") {
               {canAssign && (
                 <button onClick={() => setShowModal(true)} className="bg-yellow-400 text-black font-bold tracking-widest text-xs px-5 py-3 hover:opacity-90 transition-opacity uppercase">+ Assign Task</button>
               )}
+              {user.role === "Owner" && (
+  <div className="flex gap-2 flex-wrap mt-4">
+    {["all", "royapettah", "adayar", "bsr_mall", "velachery", "ra_puram", "anna_nagar", "pallavaram", "vadapalani", "besant_nagar", "perumbakkam", "tambaram", "porur"].map(o => (
+      <button key={o} onClick={() => setOutletFilter(o)} className={`font-mono text-[10px] uppercase tracking-widest px-3 py-1.5 border transition-colors ${outletFilter === o ? "border-yellow-400 text-yellow-400" : "border-zinc-700 text-zinc-500 hover:border-zinc-500"}`}>
+        {o === "all" ? "All Outlets" : o.replace("_", " ")}
+      </button>
+    ))}
+  </div>
+)}
             </div>
             {user.role === "Owner" && (
   <div className="bg-[#131316] border border-zinc-800 mb-8">
@@ -285,7 +295,7 @@ if (u.role !== "Owner") {
               </div>
             ) : (
               <div className="bg-[#131316] border border-zinc-800">
-                {tasks.map((t) => {
+               {tasks.filter(t => outletFilter === "all" || t.outlet_id === outletFilter).map((t) => {
                   const assigneeName = ALL_STAFF.find(s => s.id === t.assigned_to)?.name || t.assigned_to;
                   const isOverdue = t.status !== "completed" && new Date(t.due_at) < new Date();
                   return (
