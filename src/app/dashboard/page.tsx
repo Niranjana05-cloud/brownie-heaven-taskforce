@@ -222,6 +222,45 @@ if (u.role !== "Owner") {
                 <button onClick={() => setShowModal(true)} className="bg-yellow-400 text-black font-bold tracking-widest text-xs px-5 py-3 hover:opacity-90 transition-opacity uppercase">+ Assign Task</button>
               )}
             </div>
+            {user.role === "Owner" && (
+  <div className="bg-[#131316] border border-zinc-800 mb-8">
+    <div className="px-5 py-3 border-b border-zinc-800">
+      <p className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest">Staff Status — Today</p>
+    </div>
+    {ALL_STAFF.filter(s => s.id !== "nishant").map(s => {
+      const staffTasks = tasks.filter(t => t.assigned_to === s.id);
+      const staffOverdue = staffTasks.filter(t => t.status !== "completed" && new Date(t.due_at) < new Date()).length;
+      const staffCompleted = staffTasks.filter(t => t.status === "completed").length;
+      const staffTotal = staffTasks.length;
+      const hasReport = reports.some(r => r.staff_id === s.id && new Date(r.submitted_at).toDateString() === new Date().toDateString());
+      return (
+        <div key={s.id} className="grid grid-cols-[1fr_80px_80px_80px_100px] gap-4 items-center px-5 py-3 border-b border-zinc-800 last:border-0">
+          <div>
+            <p className="font-semibold text-sm">{s.name}</p>
+            <p className="text-[10px] font-mono text-zinc-600 uppercase tracking-widest">{s.role}</p>
+          </div>
+          <div className="text-center">
+            <p className="font-mono text-sm font-bold">{staffTotal}</p>
+            <p className="text-[9px] font-mono text-zinc-600 uppercase">Tasks</p>
+          </div>
+          <div className="text-center">
+            <p className={`font-mono text-sm font-bold ${staffOverdue > 0 ? "text-red-500" : "text-zinc-500"}`}>{staffOverdue}</p>
+            <p className="text-[9px] font-mono text-zinc-600 uppercase">Overdue</p>
+          </div>
+          <div className="text-center">
+            <p className="font-mono text-sm font-bold text-green-400">{staffCompleted}</p>
+            <p className="text-[9px] font-mono text-zinc-600 uppercase">Done</p>
+          </div>
+          <div className="text-center">
+            <span className={`font-mono text-[10px] uppercase tracking-widest px-2 py-1 ${hasReport ? "bg-green-400/10 text-green-400" : "bg-yellow-400/10 text-yellow-400"}`}>
+              {hasReport ? "✓ Reported" : "Pending"}
+            </span>
+          </div>
+        </div>
+      );
+    })}
+  </div>
+)}
             <div className="grid grid-cols-4 gap-px bg-zinc-800 border border-zinc-800 mb-8">
               {[
                 { label: "Total Tasks", value: total, sub: "assigned", color: "" },
