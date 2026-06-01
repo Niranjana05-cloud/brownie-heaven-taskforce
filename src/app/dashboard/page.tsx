@@ -8,7 +8,7 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 );
 
-type Staff = { id: string; name: string; role: string; report_time: string | null };
+type Staff = { id: string; name: string; role: string; report_time: string | null; outlets?: string[] };
 type Task = { id: string; title: string; description: string; status: string; priority: string; due_at: string; assigned_to: string; assigned_by: string; outlet_id: string | null };
 type Report = { id: string; staff_id: string; content: string; submitted_at: string; is_late: boolean; report_data: Record<string, string>; staff_role: string };
 
@@ -184,7 +184,14 @@ export default function DashboardPage() {
   const fetchTasks = async (u: Staff) => {
     setLoading(true);
     let query = supabase.from("tasks").select("*").order("created_at", { ascending: false });
-    if (u.role !== "Owner" && u.role !== "Manager") query = query.eq("assigned_to", u.id);
+   if (u.role !== "Owner" && u.role !== "Manager") {
+  const staffOutlets = (u as Staff & { outlets?: string[] }).outlets || [];
+  if (staffOutlets.length > 0) {
+    query = query.or(`assigned_to.eq.${u.id},outlet_id.in.(${staffOutlets.join(",")})`);
+  } else {
+    query = query.eq("assigned_to", u.id);
+  }
+}
     const { data } = await query;
     setTasks(data || []);
     setLoading(false);
