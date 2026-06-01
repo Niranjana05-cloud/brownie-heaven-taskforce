@@ -259,15 +259,20 @@ export default function DashboardPage() {
     if (user) fetchTasks(user);
   };
 
-  const updatePin = async () => {
-    if (!newPin || newPin.length < 4) { setPinMsg("PIN must be at least 4 digits."); return; }
-    if (!user) return;
-    const { error } = await supabase.from("staff").update({ pin: newPin }).eq("id", user.id);
-    if (error) { setPinMsg("Error: " + error.message); return; }
-    setPinMsg("PIN updated successfully!");
-    setNewPin("");
-    setTimeout(() => { setShowPinModal(false); setPinMsg(""); }, 1500);
-  };
+ const updatePin = async () => {
+  if (!newPin || newPin.length < 4) { setPinMsg("PIN must be at least 4 digits."); return; }
+  if (!user) return;
+  const { error } = await supabase
+    .from("staff")
+    .update({ pin: newPin })
+    .eq("id", user.id)
+    .select()
+    .limit(1);
+  if (error) { setPinMsg("Error: " + error.message); return; }
+  setPinMsg("PIN updated successfully!");
+  setNewPin("");
+  setTimeout(() => { setShowPinModal(false); setPinMsg(""); }, 1500);
+};
 
   const submitForceAck = async (action: "complete" | "reason") => {
     if (!overdueTask) return;
