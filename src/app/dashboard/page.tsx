@@ -40,6 +40,7 @@ export default function DashboardPage() {
   const [taskAssignee, setTaskAssignee] = useState("arun");
   const [taskPriority, setTaskPriority] = useState("medium");
   const [taskDueHours, setTaskDueHours] = useState("4");
+  const [taskOutlet, setTaskOutlet] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
