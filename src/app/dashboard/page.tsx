@@ -33,6 +33,8 @@ export default function DashboardPage() {
   const [reportContent, setReportContent] = useState("");
   const [reportSubmitting, setReportSubmitting] = useState(false);
   const [todayReport, setTodayReport] = useState<Report | null>(null);
+  const [overdueTask, setOverdueTask] = useState<Task | null>(null);
+  const [forceAckReason, setForceAckReason] = useState("");
 
   // Task form state
   const [taskTitle, setTaskTitle] = useState("");
@@ -63,6 +65,13 @@ export default function DashboardPage() {
     const { data } = await query;
     setTasks(data || []);
     setLoading(false);
+    // Check for overdue tasks for non-admin staff
+if (u.role !== "Owner" && u.role !== "Manager") {
+  const overdue = (data || []).find((t: Task) => 
+    t.status !== "completed" && new Date(t.due_at) < new Date()
+  );
+  if (overdue) setOverdueTask(overdue);
+}
   };
 
   const fetchReports = async (u: Staff) => {
@@ -120,6 +129,27 @@ export default function DashboardPage() {
     await supabase.from("tasks").update({ status, ...(status === "completed" ? { completed_at: new Date().toISOString() } : {}) }).eq("id", taskId);
     if (user) fetchTasks(user);
   };
+  const submitForceAck = async (action: "complete" | "reason") => {
+  if (!overdueTask) return;
+  if (action === "reason") {
+    if (forceAckReason.trim().length < 20) {
+      alert("Please provide at least 20 characters explaining the delay.");
+      return;
+    }
+    await supabase.from("tasks").update({ 
+      delay_reason: forceAckReason.trim(),
+      status: "overdue"
+    }).eq("id", overdueTask.id);
+  } else {
+    await supabase.from("tasks").update({ 
+      status: "completed",
+      completed_at: new Date().toISOString()
+    }).eq("id", overdueTask.id);
+  }
+  setOverdueTask(null);
+  setForceAckReason("");
+  if (user) fetchTasks(user);
+};
 
   const total = tasks.length;
   const completed = tasks.filter(t => t.status === "completed").length;
@@ -387,6 +417,46 @@ export default function DashboardPage() {
           </div>
         </div>
       )}
+      {/* Force-Ack Overdue Modal */}
+{overdueTask && user?.role !== "Owner" && user?.role !== "Manager" && (
+  <div className="fixed inset-0 z-[100] flex items-center justify-center" style={{ background: "rgba(20,0,0,0.97)" }}>
+    <div className="w-[560px] bg-[#131316] border-2 border-red-500">
+      <div className="bg-red-500 px-6 py-4 text-center font-mono text-xs font-bold uppercase tracking-widest text-white animate-pulse">
+        ⚠ Action Required · Overdue Task ⚠
+      </div>
+      <div className="p-8">
+        <h3 className="text-2xl font-black mb-2">You have an overdue task</h3>
+        <p className="text-zinc-400 text-sm mb-6 leading-relaxed">
+          This task is past its deadline. You cannot dismiss this alert. You must either complete the task or provide a reason for the delay.
+        </p>
+        <div className="bg-black border border-zinc-800 p-4 mb-6">
+          <p className="font-bold text-base mb-1">{overdueTask.title}</p>
+          <p className="font-mono text-xs text-red-500 uppercase tracking-widest">
+            Overdue by {Math.round((Date.now() - new Date(overdueTask.due_at).getTime()) / 60000)} minutes · Priority: {overdueTask.priority}
+          </p>
+        </div>
+        <div className="mb-4">
+          <label className="block text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-2">Reason for delay (min 20 characters)</label>
+          <textarea
+            value={forceAckReason}
+            onChange={(e) => setForceAckReason(e.target.value)}
+            placeholder="Explain why this task is overdue..."
+            rows={3}
+            className="w-full bg-black border border-zinc-800 text-white px-4 py-3 focus:outline-none focus:border-red-500 transition-colors text-sm resize-none"
+          />
+        </div>
+        <div className="flex gap-3 justify-end pt-4 border-t border-zinc-800">
+          <button onClick={() => submitForceAck("reason")} className="px-5 py-2.5 border border-zinc-700 text-sm font-medium hover:border-zinc-500 transition-colors">
+            Submit Reason
+          </button>
+          <button onClick={() => submitForceAck("complete")} className="px-5 py-2.5 bg-yellow-400 text-black font-bold text-sm uppercase tracking-widest hover:opacity-90 transition-opacity">
+            Mark Complete
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+)}
     </div>
   );
 }
