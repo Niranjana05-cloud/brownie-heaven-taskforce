@@ -9,7 +9,7 @@ const supabase = createClient(
 );
 
 type Staff = { id: string; name: string; role: string; report_time: string | null };
-type Task = { id: string; title: string; description: string; status: string; priority: string; due_at: string; assigned_to: string; assigned_by: string };
+type Task = { id: string; title: string; description: string; status: string; priority: string; due_at: string; assigned_to: string; assigned_by: string; outlet_id: string | null };
 type Report = { id: string; staff_id: string; content: string; submitted_at: string; is_late: boolean };
 
 const ALL_STAFF = [
