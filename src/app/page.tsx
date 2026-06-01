@@ -1,6 +1,12 @@
 "use client";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { createClient } from "@supabase/supabase-js";
+
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+);
 
 const STAFF = [
   { id: "nishant", name: "Nishant Vijayakumar", role: "Owner" },
@@ -14,10 +20,24 @@ const STAFF = [
 
 export default function LoginPage() {
   const [selectedUser, setSelectedUser] = useState("nishant");
+  const [pin, setPin] = useState("");
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
   const router = useRouter();
 
-  const handleLogin = () => {
-    localStorage.setItem("currentUser", selectedUser);
+  const handleLogin = async () => {
+    setError("");
+    setLoading(true);
+    const { data, error: dbError } = await supabase
+      .from("staff")
+      .select("*")
+      .eq("id", selectedUser)
+      .eq("pin", pin)
+      .single();
+    setLoading(false);
+    if (dbError) { setError("Error: " + dbError.message); return; }
+    if (!data) { setError("Wrong PIN. Try again."); return; }
+    localStorage.setItem("currentUser", JSON.stringify(data));
     router.push("/dashboard");
   };
 
@@ -37,10 +57,13 @@ export default function LoginPage() {
             </select>
           </div>
           <div>
-            <label className="block text-[11px] font-mono text-zinc-500 uppercase tracking-widest mb-2">Access Code</label>
-            <input type="password" defaultValue="123456" className="w-full bg-black border border-zinc-800 text-white px-4 py-3.5 focus:outline-none focus:border-yellow-400 transition-colors" />
+            <label className="block text-[11px] font-mono text-zinc-500 uppercase tracking-widest mb-2">PIN</label>
+            <input type="password" value={pin} onChange={(e) => setPin(e.target.value)} onKeyDown={(e) => e.key === "Enter" && handleLogin()} placeholder="Enter your PIN" className="w-full bg-black border border-zinc-800 text-white px-4 py-3.5 focus:outline-none focus:border-yellow-400 transition-colors" />
           </div>
-          <button onClick={handleLogin} className="w-full bg-yellow-400 text-black font-bold tracking-widest text-sm py-4 hover:opacity-90 transition-opacity uppercase mt-2">Enter System →</button>
+          {error && <p className="text-red-500 font-mono text-xs uppercase">{error}</p>}
+          <button onClick={handleLogin} disabled={loading} className="w-full bg-yellow-400 text-black font-bold tracking-widest text-sm py-4 hover:opacity-90 transition-opacity uppercase mt-2 disabled:opacity-50">
+            {loading ? "Checking..." : "Enter System →"}
+          </button>
         </div>
         <div className="mt-6 p-3 bg-yellow-400/5 border-l-2 border-yellow-400 text-xs text-zinc-400 leading-relaxed">
           <strong className="text-white">BROWNIE HEAVEN.</strong> Internal use only. All actions are logged.
