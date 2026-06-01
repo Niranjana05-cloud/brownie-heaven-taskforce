@@ -349,6 +349,24 @@ export default function DashboardPage() {
                 </div>
               </div>
               <div>
+  <label className="block text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-2">Outlet (Optional)</label>
+  <select value={taskOutlet} onChange={(e) => setTaskOutlet(e.target.value)} className="w-full bg-black border border-zinc-800 text-white px-4 py-3 focus:outline-none focus:border-yellow-400 transition-colors text-sm">
+    <option value="">No specific outlet</option>
+    <option value="royapettah">Royapettah</option>
+    <option value="adayar">Adayar</option>
+    <option value="bsr_mall">BSR Mall</option>
+    <option value="velachery">Velachery</option>
+    <option value="ra_puram">RA Puram</option>
+    <option value="anna_nagar">Anna Nagar</option>
+    <option value="pallavaram">Pallavaram</option>
+    <option value="vadapalani">Vadapalani</option>
+    <option value="besant_nagar">Besant Nagar</option>
+    <option value="perumbakkam">Perumbakkam</option>
+    <option value="tambaram">Tambaram</option>
+    <option value="porur">Porur</option>
+  </select>
+</div>
+              <div>
                 <label className="block text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-2">Due In</label>
                 <select value={taskDueHours} onChange={(e) => setTaskDueHours(e.target.value)} className="w-full bg-black border border-zinc-800 text-white px-4 py-3 focus:outline-none focus:border-yellow-400 transition-colors text-sm">
                   <option value="1">1 hour</option>
