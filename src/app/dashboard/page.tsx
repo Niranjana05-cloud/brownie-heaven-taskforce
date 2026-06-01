@@ -46,6 +46,9 @@ export default function DashboardPage() {
   const [taskOutlet, setTaskOutlet] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [showPinModal, setShowPinModal] = useState(false);
+  const [newPin, setNewPin] = useState("");
+  const [pinMsg, setPinMsg] = useState("");
 
   useEffect(() => {
     const stored = localStorage.getItem("currentUser");
@@ -126,6 +129,15 @@ export default function DashboardPage() {
     await supabase.from("tasks").update({ status, ...(status === "completed" ? { completed_at: new Date().toISOString() } : {}) }).eq("id", taskId);
     if (user) fetchTasks(user);
   };
+  const updatePin = async () => {
+  if (!newPin || newPin.length < 4) { setPinMsg("PIN must be at least 4 digits."); return; }
+  if (!user) return;
+  const { error } = await supabase.from("staff").update({ pin: newPin }).eq("id", user.id);
+  if (error) { setPinMsg("Error: " + error.message); return; }
+  setPinMsg("PIN updated successfully!");
+  setNewPin("");
+  setTimeout(() => { setShowPinModal(false); setPinMsg(""); }, 1500);
+};
 const deleteTask = async (taskId: string) => {
   if (!confirm("Delete this task?")) return;
   await supabase.from("tasks").delete().eq("id", taskId);
@@ -197,6 +209,7 @@ const deleteTask = async (taskId: string) => {
             <p className="text-sm font-semibold truncate">{user.name}</p>
             <p className="text-[10px] font-mono text-zinc-600 uppercase tracking-wide">{user.role}</p>
           </div>
+          <button onClick={() => setShowPinModal(true)} className="text-[11px] font-mono text-zinc-600 uppercase hover:text-yellow-400 transition-colors shrink-0 mr-2">PIN</button>
           <button onClick={() => { localStorage.removeItem("currentUser"); router.push("/"); }} className="text-[11px] font-mono text-zinc-600 uppercase hover:text-red-500 transition-colors shrink-0">Exit</button>
         </div>
       </aside>
@@ -510,7 +523,24 @@ const deleteTask = async (taskId: string) => {
           </div>
         </div>
       )}
-
+{showPinModal && (
+  <div className="fixed inset-0 bg-black/85 backdrop-blur-sm z-50 flex items-center justify-center">
+    <div className="w-[400px] bg-[#131316] border border-zinc-800 p-8">
+      <div className="flex justify-between items-center mb-6 pb-4 border-b border-zinc-800">
+        <h3 className="text-xl font-black tracking-tight">Change PIN</h3>
+        <button onClick={() => { setShowPinModal(false); setPinMsg(""); setNewPin(""); }} className="text-zinc-500 hover:text-white text-xl">✕</button>
+      </div>
+      <div className="space-y-4">
+        <div>
+          <label className="block text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-2">New PIN (min 4 digits)</label>
+          <input type="password" value={newPin} onChange={(e) => setNewPin(e.target.value)} placeholder="Enter new PIN" className="w-full bg-black border border-zinc-800 text-white px-4 py-3 focus:outline-none focus:border-yellow-400 transition-colors text-sm" />
+        </div>
+        {pinMsg && <p className={`font-mono text-xs uppercase ${pinMsg.includes("success") ? "text-green-400" : "text-red-500"}`}>{pinMsg}</p>}
+        <button onClick={updatePin} className="w-full bg-yellow-400 text-black font-bold tracking-widest text-sm py-3 hover:opacity-90 transition-opacity uppercase">Update PIN</button>
+      </div>
+    </div>
+  </div>
+)}
       {overdueTask && user?.role !== "Owner" && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center" style={{ background: "rgba(20,0,0,0.97)" }}>
           <div className="w-[560px] bg-[#131316] border-2 border-red-500">
