@@ -45,6 +45,7 @@ export default function DashboardPage() {
   const [taskDueHours, setTaskDueHours] = useState("4");
   const [taskOutlet, setTaskOutlet] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   useEffect(() => {
     const stored = localStorage.getItem("currentUser");
@@ -155,7 +156,9 @@ export default function DashboardPage() {
 
   return (
     <div className="min-h-screen bg-[#0a0a0b] text-white flex">
-      <aside className="w-60 bg-[#131316] border-r border-zinc-800 flex flex-col shrink-0">
+  {sidebarOpen && <div className="fixed inset-0 bg-black/50 z-30 md:hidden" onClick={() => setSidebarOpen(false)} />}
+  <button onClick={() => setSidebarOpen(!sidebarOpen)} className="fixed top-4 left-4 z-50 md:hidden bg-zinc-900 border border-zinc-700 p-2 text-white">☰</button>
+     <aside className={`fixed inset-y-0 left-0 z-40 w-60 bg-[#131316] border-r border-zinc-800 flex flex-col shrink-0 transition-transform duration-200 md:relative md:translate-x-0 ${sidebarOpen ? "translate-x-0" : "-translate-x-full"}`}>
         <div className="px-6 py-6 border-b border-zinc-800">
           <h1 className="text-xl font-black tracking-tight">TASK<span className="text-yellow-400">FORCE</span></h1>
           <p className="text-[10px] font-mono text-zinc-600 uppercase tracking-widest mt-1">Brownie Heaven</p>
@@ -194,7 +197,7 @@ export default function DashboardPage() {
         </div>
       </aside>
 
-      <main className="flex-1 px-8 py-8 overflow-auto">
+     <main className="flex-1 px-4 py-4 md:px-8 md:py-8 overflow-auto">
 
         {activeTab === "tasks" && (
           <div>
