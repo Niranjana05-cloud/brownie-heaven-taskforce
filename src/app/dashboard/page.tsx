@@ -210,7 +210,7 @@ if (u.role !== "Owner") {
       </aside>
 
       {/* Main */}
-      <main className="flex-1 p-10 overflow-auto">
+     <main className="flex-1 px-8 py-8 overflow-auto">
 
         {/* TASKS TAB */}
         {activeTab === "tasks" && (
@@ -397,7 +397,7 @@ if (u.role !== "Owner") {
       </main>
       {/* ANALYTICS TAB */}
 {activeTab === "analytics" && (
-  <>
+  <div className="w-full">
     <div className="mb-8 pb-5 border-b border-zinc-800">
       <h2 className="text-2xl font-black tracking-tight">Analytics</h2>
       <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mt-1">Performance overview — all staff</p>
