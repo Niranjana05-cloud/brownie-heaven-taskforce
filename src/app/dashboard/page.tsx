@@ -123,7 +123,7 @@ if (u.role !== "Owner") {
     setSubmitting(false);
     if (error) { alert("Error: " + error.message); return; }
     setShowModal(false);
-    setTaskTitle(""); setTaskDesc(""); setTaskPriority("medium"); setTaskDueHours("4");
+    setTaskTitle(""); setTaskDesc(""); setTaskPriority("medium"); setTaskDueHours("4");setTaskOutlet("");
     fetchTasks(user);
   };
 
