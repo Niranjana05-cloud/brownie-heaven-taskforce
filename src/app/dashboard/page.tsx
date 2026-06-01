@@ -399,10 +399,10 @@ if (u.role !== "Owner") {
 {activeTab === "analytics" && (
   <>
     <div className="mb-8 pb-5 border-b border-zinc-800">
-      <h2 className="text-3xl font-black tracking-tight">Analytics</h2>
+      <h2 className="text-2xl font-black tracking-tight">Analytics</h2>
       <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mt-1">Performance overview — all staff</p>
     </div>
-    <div className="grid grid-cols-2 gap-6">
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
       {/* Completion rate per staff */}
       <div className="bg-[#131316] border border-zinc-800 p-6">
         <p className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-6">Completion Rate by Staff</p>
