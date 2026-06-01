@@ -66,7 +66,7 @@ export default function DashboardPage() {
     setTasks(data || []);
     setLoading(false);
     // Check for overdue tasks for non-admin staff
-if (u.role !== "Owner" && u.role !== "Manager") {
+if (u.role !== "Owner") {
   const overdue = (data || []).find((t: Task) => 
     t.status !== "completed" && new Date(t.due_at) < new Date()
   );
@@ -418,7 +418,7 @@ if (u.role !== "Owner" && u.role !== "Manager") {
         </div>
       )}
       {/* Force-Ack Overdue Modal */}
-{overdueTask && user?.role !== "Owner" && user?.role !== "Manager" && (
+{overdueTask && user?.role !== "Owner" && (
   <div className="fixed inset-0 z-[100] flex items-center justify-center" style={{ background: "rgba(20,0,0,0.97)" }}>
     <div className="w-[560px] bg-[#131316] border-2 border-red-500">
       <div className="bg-red-500 px-6 py-4 text-center font-mono text-xs font-bold uppercase tracking-widest text-white animate-pulse">
