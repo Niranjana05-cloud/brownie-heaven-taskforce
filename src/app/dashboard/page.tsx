@@ -29,7 +29,7 @@ export default function DashboardPage() {
   const [reports, setReports] = useState<Report[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
-  const [activeTab, setActiveTab] = useState<"tasks" | "reports">("tasks");
+  const [activeTab, setActiveTab] = useState<"tasks" | "reports" | "analytics">("tasks");
   const [reportContent, setReportContent] = useState("");
   const [reportSubmitting, setReportSubmitting] = useState(false);
   const [todayReport, setTodayReport] = useState<Report | null>(null);
@@ -191,9 +191,9 @@ if (u.role !== "Owner") {
               <div onClick={() => setActiveTab("reports")} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "reports" ? "text-white bg-zinc-900 border-l-2 border-yellow-400" : "text-zinc-500 hover:text-white"}`}>
                 <span>📋</span> Reports
               </div>
-              <div className="flex items-center gap-3 px-3 py-2.5 text-sm font-medium text-zinc-500 hover:text-white cursor-pointer">
-                <span>◬</span> Analytics
-              </div>
+             <div onClick={() => setActiveTab("analytics")} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "analytics" ? "text-white bg-zinc-900 border-l-2 border-yellow-400" : "text-zinc-500 hover:text-white"}`}>
+             <span>◬</span> Analytics
+             </div>
             </>
           )}
         </nav>
@@ -327,6 +327,7 @@ if (u.role !== "Owner") {
         )}
 
         {/* REPORTS TAB */}
+        
         {activeTab === "reports" && (
           <>
             <div className="mb-8 pb-5 border-b border-zinc-800">
@@ -394,6 +395,83 @@ if (u.role !== "Owner") {
           </>
         )}
       </main>
+      {/* ANALYTICS TAB */}
+{activeTab === "analytics" && (
+  <>
+    <div className="mb-8 pb-5 border-b border-zinc-800">
+      <h2 className="text-3xl font-black tracking-tight">Analytics</h2>
+      <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mt-1">Performance overview — all staff</p>
+    </div>
+    <div className="grid grid-cols-2 gap-6">
+      {/* Completion rate per staff */}
+      <div className="bg-[#131316] border border-zinc-800 p-6">
+        <p className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-6">Completion Rate by Staff</p>
+        {ALL_STAFF.filter(s => s.id !== "nishant").map(s => {
+          const staffTasks = tasks.filter(t => t.assigned_to === s.id);
+          const done = staffTasks.filter(t => t.status === "completed").length;
+          const total = staffTasks.length || 1;
+          const pct = Math.round(done / total * 100);
+          return (
+            <div key={s.id} className="mb-4">
+              <div className="flex justify-between mb-1">
+                <span className="text-sm font-medium">{s.name.split(" ")[0]}</span>
+                <span className="font-mono text-xs text-zinc-500">{done}/{staffTasks.length} · {pct}%</span>
+              </div>
+              <div className="h-2 bg-zinc-800 border border-zinc-700">
+                <div className={`h-full transition-all ${pct >= 70 ? "bg-green-400" : pct >= 40 ? "bg-yellow-400" : "bg-red-500"}`} style={{ width: `${pct}%` }} />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      {/* Task breakdown */}
+      <div className="bg-[#131316] border border-zinc-800 p-6">
+        <p className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-6">Task Breakdown</p>
+        {[
+          { label: "Total Assigned", value: tasks.length, color: "text-white" },
+          { label: "Completed", value: tasks.filter(t => t.status === "completed").length, color: "text-green-400" },
+          { label: "In Progress", value: tasks.filter(t => t.status === "in_progress").length, color: "text-yellow-400" },
+          { label: "Assigned (not started)", value: tasks.filter(t => t.status === "assigned").length, color: "text-zinc-400" },
+          { label: "Overdue", value: tasks.filter(t => t.status !== "completed" && new Date(t.due_at) < new Date()).length, color: "text-red-500" },
+        ].map(s => (
+          <div key={s.label} className="flex justify-between items-center py-3 border-b border-zinc-800 last:border-0">
+            <span className="text-sm text-zinc-400">{s.label}</span>
+            <span className={`font-mono font-bold text-lg ${s.color}`}>{s.value}</span>
+          </div>
+        ))}
+      </div>
+      {/* Reports submitted today */}
+      <div className="bg-[#131316] border border-zinc-800 p-6">
+        <p className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-6">Reports Today</p>
+        {ALL_STAFF.filter(s => s.id !== "nishant").map(s => {
+          const todayStr = new Date().toDateString();
+          const report = reports.find(r => r.staff_id === s.id && new Date(r.submitted_at).toDateString() === todayStr);
+          return (
+            <div key={s.id} className="flex justify-between items-center py-3 border-b border-zinc-800 last:border-0">
+              <span className="text-sm font-medium">{s.name.split(" ")[0]}</span>
+              <span className={`font-mono text-[10px] uppercase tracking-widest px-2 py-1 ${report ? report.is_late ? "bg-red-500/10 text-red-500" : "bg-green-400/10 text-green-400" : "bg-zinc-800 text-zinc-500"}`}>
+                {report ? report.is_late ? "Late" : "On Time" : "Pending"}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+      {/* Outlet task count */}
+      <div className="bg-[#131316] border border-zinc-800 p-6">
+        <p className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-6">Tasks by Outlet</p>
+        {["royapettah","adayar","bsr_mall","velachery","ra_puram","anna_nagar","pallavaram","vadapalani","besant_nagar","perumbakkam","tambaram","porur"].map(o => {
+          const count = tasks.filter(t => t.outlet_id === o).length;
+          return (
+            <div key={o} className="flex justify-between items-center py-2 border-b border-zinc-800 last:border-0">
+              <span className="text-sm text-zinc-400 capitalize">{o.replace("_", " ")}</span>
+              <span className="font-mono text-sm font-bold">{count}</span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  </>
+)}
 
       {/* Assign Task Modal */}
       {showModal && (
