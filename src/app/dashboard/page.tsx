@@ -394,7 +394,7 @@ if (u.role !== "Owner") {
             </div>
           </>
         )}
-      </main>
+     
       {/* ANALYTICS TAB */}
 {activeTab === "analytics" && (
   <div className="w-full">
@@ -472,6 +472,7 @@ if (u.role !== "Owner") {
     </div>
   </>
 )}
+  </main>
 
       {/* Assign Task Modal */}
       {showModal && (
