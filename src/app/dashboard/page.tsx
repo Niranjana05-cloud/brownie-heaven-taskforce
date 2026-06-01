@@ -143,6 +143,14 @@ const deleteTask = async (taskId: string) => {
   await supabase.from("tasks").delete().eq("id", taskId);
   if (user) fetchTasks(user);
 };
+  useEffect(() => {
+  if (!user) return;
+  const interval = setInterval(() => {
+    fetchTasks(user);
+    fetchReports(user);
+  }, 30000);
+  return () => clearInterval(interval);
+}, [user]);
   const submitForceAck = async (action: "complete" | "reason") => {
     if (!overdueTask) return;
     if (action === "reason") {
