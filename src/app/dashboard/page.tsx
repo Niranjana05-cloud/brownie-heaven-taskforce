@@ -118,6 +118,7 @@ if (u.role !== "Owner") {
       title: taskTitle.trim(), description: taskDesc.trim(),
       assigned_to: taskAssignee, assigned_by: user.id,
       priority: taskPriority, status: "assigned", due_at: dueAt,
+      outlet_id: taskOutlet || null,
     });
     setSubmitting(false);
     if (error) { alert("Error: " + error.message); return; }
