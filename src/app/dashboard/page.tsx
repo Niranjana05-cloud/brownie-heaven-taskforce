@@ -142,7 +142,7 @@ export default function DashboardPage() {
   const [reports, setReports] = useState<Report[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
-  const [activeTab, setActiveTab] = useState<"tasks" | "reports" | "analytics">("tasks");
+  const [activeTab, setActiveTab] = useState<"tasks" | "my_report" | "all_reports" | "analytics">("tasks");
   const [outletFilter, setOutletFilter] = useState("all");
   const [reportData, setReportData] = useState<Record<string, string>>({});
   const [reportSubmitting, setReportSubmitting] = useState(false);
@@ -313,7 +313,7 @@ export default function DashboardPage() {
             <span>▣</span> Dashboard
           </div>
           {hasReportDuty && (
-            <div onClick={() => { setActiveTab("reports"); setSidebarOpen(false); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "reports" ? "text-white bg-zinc-900 border-l-2 border-yellow-400" : "text-zinc-500 hover:text-white"}`}>
+            <div onClick={() => { setActiveTab("all_reports"); setSidebarOpen(false); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "reports" ? "text-white bg-zinc-900 border-l-2 border-yellow-400" : "text-zinc-500 hover:text-white"}`}>
               <span>📋</span> My Report
               {!todayReport && <span className="ml-auto w-2 h-2 bg-yellow-400 rounded-full"></span>}
             </div>
@@ -456,15 +456,16 @@ export default function DashboardPage() {
           </div>
         )}
 
-        {activeTab === "reports" && (
+        {(activeTab === "my_report" || activeTab === "all_reports") && (
+      
           <div>
             <div className="mb-6 pb-5 border-b border-zinc-800">
-              <h2 className="text-2xl font-black tracking-tight">{canAssign ? "All Reports" : "Daily Report"}</h2>
+              <h2 className="text-2xl font-black tracking-tight">{activeTab === "all_reports" ? "All Reports" : "Daily Report"}</h2>
               <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mt-1">
                 {canAssign ? "Staff submissions overview" : `Due by ${ALL_STAFF.find(s => s.id === user.id)?.report_time || "--:--"} daily`}
               </p>
             </div>
-            {hasReportDuty && !canAssign && (
+            {activeTab === "my_report" && hasReportDuty && (
               <div className="mb-8">
                 {todayReport ? (
                   <div className="bg-green-400/5 border border-green-400/30 p-6">
