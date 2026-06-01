@@ -10,7 +10,7 @@ const supabase = createClient(
 
 type Staff = { id: string; name: string; role: string; report_time: string | null };
 type Task = { id: string; title: string; description: string; status: string; priority: string; due_at: string; assigned_to: string; assigned_by: string; outlet_id: string | null };
-type Report = { id: string; staff_id: string; content: string; submitted_at: string; is_late: boolean };
+type Report = { id: string; staff_id: string; content: string; submitted_at: string; is_late: boolean; report_data: Record<string, string>; staff_role: string };
 
 const ALL_STAFF = [
   { id: "nishant", name: "Nishant Vijayakumar", role: "Owner", report_time: null },
@@ -24,6 +24,117 @@ const ALL_STAFF = [
 
 const OUTLETS = ["royapettah","adayar","bsr_mall","velachery","ra_puram","anna_nagar","pallavaram","vadapalani","besant_nagar","perumbakkam","tambaram","porur"];
 
+const REPORT_FIELDS: Record<string, { label: string; key: string; type?: string }[]> = {
+  arun: [
+    { label: "Total Sales (Rs)", key: "total_sales" },
+    { label: "Target (Rs)", key: "target" },
+    { label: "Achievement %", key: "achievement" },
+    { label: "Best Outlet", key: "best_outlet" },
+    { label: "Worst Outlet", key: "worst_outlet" },
+    { label: "Swiggy Sales (Rs)", key: "swiggy_sales" },
+    { label: "Zomato Sales (Rs)", key: "zomato_sales" },
+    { label: "Shop Sales (Rs)", key: "shop_sales" },
+    { label: "Cake Sales (Rs)", key: "cake_sales" },
+    { label: "Ice Cream Sales (Rs)", key: "ice_cream_sales" },
+    { label: "Complaints Today", key: "complaints" },
+    { label: "Negative Reviews", key: "negative_reviews" },
+    { label: "Stock-out Issues", key: "stock_out" },
+    { label: "Staff Issues", key: "staff_issues" },
+    { label: "Top Issue 1", key: "issue_1" },
+    { label: "Top Issue 2", key: "issue_2" },
+    { label: "Top Issue 3", key: "issue_3" },
+    { label: "Tomorrow Action 1", key: "action_1" },
+    { label: "Tomorrow Action 2", key: "action_2" },
+    { label: "Tomorrow Action 3", key: "action_3" },
+  ],
+  nilani: [
+    { label: "Total Staff Present", key: "staff_present" },
+    { label: "Total Absent", key: "staff_absent" },
+    { label: "Total Late", key: "staff_late" },
+    { label: "Replacement Required (Yes/No)", key: "replacement_required" },
+    { label: "Training Conducted (Yes/No)", key: "training_conducted" },
+    { label: "Training Topic", key: "training_topic" },
+    { label: "Outlets Checked/Visited", key: "outlets_checked" },
+    { label: "Staff Issues", key: "staff_issues" },
+    { label: "Warnings Issued", key: "warnings_issued" },
+    { label: "New Candidates Contacted", key: "candidates_contacted" },
+    { label: "Interviews Scheduled", key: "interviews_scheduled" },
+    { label: "Top Issue 1", key: "issue_1" },
+    { label: "Top Issue 2", key: "issue_2" },
+    { label: "Top Issue 3", key: "issue_3" },
+    { label: "Action Needed 1", key: "action_1" },
+    { label: "Action Needed 2", key: "action_2" },
+    { label: "Action Needed 3", key: "action_3" },
+  ],
+  gowtham: [
+    { label: "Total Purchase Value (Rs)", key: "purchase_value" },
+    { label: "Emergency Purchase Value (Rs)", key: "emergency_purchase" },
+    { label: "Purchase as per Plan (Yes/No)", key: "purchase_as_planned" },
+    { label: "Supplier Issues", key: "supplier_issues" },
+    { label: "Material Rejected", key: "material_rejected" },
+    { label: "Stock Shortage", key: "stock_shortage" },
+    { label: "Dispatch Delay", key: "dispatch_delay" },
+    { label: "High-value Stock Variance (Rs)", key: "stock_variance" },
+    { label: "Tomorrow Purchase Requirement (Rs)", key: "tomorrow_purchase" },
+    { label: "Top Issue 1", key: "issue_1" },
+    { label: "Top Issue 2", key: "issue_2" },
+    { label: "Top Issue 3", key: "issue_3" },
+    { label: "Action Needed 1", key: "action_1" },
+    { label: "Action Needed 2", key: "action_2" },
+    { label: "Action Needed 3", key: "action_3" },
+  ],
+  vishnu: [
+    { label: "Total Enquiries Received", key: "total_enquiries" },
+    { label: "Orders Confirmed", key: "orders_confirmed" },
+    { label: "Conversion %", key: "conversion_pct" },
+    { label: "WhatsApp Sales Value (Rs)", key: "whatsapp_sales" },
+    { label: "Pending Payments (Rs)", key: "pending_payments" },
+    { label: "Custom Cake Orders", key: "custom_cake_orders" },
+    { label: "Bulk Enquiries", key: "bulk_enquiries" },
+    { label: "Complaints Handled", key: "complaints_handled" },
+    { label: "Reviews Requested", key: "reviews_requested" },
+    { label: "Reviews Received", key: "reviews_received" },
+    { label: "Top Revenue Opportunity 1", key: "opportunity_1" },
+    { label: "Top Revenue Opportunity 2", key: "opportunity_2" },
+    { label: "Top Revenue Opportunity 3", key: "opportunity_3" },
+    { label: "Pending Follow-up 1", key: "followup_1" },
+    { label: "Pending Follow-up 2", key: "followup_2" },
+    { label: "Pending Follow-up 3", key: "followup_3" },
+  ],
+  ahila: [
+    { label: "Custom Cake Orders Today", key: "cake_orders_today" },
+    { label: "Orders Delivered on Time", key: "orders_on_time" },
+    { label: "Cake Complaints", key: "cake_complaints" },
+    { label: "Cake Wastage/Damage", key: "cake_wastage" },
+    { label: "Royapettah Sales/Ops Issue", key: "royapettah_issue" },
+    { label: "Swiggy/Zomato Issues", key: "swiggy_zomato_issues" },
+    { label: "Negative Reviews", key: "negative_reviews" },
+    { label: "Product Unavailable Issues", key: "unavailable_issues" },
+    { label: "Tomorrow's Cake Orders", key: "tomorrow_cake_orders" },
+    { label: "Top Issue 1", key: "issue_1" },
+    { label: "Top Issue 2", key: "issue_2" },
+    { label: "Top Issue 3", key: "issue_3" },
+    { label: "Action Needed 1", key: "action_1" },
+    { label: "Action Needed 2", key: "action_2" },
+    { label: "Action Needed 3", key: "action_3" },
+  ],
+  bharani: [
+    { label: "Outlets Audited", key: "outlets_audited" },
+    { label: "Total Wastage (Rs)", key: "total_wastage" },
+    { label: "Stock Mismatch Found (Yes/No)", key: "stock_mismatch" },
+    { label: "Cash Reconciliation Status", key: "cash_reconciliation" },
+    { label: "Exceptions Found", key: "exceptions_found" },
+    { label: "High-value Discrepancy (Rs)", key: "discrepancy_value" },
+    { label: "Outlets with Issues", key: "outlets_with_issues" },
+    { label: "Top Issue 1", key: "issue_1" },
+    { label: "Top Issue 2", key: "issue_2" },
+    { label: "Top Issue 3", key: "issue_3" },
+    { label: "Action Needed 1", key: "action_1" },
+    { label: "Action Needed 2", key: "action_2" },
+    { label: "Action Needed 3", key: "action_3" },
+  ],
+};
+
 export default function DashboardPage() {
   const router = useRouter();
   const [user, setUser] = useState<Staff | null>(null);
@@ -33,7 +144,7 @@ export default function DashboardPage() {
   const [showModal, setShowModal] = useState(false);
   const [activeTab, setActiveTab] = useState<"tasks" | "reports" | "analytics">("tasks");
   const [outletFilter, setOutletFilter] = useState("all");
-  const [reportContent, setReportContent] = useState("");
+  const [reportData, setReportData] = useState<Record<string, string>>({});
   const [reportSubmitting, setReportSubmitting] = useState(false);
   const [todayReport, setTodayReport] = useState<Report | null>(null);
   const [overdueTask, setOverdueTask] = useState<Task | null>(null);
@@ -49,6 +160,7 @@ export default function DashboardPage() {
   const [showPinModal, setShowPinModal] = useState(false);
   const [newPin, setNewPin] = useState("");
   const [pinMsg, setPinMsg] = useState("");
+  const [selectedReport, setSelectedReport] = useState<Report | null>(null);
 
   useEffect(() => {
     const stored = localStorage.getItem("currentUser");
@@ -62,6 +174,12 @@ export default function DashboardPage() {
     fetchTasks(parsed);
     fetchReports(parsed);
   }, [router]);
+
+  useEffect(() => {
+    if (!user) return;
+    const interval = setInterval(() => { fetchTasks(user); fetchReports(user); }, 30000);
+    return () => clearInterval(interval);
+  }, [user]);
 
   const fetchTasks = async (u: Staff) => {
     setLoading(true);
@@ -87,7 +205,7 @@ export default function DashboardPage() {
   };
 
   const submitReport = async () => {
-    if (!reportContent.trim() || !user) return;
+    if (!user) return;
     setReportSubmitting(true);
     const staffInfo = ALL_STAFF.find(s => s.id === user.id);
     let isLate = false;
@@ -97,14 +215,19 @@ export default function DashboardPage() {
       deadline.setHours(h, m, 0, 0);
       isLate = new Date() > deadline;
     }
+    const content = Object.entries(reportData).map(([k, v]) => `${k}: ${v}`).join(", ");
     const { data, error } = await supabase.from("reports").insert({
-      staff_id: user.id, content: reportContent.trim(),
-      is_late: isLate, submitted_at: new Date().toISOString(),
+      staff_id: user.id,
+      content,
+      is_late: isLate,
+      submitted_at: new Date().toISOString(),
+      report_data: reportData,
+      staff_role: user.role,
     }).select().single();
     setReportSubmitting(false);
     if (error) { alert("Error: " + error.message); return; }
     setTodayReport(data);
-    setReportContent("");
+    setReportData({});
     fetchReports(user);
   };
 
@@ -129,28 +252,23 @@ export default function DashboardPage() {
     await supabase.from("tasks").update({ status, ...(status === "completed" ? { completed_at: new Date().toISOString() } : {}) }).eq("id", taskId);
     if (user) fetchTasks(user);
   };
+
+  const deleteTask = async (taskId: string) => {
+    if (!confirm("Delete this task?")) return;
+    await supabase.from("tasks").delete().eq("id", taskId);
+    if (user) fetchTasks(user);
+  };
+
   const updatePin = async () => {
-  if (!newPin || newPin.length < 4) { setPinMsg("PIN must be at least 4 digits."); return; }
-  if (!user) return;
-  const { error } = await supabase.from("staff").update({ pin: newPin }).eq("id", user.id);
-  if (error) { setPinMsg("Error: " + error.message); return; }
-  setPinMsg("PIN updated successfully!");
-  setNewPin("");
-  setTimeout(() => { setShowPinModal(false); setPinMsg(""); }, 1500);
-};
-const deleteTask = async (taskId: string) => {
-  if (!confirm("Delete this task?")) return;
-  await supabase.from("tasks").delete().eq("id", taskId);
-  if (user) fetchTasks(user);
-};
-  useEffect(() => {
-  if (!user) return;
-  const interval = setInterval(() => {
-    fetchTasks(user);
-    fetchReports(user);
-  }, 30000);
-  return () => clearInterval(interval);
-}, [user]);
+    if (!newPin || newPin.length < 4) { setPinMsg("PIN must be at least 4 digits."); return; }
+    if (!user) return;
+    const { error } = await supabase.from("staff").update({ pin: newPin }).eq("id", user.id);
+    if (error) { setPinMsg("Error: " + error.message); return; }
+    setPinMsg("PIN updated successfully!");
+    setNewPin("");
+    setTimeout(() => { setShowPinModal(false); setPinMsg(""); }, 1500);
+  };
+
   const submitForceAck = async (action: "complete" | "reason") => {
     if (!overdueTask) return;
     if (action === "reason") {
@@ -171,6 +289,7 @@ const deleteTask = async (taskId: string) => {
   const rate = total > 0 ? Math.round(completed / total * 100) : 0;
   const canAssign = user?.role === "Owner" || user?.role === "Manager";
   const hasReportDuty = user?.role !== "Owner";
+  const reportFields = user ? REPORT_FIELDS[user.id] || [] : [];
 
   if (!user) return (
     <div className="min-h-screen bg-black flex items-center justify-center">
@@ -180,36 +299,37 @@ const deleteTask = async (taskId: string) => {
 
   return (
     <div className="min-h-screen bg-[#0a0a0b] text-white flex">
-  {sidebarOpen && <div className="fixed inset-0 bg-black/50 z-30 md:hidden" onClick={() => setSidebarOpen(false)} />}
-  <button onClick={() => setSidebarOpen(!sidebarOpen)} className="fixed top-4 left-4 z-50 md:hidden bg-zinc-900 border border-zinc-700 p-2 text-white">☰</button>
-     <aside className={`fixed inset-y-0 left-0 z-40 w-60 bg-[#131316] border-r border-zinc-800 flex flex-col shrink-0 transition-transform duration-200 md:relative md:translate-x-0 ${sidebarOpen ? "translate-x-0" : "-translate-x-full"}`}>
+      {sidebarOpen && <div className="fixed inset-0 bg-black/50 z-30 md:hidden" onClick={() => setSidebarOpen(false)} />}
+      <button onClick={() => setSidebarOpen(!sidebarOpen)} className="fixed top-4 left-4 z-50 md:hidden bg-zinc-900 border border-zinc-700 p-2 text-white">☰</button>
+
+      <aside className={`fixed inset-y-0 left-0 z-40 w-60 bg-[#131316] border-r border-zinc-800 flex flex-col shrink-0 transition-transform duration-200 md:relative md:translate-x-0 ${sidebarOpen ? "translate-x-0" : "-translate-x-full"}`}>
         <div className="px-6 py-6 border-b border-zinc-800">
           <h1 className="text-xl font-black tracking-tight">TASK<span className="text-yellow-400">FORCE</span></h1>
           <p className="text-[10px] font-mono text-zinc-600 uppercase tracking-widest mt-1">Brownie Heaven</p>
         </div>
         <nav className="flex-1 px-3 py-4">
           <p className="text-[10px] font-mono text-zinc-600 uppercase tracking-widest px-3 pb-2">Workspace</p>
-          <div onClick={() => setActiveTab("tasks")} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "tasks" ? "text-white bg-zinc-900 border-l-2 border-yellow-400" : "text-zinc-500 hover:text-white"}`}>
+          <div onClick={() => { setActiveTab("tasks"); setSidebarOpen(false); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "tasks" ? "text-white bg-zinc-900 border-l-2 border-yellow-400" : "text-zinc-500 hover:text-white"}`}>
             <span>▣</span> Dashboard
           </div>
           {hasReportDuty && (
-            <div onClick={() => setActiveTab("reports")} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "reports" ? "text-white bg-zinc-900 border-l-2 border-yellow-400" : "text-zinc-500 hover:text-white"}`}>
+            <div onClick={() => { setActiveTab("reports"); setSidebarOpen(false); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "reports" ? "text-white bg-zinc-900 border-l-2 border-yellow-400" : "text-zinc-500 hover:text-white"}`}>
               <span>📋</span> My Report
               {!todayReport && <span className="ml-auto w-2 h-2 bg-yellow-400 rounded-full"></span>}
             </div>
           )}
           {canAssign && (
             <>
-              <div onClick={() => setActiveTab("reports")} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "reports" ? "text-white bg-zinc-900 border-l-2 border-yellow-400" : "text-zinc-500 hover:text-white"}`}>
+              <div onClick={() => { setActiveTab("reports"); setSidebarOpen(false); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "reports" ? "text-white bg-zinc-900 border-l-2 border-yellow-400" : "text-zinc-500 hover:text-white"}`}>
                 <span>📋</span> Reports
               </div>
-              <div onClick={() => setActiveTab("analytics")} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "analytics" ? "text-white bg-zinc-900 border-l-2 border-yellow-400" : "text-zinc-500 hover:text-white"}`}>
+              <div onClick={() => { setActiveTab("analytics"); setSidebarOpen(false); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "analytics" ? "text-white bg-zinc-900 border-l-2 border-yellow-400" : "text-zinc-500 hover:text-white"}`}>
                 <span>◬</span> Analytics
               </div>
             </>
           )}
         </nav>
-        <div className="px-6 py-4 border-t border-zinc-800 flex items-center gap-3">
+        <div className="px-4 py-4 border-t border-zinc-800 flex items-center gap-2">
           <div className="w-9 h-9 bg-yellow-400 text-black flex items-center justify-center font-bold text-sm shrink-0">
             {user.name.split(" ").map((n: string) => n[0]).join("").slice(0, 2)}
           </div>
@@ -217,29 +337,29 @@ const deleteTask = async (taskId: string) => {
             <p className="text-sm font-semibold truncate">{user.name}</p>
             <p className="text-[10px] font-mono text-zinc-600 uppercase tracking-wide">{user.role}</p>
           </div>
-          <button onClick={() => setShowPinModal(true)} className="text-[11px] font-mono text-zinc-600 uppercase hover:text-yellow-400 transition-colors shrink-0 mr-2">PIN</button>
-          <button onClick={() => { localStorage.removeItem("currentUser"); router.push("/"); }} className="text-[11px] font-mono text-zinc-600 uppercase hover:text-red-500 transition-colors shrink-0">Exit</button>
+          <button onClick={() => setShowPinModal(true)} className="text-[10px] font-mono text-zinc-600 uppercase hover:text-yellow-400 transition-colors shrink-0">PIN</button>
+          <button onClick={() => { localStorage.removeItem("currentUser"); router.push("/"); }} className="text-[10px] font-mono text-zinc-600 uppercase hover:text-red-500 transition-colors shrink-0">Exit</button>
         </div>
       </aside>
 
-     <main className="flex-1 px-4 py-4 md:px-8 md:py-8 overflow-auto">
+      <main className="flex-1 px-4 py-4 md:px-8 md:py-8 overflow-auto">
 
         {activeTab === "tasks" && (
           <div>
             <div className="flex justify-between items-start mb-6 pb-5 border-b border-zinc-800">
               <div>
-                <h2 className="text-3xl font-black tracking-tight">{canAssign ? "Command Center" : "My Tasks"}</h2>
-                <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mt-1">Welcome back, {user.name.split(" ")[0]} — system online</p>
+                <h2 className="text-2xl md:text-3xl font-black tracking-tight">{canAssign ? "Command Center" : "My Tasks"}</h2>
+                <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mt-1">Welcome back, {user.name.split(" ")[0]}</p>
               </div>
               {canAssign && (
-                <button onClick={() => setShowModal(true)} className="bg-yellow-400 text-black font-bold tracking-widest text-xs px-5 py-3 hover:opacity-90 transition-opacity uppercase">+ Assign Task</button>
+                <button onClick={() => setShowModal(true)} className="bg-yellow-400 text-black font-bold tracking-widest text-xs px-4 py-3 hover:opacity-90 transition-opacity uppercase">+ Assign Task</button>
               )}
             </div>
             {user.role === "Owner" && (
               <div className="flex gap-2 flex-wrap mb-6">
                 {["all", ...OUTLETS].map(o => (
                   <button key={o} onClick={() => setOutletFilter(o)} className={`font-mono text-[10px] uppercase tracking-widest px-3 py-1.5 border transition-colors ${outletFilter === o ? "border-yellow-400 text-yellow-400" : "border-zinc-700 text-zinc-500 hover:border-zinc-500"}`}>
-                    {o === "all" ? "All Outlets" : o.replace(/_/g, " ")}
+                    {o === "all" ? "All" : o.replace(/_/g, " ")}
                   </button>
                 ))}
               </div>
@@ -255,7 +375,7 @@ const deleteTask = async (taskId: string) => {
                   const staffCompleted = staffTasks.filter(t => t.status === "completed").length;
                   const hasReport = reports.some(r => r.staff_id === s.id && new Date(r.submitted_at).toDateString() === new Date().toDateString());
                   return (
-                    <div key={s.id} className="grid grid-cols-[1fr_80px_80px_80px_100px] gap-4 items-center px-5 py-3 border-b border-zinc-800 last:border-0">
+                    <div key={s.id} className="grid grid-cols-[1fr_60px_60px_60px_90px] gap-2 items-center px-5 py-3 border-b border-zinc-800 last:border-0">
                       <div>
                         <p className="font-semibold text-sm">{s.name}</p>
                         <p className="text-[10px] font-mono text-zinc-600 uppercase tracking-widest">{s.role}</p>
@@ -266,7 +386,7 @@ const deleteTask = async (taskId: string) => {
                       </div>
                       <div className="text-center">
                         <p className={`font-mono text-sm font-bold ${staffOverdue > 0 ? "text-red-500" : "text-zinc-500"}`}>{staffOverdue}</p>
-                        <p className="text-[9px] font-mono text-zinc-600 uppercase">Overdue</p>
+                        <p className="text-[9px] font-mono text-zinc-600 uppercase">Late</p>
                       </div>
                       <div className="text-center">
                         <p className="font-mono text-sm font-bold text-green-400">{staffCompleted}</p>
@@ -274,7 +394,7 @@ const deleteTask = async (taskId: string) => {
                       </div>
                       <div className="text-center">
                         <span className={`font-mono text-[10px] uppercase tracking-widest px-2 py-1 ${hasReport ? "bg-green-400/10 text-green-400" : "bg-yellow-400/10 text-yellow-400"}`}>
-                          {hasReport ? "✓ Reported" : "Pending"}
+                          {hasReport ? "✓ Done" : "Pending"}
                         </span>
                       </div>
                     </div>
@@ -282,23 +402,23 @@ const deleteTask = async (taskId: string) => {
                 })}
               </div>
             )}
-            <div className="grid grid-cols-4 gap-px bg-zinc-800 border border-zinc-800 mb-6">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-px bg-zinc-800 border border-zinc-800 mb-6">
               {[
                 { label: "Total Tasks", value: total, sub: "assigned", color: "" },
                 { label: "Completed", value: completed, sub: `${rate}% rate`, color: "text-green-400" },
                 { label: "In Progress", value: inProgress, sub: "active", color: "text-yellow-400" },
-                { label: "Overdue", value: overdue, sub: overdue > 0 ? "needs action" : "all clear", color: overdue > 0 ? "text-red-500" : "" },
+                { label: "Overdue", value: overdue, sub: overdue > 0 ? "action needed" : "all clear", color: overdue > 0 ? "text-red-500" : "" },
               ].map((s) => (
-                <div key={s.label} className="bg-[#131316] p-5">
+                <div key={s.label} className="bg-[#131316] p-4">
                   <p className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-2">{s.label}</p>
-                  <p className={`text-4xl font-black tracking-tight ${s.color}`}>{s.value}</p>
-                  <p className="text-[11px] font-mono text-zinc-600 mt-1.5">{s.sub}</p>
+                  <p className={`text-3xl font-black tracking-tight ${s.color}`}>{s.value}</p>
+                  <p className="text-[11px] font-mono text-zinc-600 mt-1">{s.sub}</p>
                 </div>
               ))}
             </div>
             {loading ? (
               <div className="bg-[#131316] border border-zinc-800 p-10 text-center">
-                <p className="text-zinc-600 font-mono text-sm uppercase tracking-widest">Loading tasks...</p>
+                <p className="text-zinc-600 font-mono text-sm uppercase tracking-widest">Loading...</p>
               </div>
             ) : tasks.filter(t => outletFilter === "all" || t.outlet_id === outletFilter).length === 0 ? (
               <div className="bg-[#131316] border border-zinc-800 p-10 text-center">
@@ -310,26 +430,23 @@ const deleteTask = async (taskId: string) => {
                   const assigneeName = ALL_STAFF.find(s => s.id === t.assigned_to)?.name || t.assigned_to;
                   const isOverdue = t.status !== "completed" && new Date(t.due_at) < new Date();
                   return (
-                    <div key={t.id} className={`grid grid-cols-[8px_1fr_140px_110px_110px] gap-4 items-center px-5 py-4 border-b border-zinc-800 last:border-0 hover:bg-zinc-900 transition-colors ${isOverdue ? "border-l-2 border-l-red-500" : ""}`}>
+                    <div key={t.id} className={`flex flex-wrap gap-2 items-center px-4 py-3 border-b border-zinc-800 last:border-0 hover:bg-zinc-900 transition-colors ${isOverdue ? "border-l-2 border-l-red-500" : ""}`}>
                       <div className={`w-2 h-2 rounded-full shrink-0 ${t.priority === "critical" ? "bg-red-500" : t.priority === "high" ? "bg-orange-400" : t.priority === "medium" ? "bg-yellow-400" : "bg-zinc-600"}`} />
-                      <div>
+                      <div className="flex-1 min-w-0">
                         <p className="font-semibold text-sm">{t.title}</p>
                         <p className="text-[11px] font-mono text-zinc-500 mt-0.5">{assigneeName} · {t.due_at ? new Date(t.due_at).toLocaleString("en-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "No deadline"}{t.outlet_id ? ` · ${t.outlet_id.replace(/_/g, " ")}` : ""}</p>
                       </div>
-                      <p className={`font-mono text-[10px] uppercase tracking-widest px-2 py-1 text-center ${t.status === "completed" ? "bg-green-400/10 text-green-400" : isOverdue ? "bg-red-500/10 text-red-500" : t.status === "in_progress" ? "bg-yellow-400/10 text-yellow-400" : "bg-zinc-800 text-zinc-500"}`}>
+                      <span className={`font-mono text-[10px] uppercase tracking-widest px-2 py-1 ${t.status === "completed" ? "bg-green-400/10 text-green-400" : isOverdue ? "bg-red-500/10 text-red-500" : t.status === "in_progress" ? "bg-yellow-400/10 text-yellow-400" : "bg-zinc-800 text-zinc-500"}`}>
                         {isOverdue && t.status !== "completed" ? "overdue" : t.status.replace("_", " ")}
-                      </p>
-                      <p className={`font-mono text-[10px] uppercase tracking-widest text-center ${t.priority === "critical" ? "text-red-500" : t.priority === "high" ? "text-orange-400" : t.priority === "medium" ? "text-yellow-400" : "text-zinc-600"}`}>{t.priority}</p>
-                      <div className="flex gap-2 justify-end">
+                      </span>
+                      <div className="flex gap-2">
                         {t.status !== "completed" && (
                           <>
-                            {t.status === "assigned" && <button onClick={() => updateStatus(t.id, "in_progress")} className="text-[10px] font-mono uppercase tracking-widest px-2 py-1 border border-zinc-700 hover:border-yellow-400 hover:text-yellow-400 transition-colors">Start</button>}
-                            <button onClick={() => updateStatus(t.id, "completed")} className="text-[10px] font-mono uppercase tracking-widest px-2 py-1 border border-zinc-700 hover:border-green-400 hover:text-green-400 transition-colors">Done</button>
-                            {user.role === "Owner" && (
-                            <button onClick={() => deleteTask(t.id)} className="text-[10px] font-mono uppercase tracking-widest px-2 py-1 border border-zinc-700 hover:border-red-500 hover:text-red-500 transition-colors">✕</button>
-                            )}
+                            {t.status === "assigned" && <button onClick={() => updateStatus(t.id, "in_progress")} className="text-[10px] font-mono uppercase px-2 py-1 border border-zinc-700 hover:border-yellow-400 hover:text-yellow-400 transition-colors">Start</button>}
+                            <button onClick={() => updateStatus(t.id, "completed")} className="text-[10px] font-mono uppercase px-2 py-1 border border-zinc-700 hover:border-green-400 hover:text-green-400 transition-colors">Done</button>
                           </>
                         )}
+                        {user.role === "Owner" && <button onClick={() => deleteTask(t.id)} className="text-[10px] font-mono uppercase px-2 py-1 border border-zinc-700 hover:border-red-500 hover:text-red-500 transition-colors">✕</button>}
                       </div>
                     </div>
                   );
@@ -341,8 +458,8 @@ const deleteTask = async (taskId: string) => {
 
         {activeTab === "reports" && (
           <div>
-            <div className="mb-8 pb-5 border-b border-zinc-800">
-              <h2 className="text-3xl font-black tracking-tight">{canAssign ? "All Reports" : "Daily Report"}</h2>
+            <div className="mb-6 pb-5 border-b border-zinc-800">
+              <h2 className="text-2xl font-black tracking-tight">{canAssign ? "All Reports" : "Daily Report"}</h2>
               <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mt-1">
                 {canAssign ? "Staff submissions overview" : `Due by ${ALL_STAFF.find(s => s.id === user.id)?.report_time || "--:--"} daily`}
               </p>
@@ -351,21 +468,43 @@ const deleteTask = async (taskId: string) => {
               <div className="mb-8">
                 {todayReport ? (
                   <div className="bg-green-400/5 border border-green-400/30 p-6">
-                    <div className="flex items-center gap-3 mb-3">
+                    <div className="flex items-center gap-3 mb-4">
                       <span className="text-green-400 font-mono text-xs uppercase tracking-widest">✓ Today's report submitted</span>
-                      {todayReport.is_late && <span className="text-red-500 font-mono text-[10px] uppercase tracking-widest bg-red-500/10 px-2 py-0.5">Late</span>}
+                      {todayReport.is_late && <span className="text-red-500 font-mono text-[10px] uppercase bg-red-500/10 px-2 py-0.5">Late</span>}
                     </div>
-                    <p className="text-sm text-zinc-300 leading-relaxed">{todayReport.content}</p>
-                    <p className="text-[11px] font-mono text-zinc-600 mt-3">{new Date(todayReport.submitted_at).toLocaleString("en-IN")}</p>
+                    {todayReport.report_data && (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        {reportFields.map(f => (
+                          <div key={f.key} className="bg-black/30 px-3 py-2">
+                            <p className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest">{f.label}</p>
+                            <p className="text-sm text-white mt-1">{todayReport.report_data[f.key] || "—"}</p>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    <p className="text-[11px] font-mono text-zinc-600 mt-4">{new Date(todayReport.submitted_at).toLocaleString("en-IN")}</p>
                   </div>
                 ) : (
                   <div className="bg-[#131316] border border-zinc-800 p-6">
-                    <div className="flex items-center justify-between mb-4">
-                      <p className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest">Submit Today's Report</p>
+                    <div className="flex items-center justify-between mb-6">
+                      <p className="text-sm font-bold uppercase tracking-widest">Submit Today's Report</p>
                       <span className="text-yellow-400 font-mono text-xs">Due: {ALL_STAFF.find(s => s.id === user.id)?.report_time}</span>
                     </div>
-                    <textarea value={reportContent} onChange={(e) => setReportContent(e.target.value)} placeholder="What did you accomplish today? Any issues or blockers?" rows={5} className="w-full bg-black border border-zinc-800 text-white px-4 py-3 focus:outline-none focus:border-yellow-400 transition-colors text-sm resize-none mb-4" />
-                    <button onClick={submitReport} disabled={reportSubmitting || !reportContent.trim()} className="bg-yellow-400 text-black font-bold tracking-widest text-xs px-6 py-3 hover:opacity-90 transition-opacity uppercase disabled:opacity-50">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                      {reportFields.map(f => (
+                        <div key={f.key}>
+                          <label className="block text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-1">{f.label}</label>
+                          <input
+                            type="text"
+                            value={reportData[f.key] || ""}
+                            onChange={(e) => setReportData(prev => ({ ...prev, [f.key]: e.target.value }))}
+                            className="w-full bg-black border border-zinc-800 text-white px-3 py-2 focus:outline-none focus:border-yellow-400 transition-colors text-sm"
+                            placeholder="—"
+                          />
+                        </div>
+                      ))}
+                    </div>
+                    <button onClick={submitReport} disabled={reportSubmitting} className="bg-yellow-400 text-black font-bold tracking-widest text-xs px-6 py-3 hover:opacity-90 transition-opacity uppercase disabled:opacity-50">
                       {reportSubmitting ? "Submitting..." : "Submit Report →"}
                     </button>
                   </div>
@@ -379,16 +518,29 @@ const deleteTask = async (taskId: string) => {
                 </div>
               ) : reports.map((r) => {
                 const staffName = ALL_STAFF.find(s => s.id === r.staff_id)?.name || r.staff_id;
+                const staffFields = REPORT_FIELDS[r.staff_id] || [];
                 return (
-                  <div key={r.id} className="px-6 py-5 border-b border-zinc-800 last:border-0">
-                    <div className="flex items-center justify-between mb-2">
+                  <div key={r.id} className="border-b border-zinc-800 last:border-0">
+                    <div className="flex items-center justify-between px-6 py-4 cursor-pointer hover:bg-zinc-900 transition-colors" onClick={() => setSelectedReport(selectedReport?.id === r.id ? null : r)}>
                       <div className="flex items-center gap-3">
                         <span className="font-semibold text-sm">{canAssign ? staffName : "My Report"}</span>
-                        {r.is_late && <span className="text-red-500 font-mono text-[10px] uppercase tracking-widest bg-red-500/10 px-2 py-0.5">Late</span>}
+                        {r.is_late && <span className="text-red-500 font-mono text-[10px] uppercase bg-red-500/10 px-2 py-0.5">Late</span>}
                       </div>
-                      <span className="text-[11px] font-mono text-zinc-500">{new Date(r.submitted_at).toLocaleString("en-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</span>
+                      <div className="flex items-center gap-3">
+                        <span className="text-[11px] font-mono text-zinc-500">{new Date(r.submitted_at).toLocaleString("en-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</span>
+                        <span className="text-zinc-500">{selectedReport?.id === r.id ? "▲" : "▼"}</span>
+                      </div>
                     </div>
-                    <p className="text-sm text-zinc-300 leading-relaxed">{r.content}</p>
+                    {selectedReport?.id === r.id && r.report_data && (
+                      <div className="px-6 pb-6 grid grid-cols-1 md:grid-cols-2 gap-3">
+                        {staffFields.map(f => (
+                          <div key={f.key} className="bg-black/30 px-3 py-2">
+                            <p className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest">{f.label}</p>
+                            <p className="text-sm text-white mt-1">{r.report_data[f.key] || "—"}</p>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 );
               })}
@@ -402,7 +554,7 @@ const deleteTask = async (taskId: string) => {
               <h2 className="text-2xl font-black tracking-tight">Analytics</h2>
               <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mt-1">Performance overview — all staff</p>
             </div>
-            <div className="grid grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="bg-[#131316] border border-zinc-800 p-6">
                 <p className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-6">Completion Rate by Staff</p>
                 {ALL_STAFF.filter(s => s.id !== "nishant").map(s => {
@@ -429,7 +581,7 @@ const deleteTask = async (taskId: string) => {
                   { label: "Total Assigned", value: tasks.length, color: "text-white" },
                   { label: "Completed", value: tasks.filter(t => t.status === "completed").length, color: "text-green-400" },
                   { label: "In Progress", value: tasks.filter(t => t.status === "in_progress").length, color: "text-yellow-400" },
-                  { label: "Assigned (not started)", value: tasks.filter(t => t.status === "assigned").length, color: "text-zinc-400" },
+                  { label: "Not Started", value: tasks.filter(t => t.status === "assigned").length, color: "text-zinc-400" },
                   { label: "Overdue", value: tasks.filter(t => t.status !== "completed" && new Date(t.due_at) < new Date()).length, color: "text-red-500" },
                 ].map(s => (
                   <div key={s.label} className="flex justify-between items-center py-3 border-b border-zinc-800 last:border-0">
@@ -472,8 +624,8 @@ const deleteTask = async (taskId: string) => {
       </main>
 
       {showModal && (
-        <div className="fixed inset-0 bg-black/85 backdrop-blur-sm z-50 flex items-center justify-center">
-          <div className="w-[500px] bg-[#131316] border border-zinc-800 p-8">
+        <div className="fixed inset-0 bg-black/85 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="w-full max-w-[500px] bg-[#131316] border border-zinc-800 p-6 max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-6 pb-4 border-b border-zinc-800">
               <h3 className="text-xl font-black tracking-tight">Assign New Task</h3>
               <button onClick={() => setShowModal(false)} className="text-zinc-500 hover:text-white text-xl">✕</button>
@@ -485,7 +637,7 @@ const deleteTask = async (taskId: string) => {
               </div>
               <div>
                 <label className="block text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-2">Description</label>
-                <textarea value={taskDesc} onChange={(e) => setTaskDesc(e.target.value)} placeholder="Optional details..." rows={3} className="w-full bg-black border border-zinc-800 text-white px-4 py-3 focus:outline-none focus:border-yellow-400 transition-colors text-sm resize-none" />
+                <textarea value={taskDesc} onChange={(e) => setTaskDesc(e.target.value)} placeholder="Optional details..." rows={2} className="w-full bg-black border border-zinc-800 text-white px-4 py-3 focus:outline-none focus:border-yellow-400 transition-colors text-sm resize-none" />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
@@ -531,37 +683,39 @@ const deleteTask = async (taskId: string) => {
           </div>
         </div>
       )}
-{showPinModal && (
-  <div className="fixed inset-0 bg-black/85 backdrop-blur-sm z-50 flex items-center justify-center">
-    <div className="w-[400px] bg-[#131316] border border-zinc-800 p-8">
-      <div className="flex justify-between items-center mb-6 pb-4 border-b border-zinc-800">
-        <h3 className="text-xl font-black tracking-tight">Change PIN</h3>
-        <button onClick={() => { setShowPinModal(false); setPinMsg(""); setNewPin(""); }} className="text-zinc-500 hover:text-white text-xl">✕</button>
-      </div>
-      <div className="space-y-4">
-        <div>
-          <label className="block text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-2">New PIN (min 4 digits)</label>
-          <input type="password" value={newPin} onChange={(e) => setNewPin(e.target.value)} placeholder="Enter new PIN" className="w-full bg-black border border-zinc-800 text-white px-4 py-3 focus:outline-none focus:border-yellow-400 transition-colors text-sm" />
+
+      {showPinModal && (
+        <div className="fixed inset-0 bg-black/85 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="w-full max-w-[400px] bg-[#131316] border border-zinc-800 p-8">
+            <div className="flex justify-between items-center mb-6 pb-4 border-b border-zinc-800">
+              <h3 className="text-xl font-black tracking-tight">Change PIN</h3>
+              <button onClick={() => { setShowPinModal(false); setPinMsg(""); setNewPin(""); }} className="text-zinc-500 hover:text-white text-xl">✕</button>
+            </div>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-2">New PIN (min 4 digits)</label>
+                <input type="password" value={newPin} onChange={(e) => setNewPin(e.target.value)} placeholder="Enter new PIN" className="w-full bg-black border border-zinc-800 text-white px-4 py-3 focus:outline-none focus:border-yellow-400 transition-colors text-sm" />
+              </div>
+              {pinMsg && <p className={`font-mono text-xs uppercase ${pinMsg.includes("success") ? "text-green-400" : "text-red-500"}`}>{pinMsg}</p>}
+              <button onClick={updatePin} className="w-full bg-yellow-400 text-black font-bold tracking-widest text-sm py-3 hover:opacity-90 transition-opacity uppercase">Update PIN</button>
+            </div>
+          </div>
         </div>
-        {pinMsg && <p className={`font-mono text-xs uppercase ${pinMsg.includes("success") ? "text-green-400" : "text-red-500"}`}>{pinMsg}</p>}
-        <button onClick={updatePin} className="w-full bg-yellow-400 text-black font-bold tracking-widest text-sm py-3 hover:opacity-90 transition-opacity uppercase">Update PIN</button>
-      </div>
-    </div>
-  </div>
-)}
+      )}
+
       {overdueTask && user?.role !== "Owner" && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center" style={{ background: "rgba(20,0,0,0.97)" }}>
-          <div className="w-[560px] bg-[#131316] border-2 border-red-500">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4" style={{ background: "rgba(20,0,0,0.97)" }}>
+          <div className="w-full max-w-[560px] bg-[#131316] border-2 border-red-500">
             <div className="bg-red-500 px-6 py-4 text-center font-mono text-xs font-bold uppercase tracking-widest text-white animate-pulse">
               ⚠ Action Required · Overdue Task ⚠
             </div>
-            <div className="p-8">
+            <div className="p-6">
               <h3 className="text-2xl font-black mb-2">You have an overdue task</h3>
-              <p className="text-zinc-400 text-sm mb-6 leading-relaxed">This task is past its deadline. You must either complete the task or provide a reason for the delay.</p>
-              <div className="bg-black border border-zinc-800 p-4 mb-6">
+              <p className="text-zinc-400 text-sm mb-4 leading-relaxed">This task is past its deadline. You must either complete it or provide a reason.</p>
+              <div className="bg-black border border-zinc-800 p-4 mb-4">
                 <p className="font-bold text-base mb-1">{overdueTask.title}</p>
                 <p className="font-mono text-xs text-red-500 uppercase tracking-widest">
-                  Overdue by {Math.round((Date.now() - new Date(overdueTask.due_at).getTime()) / 60000)} minutes · Priority: {overdueTask.priority}
+                  Overdue by {Math.round((Date.now() - new Date(overdueTask.due_at).getTime()) / 60000)} min · {overdueTask.priority}
                 </p>
               </div>
               <div className="mb-4">
