@@ -11,6 +11,17 @@ const supabase = createClient(
 type Staff = { id: string; name: string; role: string; report_time: string | null; outlets?: string[] };
 type Task = { id: string; title: string; description: string; status: string; priority: string; due_at: string; assigned_to: string; assigned_by: string; outlet_id: string | null };
 type Report = { id: string; staff_id: string; content: string; submitted_at: string; is_late: boolean; report_data: Record<string, string>; staff_role: string };
+type OutletReport = {
+  id: string; staff_id: string; outlet_id: string; report_date: string;
+  shop_sales_count: number; shop_sales_value: number;
+  swiggy_sales_count: number; swiggy_sales_value: number;
+  zomato_sales_count: number; zomato_sales_value: number;
+  target: number; swiggy_live: boolean; zomato_live: boolean;
+  discount_running: string; discount_rate_good: boolean;
+  unavailable_items: string; expiry_count: number; expiry_items: string;
+  complimentary_count: number; complimentary_reason: string;
+  issues: string; action_taken: string; submitted_at: string; is_late: boolean;
+};
 
 const ALL_STAFF = [
   { id: "nishant", name: "Nishant Vijayakumar", role: "Owner", report_time: null },
@@ -161,6 +172,10 @@ export default function DashboardPage() {
   const [newPin, setNewPin] = useState("");
   const [pinMsg, setPinMsg] = useState("");
   const [selectedReport, setSelectedReport] = useState<Report | null>(null);
+  const [activeOutlet, setActiveOutlet] = useState<string>("");
+  const [outletReports, setOutletReports] = useState<Record<string, OutletReport>>({});
+  const [outletReportData, setOutletReportData] = useState<Record<string, string>>({});
+  const [outletSubmitting, setOutletSubmitting] = useState(false);
 
   useEffect(() => {
     const stored = localStorage.getItem("currentUser");
