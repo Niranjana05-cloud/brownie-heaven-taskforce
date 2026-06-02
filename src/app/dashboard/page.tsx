@@ -188,6 +188,7 @@ export default function DashboardPage() {
     setUser(parsed);
     fetchTasks(parsed);
     fetchReports(parsed);
+    fetchOutletReports(parsed);
   }, [router]);
 
   useEffect(() => {
@@ -215,7 +216,17 @@ export default function DashboardPage() {
       if (overdue) setOverdueTask(overdue);
     }
   };
-
+const fetchOutletReports = async (u: Staff) => {
+  const today = new Date().toISOString().split("T")[0];
+  const { data } = await supabase
+    .from("outlet_reports")
+    .select("*")
+    .eq("staff_id", u.id)
+    .eq("report_date", today);
+  const map: Record<string, OutletReport> = {};
+  (data || []).forEach((r: OutletReport) => { map[r.outlet_id] = r; });
+  setOutletReports(map);
+};
   const fetchReports = async (u: Staff) => {
     let query = supabase.from("reports").select("*").order("submitted_at", { ascending: false });
     if (u.role !== "Owner") query = query.eq("staff_id", u.id);
