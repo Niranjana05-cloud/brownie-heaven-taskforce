@@ -741,6 +741,7 @@ const submitOutletReport = async () => {
                   { label: "Shop Sales", value: `₹${report.shop_sales_value} (${report.shop_sales_count})` },
                   { label: "Swiggy", value: `₹${report.swiggy_sales_value} (${report.swiggy_sales_count})` },
                   { label: "Zomato", value: `₹${report.zomato_sales_value} (${report.zomato_sales_count})` },
+                  { label: "Total Sales", value: `₹${Number(report.shop_sales_value) + Number(report.swiggy_sales_value) + Number(report.zomato_sales_value)}`, color: "text-yellow-400" },
                   { label: "Target", value: `₹${report.target}` },
                   { label: "Swiggy Live", value: report.swiggy_live ? "✓ Yes" : "✗ No", color: report.swiggy_live ? "text-green-400" : "text-red-500" },
                   { label: "Zomato Live", value: report.zomato_live ? "✓ Yes" : "✗ No", color: report.zomato_live ? "text-green-400" : "text-red-500" },
@@ -796,7 +797,6 @@ const submitOutletReport = async () => {
   <p className="text-green-400 font-mono text-xs uppercase tracking-widest">✓ Report submitted for {activeOutlet.replace(/_/g, " ")}</p>
   <button
   onClick={() => editOutletReport(activeOutlet)}
-        target: String(r.target),
         shop_sales_count: String(r.shop_sales_count),
         shop_sales_value: String(r.shop_sales_value),
         swiggy_sales_count: String(r.swiggy_sales_count),
