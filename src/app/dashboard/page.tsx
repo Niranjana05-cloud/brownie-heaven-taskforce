@@ -791,39 +791,40 @@ const submitOutletReport = async () => {
       </div>
     )}
 
-    {activeOutlet && outletReports[activeOutlet] && (
-      <div className="bg-green-400/5 border border-green-400/30 p-6 mb-4">
-       <div className="flex items-center justify-between mb-4">
-  <p className="text-green-400 font-mono text-xs uppercase tracking-widest">✓ Report submitted for {activeOutlet.replace(/_/g, " ")}</p>
-  <button
-  onClick={() => editOutletReport(activeOutlet)}
-className="font-mono text-[10px] uppercase tracking-widest px-3 py-1.5 border border-zinc-700 hover:border-yellow-400 hover:text-yellow-400 transition-colors"
-  >
-    ✏ Edit
-  </button>
-</div>
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-          {[
-            { label: "Shop Sales", value: `₹${outletReports[activeOutlet].shop_sales_value} (${outletReports[activeOutlet].shop_sales_count} orders)` },
-            { label: "Swiggy", value: `₹${outletReports[activeOutlet].swiggy_sales_value} (${outletReports[activeOutlet].swiggy_sales_count} orders)` },
-            { label: "Zomato", value: `₹${outletReports[activeOutlet].zomato_sales_value} (${outletReports[activeOutlet].zomato_sales_count} orders)` },
-            { label: "Target", value: `₹${outletReports[activeOutlet].target}` },
-            { label: "Swiggy Live", value: outletReports[activeOutlet].swiggy_live ? "Yes" : "No" },
-            { label: "Zomato Live", value: outletReports[activeOutlet].zomato_live ? "Yes" : "No" },
-            { label: "Discount Running", value: outletReports[activeOutlet].discount_running || "—" },
-            { label: "Expiry Items", value: `${outletReports[activeOutlet].expiry_count} — ${outletReports[activeOutlet].expiry_items || "—"}` },
-            { label: "Complimentary", value: `${outletReports[activeOutlet].complimentary_count} — ${outletReports[activeOutlet].complimentary_reason || "—"}` },
-            { label: "Issues", value: outletReports[activeOutlet].issues || "—" },
-            { label: "Action Taken", value: outletReports[activeOutlet].action_taken || "—" },
-          ].map(f => (
-            <div key={f.label} className="bg-black/30 px-3 py-2">
-              <p className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest">{f.label}</p>
-              <p className="text-sm text-white mt-1">{f.value}</p>
-            </div>
-          ))}
+   {activeOutlet && outletReports[activeOutlet] && (
+  <div className="bg-green-400/5 border border-green-400/30 p-6 mb-4">
+    <div className="flex items-center justify-between mb-4">
+      <p className="text-green-400 font-mono text-xs uppercase tracking-widest">✓ Report submitted for {activeOutlet.replace(/_/g, " ")}</p>
+      <button
+        onClick={() => editOutletReport(activeOutlet)}
+        className="font-mono text-[10px] uppercase tracking-widest px-3 py-1.5 border border-zinc-700 hover:border-yellow-400 hover:text-yellow-400 transition-colors"
+      >
+        ✏ Edit
+      </button>
+    </div>
+    <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+      {[
+        { label: "Shop Sales", value: `₹${outletReports[activeOutlet].shop_sales_value} (${outletReports[activeOutlet].shop_sales_count} orders)` },
+        { label: "Swiggy", value: `₹${outletReports[activeOutlet].swiggy_sales_value} (${outletReports[activeOutlet].swiggy_sales_count} orders)` },
+        { label: "Zomato", value: `₹${outletReports[activeOutlet].zomato_sales_value} (${outletReports[activeOutlet].zomato_sales_count} orders)` },
+        { label: "Total Sales", value: `₹${Number(outletReports[activeOutlet].shop_sales_value) + Number(outletReports[activeOutlet].swiggy_sales_value) + Number(outletReports[activeOutlet].zomato_sales_value)}`, color: "text-yellow-400" },
+        { label: "Target", value: `₹${outletReports[activeOutlet].target}` },
+        { label: "Swiggy Live", value: outletReports[activeOutlet].swiggy_live ? "✓ Yes" : "✗ No", color: outletReports[activeOutlet].swiggy_live ? "text-green-400" : "text-red-500" },
+        { label: "Zomato Live", value: outletReports[activeOutlet].zomato_live ? "✓ Yes" : "✗ No", color: outletReports[activeOutlet].zomato_live ? "text-green-400" : "text-red-500" },
+        { label: "Discount Running", value: outletReports[activeOutlet].discount_running || "—" },
+        { label: "Expiry Items", value: `${outletReports[activeOutlet].expiry_count} — ${outletReports[activeOutlet].expiry_items || "—"}` },
+        { label: "Complimentary", value: `${outletReports[activeOutlet].complimentary_count} — ${outletReports[activeOutlet].complimentary_reason || "—"}` },
+        { label: "Issues", value: outletReports[activeOutlet].issues || "—" },
+        { label: "Action Taken", value: outletReports[activeOutlet].action_taken || "—" },
+      ].map(f => (
+        <div key={f.label} className="bg-black/30 px-3 py-2">
+          <p className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest">{f.label}</p>
+          <p className={`text-sm mt-1 ${f.color || "text-white"}`}>{f.value}</p>
         </div>
-      </div>
-    )}
+      ))}
+    </div>
+  </div>
+)}
 
     {activeOutlet && !outletReports[activeOutlet] && (
       <div className="bg-[#131316] border border-zinc-800 p-6">
