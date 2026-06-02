@@ -333,6 +333,32 @@ const fetchOutletReports = async (u: Staff) => {
   setNewPin("");
   setTimeout(() => { setShowPinModal(false); setPinMsg(""); }, 1500);
 };
+  const editOutletReport = async (outletId: string) => {
+  const r = outletReports[outletId];
+  if (!r) return;
+  setOutletReportData({
+    target: String(r.target),
+    shop_sales_count: String(r.shop_sales_count),
+    shop_sales_value: String(r.shop_sales_value),
+    swiggy_sales_count: String(r.swiggy_sales_count),
+    swiggy_sales_value: String(r.swiggy_sales_value),
+    zomato_sales_count: String(r.zomato_sales_count),
+    zomato_sales_value: String(r.zomato_sales_value),
+    swiggy_live: r.swiggy_live ? "yes" : "no",
+    zomato_live: r.zomato_live ? "yes" : "no",
+    discount_running: r.discount_running || "",
+    discount_rate_good: r.discount_rate_good ? "yes" : "no",
+    unavailable_items: r.unavailable_items || "",
+    expiry_count: String(r.expiry_count),
+    expiry_items: r.expiry_items || "",
+    complimentary_count: String(r.complimentary_count),
+    complimentary_reason: r.complimentary_reason || "",
+    issues: r.issues || "",
+    action_taken: r.action_taken || "",
+  });
+  await supabase.from("outlet_reports").delete().eq("id", r.id);
+  fetchOutletReports(user!);
+};
 const submitOutletReport = async () => {
   if (!user || !activeOutlet) return;
   setOutletSubmitting(true);
@@ -769,9 +795,7 @@ const submitOutletReport = async () => {
        <div className="flex items-center justify-between mb-4">
   <p className="text-green-400 font-mono text-xs uppercase tracking-widest">✓ Report submitted for {activeOutlet.replace(/_/g, " ")}</p>
   <button
-    onClick={() => {
-      const r = outletReports[activeOutlet];
-      setOutletReportData({
+  onClick={() => editOutletReport(activeOutlet)}
         target: String(r.target),
         shop_sales_count: String(r.shop_sales_count),
         shop_sales_value: String(r.shop_sales_value),
