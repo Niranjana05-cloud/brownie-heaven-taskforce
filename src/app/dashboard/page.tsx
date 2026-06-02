@@ -153,7 +153,7 @@ export default function DashboardPage() {
   const [reports, setReports] = useState<Report[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
-  const [activeTab, setActiveTab] = useState<"tasks" | "my_report" | "all_reports" | "analytics" | "outlet_reports" | "owner_outlets">("tasks");
+  const [activeTab, setActiveTab] = useState<"tasks" | "my_report" | "all_reports" | "analytics" | "outlet_reports" | "owner_outlets" | "history">("tasks");
   const [outletFilter, setOutletFilter] = useState("all");
   const [reportData, setReportData] = useState<Record<string, string>>({});
   const [reportSubmitting, setReportSubmitting] = useState(false);
@@ -177,6 +177,10 @@ export default function DashboardPage() {
   const [outletReportData, setOutletReportData] = useState<Record<string, string>>({});
   const [outletSubmitting, setOutletSubmitting] = useState(false);
   const [allOutletReports, setAllOutletReports] = useState<OutletReport[]>([]);
+  const [historyDate, setHistoryDate] = useState<string>(new Date().toISOString().split("T")[0]);
+const [historyReports, setHistoryReports] = useState<Report[]>([]);
+const [historyOutletReports, setHistoryOutletReports] = useState<OutletReport[]>([]);
+const [historyLoading, setHistoryLoading] = useState(false);
 
   useEffect(() => {
     const stored = localStorage.getItem("currentUser");
@@ -218,6 +222,18 @@ export default function DashboardPage() {
       if (overdue) setOverdueTask(overdue);
     }
   };
+  const fetchHistoryReports = async (date: string) => {
+  setHistoryLoading(true);
+  const start = `${date}T00:00:00.000Z`;
+  const end = `${date}T23:59:59.999Z`;
+  const [{ data: reps }, { data: outletReps }] = await Promise.all([
+    supabase.from("reports").select("*").gte("submitted_at", start).lte("submitted_at", end).order("submitted_at", { ascending: false }),
+    supabase.from("outlet_reports").select("*").eq("report_date", date).order("submitted_at", { ascending: false }),
+  ]);
+  setHistoryReports(reps || []);
+  setHistoryOutletReports(outletReps || []);
+  setHistoryLoading(false);
+};
   const fetchAllOutletReports = async () => {
   const today = new Date().toISOString().split("T")[0];
   const { data } = await supabase
@@ -424,6 +440,9 @@ const submitOutletReport = async () => {
               <div onClick={() => { setActiveTab("owner_outlets"); setSidebarOpen(false); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "owner_outlets" ? "text-white bg-zinc-900 border-l-2 border-yellow-400" : "text-zinc-500 hover:text-white"}`}>
               <span>🏪</span> Outlet Reports
               </div>
+              <div onClick={() => { setActiveTab("history"); setSidebarOpen(false); fetchHistoryReports(historyDate); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "history" ? "text-white bg-zinc-900 border-l-2 border-yellow-400" : "text-zinc-500 hover:text-white"}`}>
+             <span>📅</span> History
+             </div>
             </>
           )}
         </nav>
@@ -796,6 +815,107 @@ const submitOutletReport = async () => {
         </button>
       </div>
     )}
+  </div>
+)}
+        {activeTab === "history" && (
+  <div>
+    <div className="mb-6 pb-5 border-b border-zinc-800">
+      <h2 className="text-2xl font-black tracking-tight">History</h2>
+      <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mt-1">View reports by date</p>
+    </div>
+    <div className="flex items-center gap-4 mb-8">
+      <input
+        type="date"
+        value={historyDate}
+        onChange={(e) => { setHistoryDate(e.target.value); fetchHistoryReports(e.target.value); }}
+        className="bg-black border border-zinc-800 text-white px-4 py-2.5 focus:outline-none focus:border-yellow-400 transition-colors font-mono text-sm"
+      />
+      <span className="text-zinc-500 font-mono text-xs uppercase tracking-widest">{historyLoading ? "Loading..." : `${historyReports.length} reports · ${historyOutletReports.length} outlet reports`}</span>
+    </div>
+
+    {/* Staff Reports */}
+    <div className="mb-8">
+      <p className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-4">Staff Reports</p>
+      <div className="bg-[#131316] border border-zinc-800">
+        {historyReports.length === 0 ? (
+          <div className="p-8 text-center">
+            <p className="text-zinc-600 font-mono text-sm uppercase tracking-widest">No reports for this date</p>
+          </div>
+        ) : historyReports.map((r) => {
+          const staffName = ALL_STAFF.find(s => s.id === r.staff_id)?.name || r.staff_id;
+          const staffFields = REPORT_FIELDS[r.staff_id] || [];
+          return (
+            <div key={r.id} className="border-b border-zinc-800 last:border-0">
+              <div className="flex items-center justify-between px-6 py-4 cursor-pointer hover:bg-zinc-900 transition-colors" onClick={() => setSelectedReport(selectedReport?.id === r.id ? null : r)}>
+                <div className="flex items-center gap-3">
+                  <span className="font-semibold text-sm">{staffName}</span>
+                  {r.is_late && <span className="text-red-500 font-mono text-[10px] uppercase bg-red-500/10 px-2 py-0.5">Late</span>}
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className="text-[11px] font-mono text-zinc-500">{new Date(r.submitted_at).toLocaleString("en-IN", { hour: "2-digit", minute: "2-digit" })}</span>
+                  <span className="text-zinc-500">{selectedReport?.id === r.id ? "▲" : "▼"}</span>
+                </div>
+              </div>
+              {selectedReport?.id === r.id && r.report_data && (
+                <div className="px-6 pb-6 grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {staffFields.map(f => (
+                    <div key={f.key} className="bg-black/30 px-3 py-2">
+                      <p className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest">{f.label}</p>
+                      <p className="text-sm text-white mt-1">{r.report_data[f.key] || "—"}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+
+    {/* Outlet Reports */}
+    <div>
+      <p className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-4">Outlet Reports</p>
+      <div className="grid grid-cols-1 gap-4">
+        {historyOutletReports.length === 0 ? (
+          <div className="bg-[#131316] border border-zinc-800 p-8 text-center">
+            <p className="text-zinc-600 font-mono text-sm uppercase tracking-widest">No outlet reports for this date</p>
+          </div>
+        ) : historyOutletReports.map((r) => {
+          const staffName = ALL_STAFF.find(s => s.id === r.staff_id)?.name || r.staff_id;
+          return (
+            <div key={r.id} className="bg-[#131316] border border-zinc-800 p-5">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <p className="font-bold text-sm uppercase tracking-widest">{r.outlet_id.replace(/_/g, " ")}</p>
+                  <p className="text-[10px] font-mono text-zinc-500 mt-0.5">{staffName}</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  {r.is_late && <span className="font-mono text-[10px] uppercase px-2 py-1 bg-red-500/10 text-red-500">Late</span>}
+                  <span className="text-[11px] font-mono text-zinc-500">{new Date(r.submitted_at).toLocaleString("en-IN", { hour: "2-digit", minute: "2-digit" })}</span>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                {[
+                  { label: "Shop Sales", value: `₹${r.shop_sales_value} (${r.shop_sales_count})` },
+                  { label: "Swiggy", value: `₹${r.swiggy_sales_value} (${r.swiggy_sales_count})` },
+                  { label: "Zomato", value: `₹${r.zomato_sales_value} (${r.zomato_sales_count})` },
+                  { label: "Target", value: `₹${r.target}` },
+                  { label: "Swiggy Live", value: r.swiggy_live ? "✓ Yes" : "✗ No", color: r.swiggy_live ? "text-green-400" : "text-red-500" },
+                  { label: "Zomato Live", value: r.zomato_live ? "✓ Yes" : "✗ No", color: r.zomato_live ? "text-green-400" : "text-red-500" },
+                  { label: "Expiry", value: r.expiry_count > 0 ? `${r.expiry_count} — ${r.expiry_items}` : "None", color: r.expiry_count > 0 ? "text-red-500" : "" },
+                  { label: "Issues", value: r.issues || "—", color: r.issues ? "text-yellow-400" : "" },
+                ].map(f => (
+                  <div key={f.label} className="bg-black/30 px-3 py-2">
+                    <p className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest">{f.label}</p>
+                    <p className={`text-sm mt-1 ${f.color || "text-white"}`}>{f.value}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
   </div>
 )}
         {activeTab === "analytics" && (
