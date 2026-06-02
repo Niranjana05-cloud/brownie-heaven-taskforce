@@ -153,7 +153,7 @@ export default function DashboardPage() {
   const [reports, setReports] = useState<Report[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
-  const [activeTab, setActiveTab] = useState<"tasks" | "my_report" | "all_reports" | "analytics">("tasks");
+  const [activeTab, setActiveTab] = useState<"tasks" | "my_report" | "all_reports" | "analytics" | "outlet_reports">("tasks");
   const [outletFilter, setOutletFilter] = useState("all");
   const [reportData, setReportData] = useState<Record<string, string>>({});
   const [reportSubmitting, setReportSubmitting] = useState(false);
@@ -396,6 +396,12 @@ const submitOutletReport = async () => {
               {!todayReport && <span className="ml-auto w-2 h-2 bg-yellow-400 rounded-full"></span>}
             </div>
           )}
+          {(user.outlets && user.outlets.length > 0) && (
+  <div onClick={() => { setActiveTab("outlet_reports"); setSidebarOpen(false); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "outlet_reports" ? "text-white bg-zinc-900 border-l-2 border-yellow-400" : "text-zinc-500 hover:text-white"}`}>
+    <span>🏪</span> Outlets
+    {Object.keys(outletReports).length < (user.outlets?.length || 0) && <span className="ml-auto w-2 h-2 bg-yellow-400 rounded-full"></span>}
+  </div>
+)}
           {canAssign && (
             <>
               <div onClick={() => { setActiveTab("all_reports"); setSidebarOpen(false); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "my_report" ? "text-white bg-zinc-900 border-l-2 border-yellow-400" : "text-zinc-500 hover:text-white"}`}>
