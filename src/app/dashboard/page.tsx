@@ -306,7 +306,47 @@ const fetchOutletReports = async (u: Staff) => {
   setNewPin("");
   setTimeout(() => { setShowPinModal(false); setPinMsg(""); }, 1500);
 };
-
+const submitOutletReport = async () => {
+  if (!user || !activeOutlet) return;
+  setOutletSubmitting(true);
+  const staffInfo = ALL_STAFF.find(s => s.id === user.id);
+  let isLate = false;
+  if (staffInfo?.report_time) {
+    const [h, m] = staffInfo.report_time.split(":").map(Number);
+    const deadline = new Date();
+    deadline.setHours(h, m, 0, 0);
+    isLate = new Date() > deadline;
+  }
+  const d = outletReportData;
+  const { error } = await supabase.from("outlet_reports").insert({
+    staff_id: user.id,
+    outlet_id: activeOutlet,
+    report_date: new Date().toISOString().split("T")[0],
+    shop_sales_count: parseInt(d.shop_sales_count) || 0,
+    shop_sales_value: parseFloat(d.shop_sales_value) || 0,
+    swiggy_sales_count: parseInt(d.swiggy_sales_count) || 0,
+    swiggy_sales_value: parseFloat(d.swiggy_sales_value) || 0,
+    zomato_sales_count: parseInt(d.zomato_sales_count) || 0,
+    zomato_sales_value: parseFloat(d.zomato_sales_value) || 0,
+    target: parseFloat(d.target) || 0,
+    swiggy_live: d.swiggy_live === "yes",
+    zomato_live: d.zomato_live === "yes",
+    discount_running: d.discount_running || "",
+    discount_rate_good: d.discount_rate_good === "yes",
+    unavailable_items: d.unavailable_items || "",
+    expiry_count: parseInt(d.expiry_count) || 0,
+    expiry_items: d.expiry_items || "",
+    complimentary_count: parseInt(d.complimentary_count) || 0,
+    complimentary_reason: d.complimentary_reason || "",
+    issues: d.issues || "",
+    action_taken: d.action_taken || "",
+    is_late: isLate,
+  });
+  setOutletSubmitting(false);
+  if (error) { alert("Error: " + error.message); return; }
+  setOutletReportData({});
+  fetchOutletReports(user);
+};
   const submitForceAck = async (action: "complete" | "reason") => {
     if (!overdueTask) return;
     if (action === "reason") {
