@@ -655,7 +655,7 @@ const submitOutletReport = async () => {
     <div className="grid grid-cols-1 gap-4">
       {OUTLETS.map(o => {
         const report = allOutletReports.find(r => r.outlet_id === o);
-        const manager = ALL_STAFF.find(s => s.outlets?.includes(o));
+       const manager = ALL_STAFF.find(s => Array.isArray(s.outlets) && s.outlets.includes(o));
         return (
           <div key={o} className={`bg-[#131316] border ${report ? "border-green-400/30" : "border-zinc-800"} p-5`}>
             <div className="flex items-center justify-between mb-4">
