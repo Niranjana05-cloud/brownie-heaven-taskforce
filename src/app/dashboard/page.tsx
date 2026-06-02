@@ -632,7 +632,105 @@ const submitOutletReport = async () => {
             </div>
           </div>
         )}
+{activeTab === "outlet_reports" && (
+  <div>
+    <div className="mb-6 pb-5 border-b border-zinc-800">
+      <h2 className="text-2xl font-black tracking-tight">Outlet Reports</h2>
+      <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mt-1">Daily tracker — fill for each outlet</p>
+    </div>
 
+    {/* Outlet selector tabs */}
+    <div className="flex gap-2 flex-wrap mb-6">
+      {(user.outlets || []).map(o => {
+        const submitted = !!outletReports[o];
+        return (
+          <button key={o} onClick={() => { setActiveOutlet(o); setOutletReportData({}); }}
+            className={`font-mono text-[10px] uppercase tracking-widest px-4 py-2 border transition-colors relative ${activeOutlet === o ? "border-yellow-400 text-yellow-400" : "border-zinc-700 text-zinc-500 hover:border-zinc-500"}`}>
+            {o.replace(/_/g, " ")}
+            {submitted && <span className="ml-2 text-green-400">✓</span>}
+          </button>
+        );
+      })}
+    </div>
+
+    {!activeOutlet && (
+      <div className="bg-[#131316] border border-zinc-800 p-10 text-center">
+        <p className="text-zinc-600 font-mono text-sm uppercase tracking-widest">Select an outlet above to fill today's report</p>
+      </div>
+    )}
+
+    {activeOutlet && outletReports[activeOutlet] && (
+      <div className="bg-green-400/5 border border-green-400/30 p-6 mb-4">
+        <p className="text-green-400 font-mono text-xs uppercase tracking-widest mb-4">✓ Report submitted for {activeOutlet.replace(/_/g, " ")}</p>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+          {[
+            { label: "Shop Sales", value: `₹${outletReports[activeOutlet].shop_sales_value} (${outletReports[activeOutlet].shop_sales_count} orders)` },
+            { label: "Swiggy", value: `₹${outletReports[activeOutlet].swiggy_sales_value} (${outletReports[activeOutlet].swiggy_sales_count} orders)` },
+            { label: "Zomato", value: `₹${outletReports[activeOutlet].zomato_sales_value} (${outletReports[activeOutlet].zomato_sales_count} orders)` },
+            { label: "Target", value: `₹${outletReports[activeOutlet].target}` },
+            { label: "Swiggy Live", value: outletReports[activeOutlet].swiggy_live ? "Yes" : "No" },
+            { label: "Zomato Live", value: outletReports[activeOutlet].zomato_live ? "Yes" : "No" },
+            { label: "Discount Running", value: outletReports[activeOutlet].discount_running || "—" },
+            { label: "Expiry Items", value: `${outletReports[activeOutlet].expiry_count} — ${outletReports[activeOutlet].expiry_items || "—"}` },
+            { label: "Complimentary", value: `${outletReports[activeOutlet].complimentary_count} — ${outletReports[activeOutlet].complimentary_reason || "—"}` },
+            { label: "Issues", value: outletReports[activeOutlet].issues || "—" },
+            { label: "Action Taken", value: outletReports[activeOutlet].action_taken || "—" },
+          ].map(f => (
+            <div key={f.label} className="bg-black/30 px-3 py-2">
+              <p className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest">{f.label}</p>
+              <p className="text-sm text-white mt-1">{f.value}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+    )}
+
+    {activeOutlet && !outletReports[activeOutlet] && (
+      <div className="bg-[#131316] border border-zinc-800 p-6">
+        <div className="flex items-center justify-between mb-6">
+          <p className="text-sm font-bold uppercase tracking-widest">{activeOutlet.replace(/_/g, " ")} — Today's Report</p>
+          <span className="text-yellow-400 font-mono text-xs">Due: {ALL_STAFF.find(s => s.id === user.id)?.report_time}</span>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+          {[
+            { label: "Yesterday's Target (Rs)", key: "target" },
+            { label: "Shop Sales — Orders Count", key: "shop_sales_count" },
+            { label: "Shop Sales — Value (Rs)", key: "shop_sales_value" },
+            { label: "Swiggy Orders Count", key: "swiggy_sales_count" },
+            { label: "Swiggy Sales Value (Rs)", key: "swiggy_sales_value" },
+            { label: "Zomato Orders Count", key: "zomato_sales_count" },
+            { label: "Zomato Sales Value (Rs)", key: "zomato_sales_value" },
+            { label: "Swiggy Live? (yes/no)", key: "swiggy_live" },
+            { label: "Zomato Live? (yes/no)", key: "zomato_live" },
+            { label: "Discount/Offer Running", key: "discount_running" },
+            { label: "Discount Rate Good? (yes/no)", key: "discount_rate_good" },
+            { label: "Unavailable Items", key: "unavailable_items" },
+            { label: "Expiry Items Count", key: "expiry_count" },
+            { label: "Expiry Items (list)", key: "expiry_items" },
+            { label: "Complimentary Given (count)", key: "complimentary_count" },
+            { label: "Complimentary Reason", key: "complimentary_reason" },
+            { label: "Issues Today", key: "issues" },
+            { label: "Action Taken", key: "action_taken" },
+          ].map(f => (
+            <div key={f.key}>
+              <label className="block text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-1">{f.label}</label>
+              <input
+                type="text"
+                value={outletReportData[f.key] || ""}
+                onChange={(e) => setOutletReportData(prev => ({ ...prev, [f.key]: e.target.value }))}
+                className="w-full bg-black border border-zinc-800 text-white px-3 py-2 focus:outline-none focus:border-yellow-400 transition-colors text-sm"
+                placeholder="—"
+              />
+            </div>
+          ))}
+        </div>
+        <button onClick={submitOutletReport} disabled={outletSubmitting} className="bg-yellow-400 text-black font-bold tracking-widest text-xs px-6 py-3 hover:opacity-90 transition-opacity uppercase disabled:opacity-50">
+          {outletSubmitting ? "Submitting..." : `Submit ${activeOutlet.replace(/_/g, " ")} Report →`}
+        </button>
+      </div>
+    )}
+  </div>
+)}
         {activeTab === "analytics" && (
           <div>
             <div className="mb-8 pb-5 border-b border-zinc-800">
