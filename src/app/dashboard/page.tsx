@@ -349,13 +349,13 @@ const submitOutletReport = async () => {
     staff_id: user.id,
     outlet_id: activeOutlet,
     report_date: new Date().toISOString().split("T")[0],
-    shop_sales_count: parseInt(d.shop_sales_count) || 0,
-    shop_sales_value: parseFloat(d.shop_sales_value) || 0,
-    swiggy_sales_count: parseInt(d.swiggy_sales_count) || 0,
-    swiggy_sales_value: parseFloat(d.swiggy_sales_value) || 0,
-    zomato_sales_count: parseInt(d.zomato_sales_count) || 0,
-    zomato_sales_value: parseFloat(d.zomato_sales_value) || 0,
-    target: parseFloat(d.target) || 0,
+   shop_sales_count: parseInt(d.shop_sales_count?.replace(/,/g, "")) || 0,
+   shop_sales_value: parseFloat(d.shop_sales_value?.replace(/,/g, "")) || 0,
+   swiggy_sales_count: parseInt(d.swiggy_sales_count?.replace(/,/g, "")) || 0,
+   swiggy_sales_value: parseFloat(d.swiggy_sales_value?.replace(/,/g, "")) || 0,
+   zomato_sales_count: parseInt(d.zomato_sales_count?.replace(/,/g, "")) || 0,
+   zomato_sales_value: parseFloat(d.zomato_sales_value?.replace(/,/g, "")) || 0,
+   target: parseFloat(d.target?.replace(/,/g, "")) || 0,
     swiggy_live: d.swiggy_live === "yes",
     zomato_live: d.zomato_live === "yes",
     discount_running: d.discount_running || "",
@@ -766,7 +766,40 @@ const submitOutletReport = async () => {
 
     {activeOutlet && outletReports[activeOutlet] && (
       <div className="bg-green-400/5 border border-green-400/30 p-6 mb-4">
-        <p className="text-green-400 font-mono text-xs uppercase tracking-widest mb-4">✓ Report submitted for {activeOutlet.replace(/_/g, " ")}</p>
+       <div className="flex items-center justify-between mb-4">
+  <p className="text-green-400 font-mono text-xs uppercase tracking-widest">✓ Report submitted for {activeOutlet.replace(/_/g, " ")}</p>
+  <button
+    onClick={() => {
+      const r = outletReports[activeOutlet];
+      setOutletReportData({
+        target: String(r.target),
+        shop_sales_count: String(r.shop_sales_count),
+        shop_sales_value: String(r.shop_sales_value),
+        swiggy_sales_count: String(r.swiggy_sales_count),
+        swiggy_sales_value: String(r.swiggy_sales_value),
+        zomato_sales_count: String(r.zomato_sales_count),
+        zomato_sales_value: String(r.zomato_sales_value),
+        swiggy_live: r.swiggy_live ? "yes" : "no",
+        zomato_live: r.zomato_live ? "yes" : "no",
+        discount_running: r.discount_running,
+        discount_rate_good: r.discount_rate_good ? "yes" : "no",
+        unavailable_items: r.unavailable_items,
+        expiry_count: String(r.expiry_count),
+        expiry_items: r.expiry_items,
+        complimentary_count: String(r.complimentary_count),
+        complimentary_reason: r.complimentary_reason,
+        issues: r.issues,
+        action_taken: r.action_taken,
+      });
+      supabase.from("outlet_reports").delete().eq("id", r.id).then(() => {
+        fetchOutletReports(user!);
+      });
+    }}
+    className="font-mono text-[10px] uppercase tracking-widest px-3 py-1.5 border border-zinc-700 hover:border-yellow-400 hover:text-yellow-400 transition-colors"
+  >
+    ✏ Edit
+  </button>
+</div>
         <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
           {[
             { label: "Shop Sales", value: `₹${outletReports[activeOutlet].shop_sales_value} (${outletReports[activeOutlet].shop_sales_count} orders)` },
