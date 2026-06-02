@@ -153,7 +153,7 @@ export default function DashboardPage() {
   const [reports, setReports] = useState<Report[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
-  const [activeTab, setActiveTab] = useState<"tasks" | "my_report" | "all_reports" | "analytics" | "outlet_reports">("tasks");
+  const [activeTab, setActiveTab] = useState<"tasks" | "my_report" | "all_reports" | "analytics" | "outlet_reports" | "owner_outlets">("tasks");
   const [outletFilter, setOutletFilter] = useState("all");
   const [reportData, setReportData] = useState<Record<string, string>>({});
   const [reportSubmitting, setReportSubmitting] = useState(false);
@@ -176,6 +176,7 @@ export default function DashboardPage() {
   const [outletReports, setOutletReports] = useState<Record<string, OutletReport>>({});
   const [outletReportData, setOutletReportData] = useState<Record<string, string>>({});
   const [outletSubmitting, setOutletSubmitting] = useState(false);
+  const [allOutletReports, setAllOutletReports] = useState<OutletReport[]>([]);
 
   useEffect(() => {
     const stored = localStorage.getItem("currentUser");
@@ -189,6 +190,7 @@ export default function DashboardPage() {
     fetchTasks(parsed);
     fetchReports(parsed);
     fetchOutletReports(parsed);
+    if (parsed.role === "Owner") fetchAllOutletReports();
   }, [router]);
 
   useEffect(() => {
@@ -216,6 +218,15 @@ export default function DashboardPage() {
       if (overdue) setOverdueTask(overdue);
     }
   };
+  const fetchAllOutletReports = async () => {
+  const today = new Date().toISOString().split("T")[0];
+  const { data } = await supabase
+    .from("outlet_reports")
+    .select("*")
+    .eq("report_date", today)
+    .order("submitted_at", { ascending: false });
+  setAllOutletReports(data || []);
+};
 const fetchOutletReports = async (u: Staff) => {
   const today = new Date().toISOString().split("T")[0];
   const { data } = await supabase
@@ -409,6 +420,9 @@ const submitOutletReport = async () => {
               </div>
               <div onClick={() => { setActiveTab("analytics"); setSidebarOpen(false); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "analytics" ? "text-white bg-zinc-900 border-l-2 border-yellow-400" : "text-zinc-500 hover:text-white"}`}>
                 <span>◬</span> Analytics
+              </div>
+              <div onClick={() => { setActiveTab("owner_outlets"); setSidebarOpen(false); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "owner_outlets" ? "text-white bg-zinc-900 border-l-2 border-yellow-400" : "text-zinc-500 hover:text-white"}`}>
+              <span>🏪</span> Outlet Reports
               </div>
             </>
           )}
@@ -632,6 +646,59 @@ const submitOutletReport = async () => {
             </div>
           </div>
         )}
+        {activeTab === "owner_outlets" && (
+  <div>
+    <div className="mb-6 pb-5 border-b border-zinc-800">
+      <h2 className="text-2xl font-black tracking-tight">Outlet Reports</h2>
+      <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mt-1">All 12 outlets — today's tracker</p>
+    </div>
+    <div className="grid grid-cols-1 gap-4">
+      {OUTLETS.map(o => {
+        const report = allOutletReports.find(r => r.outlet_id === o);
+        const manager = ALL_STAFF.find(s => s.outlets?.includes(o));
+        return (
+          <div key={o} className={`bg-[#131316] border ${report ? "border-green-400/30" : "border-zinc-800"} p-5`}>
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <p className="font-bold text-sm uppercase tracking-widest">{o.replace(/_/g, " ")}</p>
+                <p className="text-[10px] font-mono text-zinc-500 mt-0.5">{manager?.name || "—"}</p>
+              </div>
+              {report ? (
+                <span className="font-mono text-[10px] uppercase tracking-widest px-2 py-1 bg-green-400/10 text-green-400">
+                  ✓ Submitted {report.is_late ? "· Late" : "· On Time"}
+                </span>
+              ) : (
+                <span className="font-mono text-[10px] uppercase tracking-widest px-2 py-1 bg-yellow-400/10 text-yellow-400">Pending</span>
+              )}
+            </div>
+            {report && (
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                {[
+                  { label: "Shop Sales", value: `₹${report.shop_sales_value} (${report.shop_sales_count})` },
+                  { label: "Swiggy", value: `₹${report.swiggy_sales_value} (${report.swiggy_sales_count})` },
+                  { label: "Zomato", value: `₹${report.zomato_sales_value} (${report.zomato_sales_count})` },
+                  { label: "Target", value: `₹${report.target}` },
+                  { label: "Swiggy Live", value: report.swiggy_live ? "✓ Yes" : "✗ No", color: report.swiggy_live ? "text-green-400" : "text-red-500" },
+                  { label: "Zomato Live", value: report.zomato_live ? "✓ Yes" : "✗ No", color: report.zomato_live ? "text-green-400" : "text-red-500" },
+                  { label: "Discount", value: report.discount_running || "—" },
+                  { label: "Expiry", value: report.expiry_count > 0 ? `${report.expiry_count} items` : "None", color: report.expiry_count > 0 ? "text-red-500" : "" },
+                  { label: "Complimentary", value: report.complimentary_count > 0 ? `${report.complimentary_count}` : "None" },
+                  { label: "Issues", value: report.issues || "—", color: report.issues ? "text-yellow-400" : "" },
+                  { label: "Action Taken", value: report.action_taken || "—" },
+                ].map(f => (
+                  <div key={f.label} className="bg-black/30 px-3 py-2">
+                    <p className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest">{f.label}</p>
+                    <p className={`text-sm mt-1 ${f.color || "text-white"}`}>{f.value}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  </div>
+)}
 {activeTab === "outlet_reports" && (
   <div>
     <div className="mb-6 pb-5 border-b border-zinc-800">
