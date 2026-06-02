@@ -819,10 +819,18 @@ const submitOutletReport = async () => {
 )}
         {activeTab === "history" && (
   <div>
-    <div className="mb-6 pb-5 border-b border-zinc-800">
-      <h2 className="text-2xl font-black tracking-tight">History</h2>
-      <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mt-1">View reports by date</p>
-    </div>
+    <div className="flex justify-between items-end mb-6 pb-5 border-b border-zinc-800">
+  <div>
+    <h2 className="text-2xl font-black tracking-tight">History</h2>
+    <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mt-1">View reports by date</p>
+  </div>
+  <button
+    onClick={() => window.print()}
+    className="bg-yellow-400 text-black font-bold tracking-widest text-xs px-5 py-3 hover:opacity-90 transition-opacity uppercase"
+  >
+    ↓ Export PDF
+  </button>
+</div>
     <div className="flex items-center gap-4 mb-8">
       <input
         type="date"
