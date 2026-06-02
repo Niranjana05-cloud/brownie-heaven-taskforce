@@ -219,7 +219,7 @@ const [historyLoading, setHistoryLoading] = useState(false);
     setLoading(false);
     if (u.role !== "Owner") {
       const overdue = (data || []).find((t: Task) => t.status !== "completed" && new Date(t.due_at) < new Date());
-      if (overdue) setOverdueTask(overdue);
+     if (overdue) { setOverdueTask(overdue); playAlert(); }
     }
   };
   const fetchHistoryReports = async (date: string) => {
@@ -373,6 +373,25 @@ const submitOutletReport = async () => {
   if (error) { alert("Error: " + error.message); return; }
   setOutletReportData({});
   fetchOutletReports(user);
+};
+  const playAlert = () => {
+  try {
+    const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+    const oscillator = ctx.createOscillator();
+    const gainNode = ctx.createGain();
+    oscillator.connect(gainNode);
+    gainNode.connect(ctx.destination);
+    oscillator.type = "square";
+    oscillator.frequency.setValueAtTime(880, ctx.currentTime);
+    oscillator.frequency.setValueAtTime(440, ctx.currentTime + 0.1);
+    oscillator.frequency.setValueAtTime(880, ctx.currentTime + 0.2);
+    gainNode.gain.setValueAtTime(0.3, ctx.currentTime);
+    gainNode.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4);
+    oscillator.start(ctx.currentTime);
+    oscillator.stop(ctx.currentTime + 0.4);
+  } catch (e) {
+    console.log("Audio not supported");
+  }
 };
   const submitForceAck = async (action: "complete" | "reason") => {
     if (!overdueTask) return;
