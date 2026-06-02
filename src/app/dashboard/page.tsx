@@ -838,37 +838,53 @@ const submitOutletReport = async () => {
           <span className="text-yellow-400 font-mono text-xs">Due: {ALL_STAFF.find(s => s.id === user.id)?.report_time}</span>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-          {[
-            { label: "Yesterday's Target (Rs)", key: "target" },
-            { label: "Shop Sales — Orders Count", key: "shop_sales_count" },
-            { label: "Shop Sales — Value (Rs)", key: "shop_sales_value" },
-            { label: "Swiggy Orders Count", key: "swiggy_sales_count" },
-            { label: "Swiggy Sales Value (Rs)", key: "swiggy_sales_value" },
-            { label: "Zomato Orders Count", key: "zomato_sales_count" },
-            { label: "Zomato Sales Value (Rs)", key: "zomato_sales_value" },
-            { label: "Swiggy Live? (yes/no)", key: "swiggy_live" },
-            { label: "Zomato Live? (yes/no)", key: "zomato_live" },
-            { label: "Discount/Offer Running", key: "discount_running" },
-            { label: "Discount Rate Good? (yes/no)", key: "discount_rate_good" },
-            { label: "Unavailable Items", key: "unavailable_items" },
-            { label: "Expiry Items Count", key: "expiry_count" },
-            { label: "Expiry Items (list)", key: "expiry_items" },
-            { label: "Complimentary Given (count)", key: "complimentary_count" },
-            { label: "Complimentary Reason", key: "complimentary_reason" },
-            { label: "Issues Today", key: "issues" },
-            { label: "Action Taken", key: "action_taken" },
-          ].map(f => (
-            <div key={f.key}>
-              <label className="block text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-1">{f.label}</label>
-              <input
-                type="text"
-                value={outletReportData[f.key] || ""}
-                onChange={(e) => setOutletReportData(prev => ({ ...prev, [f.key]: e.target.value }))}
-                className="w-full bg-black border border-zinc-800 text-white px-3 py-2 focus:outline-none focus:border-yellow-400 transition-colors text-sm"
-                placeholder="—"
-              />
-            </div>
-          ))}
+         {[
+  { label: "Yesterday's Target (Rs)", key: "target" },
+  { label: "Shop Sales — Orders Count", key: "shop_sales_count" },
+  { label: "Shop Sales — Value (Rs)", key: "shop_sales_value" },
+  { label: "Swiggy Orders Count", key: "swiggy_sales_count" },
+  { label: "Swiggy Sales Value (Rs)", key: "swiggy_sales_value" },
+  { label: "Zomato Orders Count", key: "zomato_sales_count" },
+  { label: "Zomato Sales Value (Rs)", key: "zomato_sales_value" },
+  { label: "Discount/Offer Running", key: "discount_running" },
+  { label: "Unavailable Items", key: "unavailable_items" },
+  { label: "Expiry Items Count", key: "expiry_count" },
+  { label: "Expiry Items (list)", key: "expiry_items" },
+  { label: "Complimentary Given (count)", key: "complimentary_count" },
+  { label: "Complimentary Reason", key: "complimentary_reason" },
+  { label: "Issues Today", key: "issues" },
+  { label: "Action Taken", key: "action_taken" },
+].map(f => (
+  <div key={f.key}>
+    <label className="block text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-1">{f.label}</label>
+    <input
+      type="text"
+      value={outletReportData[f.key] || ""}
+      onChange={(e) => setOutletReportData(prev => ({ ...prev, [f.key]: e.target.value }))}
+      className="w-full bg-black border border-zinc-800 text-white px-3 py-2 focus:outline-none focus:border-yellow-400 transition-colors text-sm"
+      placeholder="—"
+    />
+  </div>
+))}
+
+{/* Yes/No dropdowns */}
+{[
+  { label: "Swiggy Live?", key: "swiggy_live" },
+  { label: "Zomato Live?", key: "zomato_live" },
+  { label: "Discount Rate Good?", key: "discount_rate_good" },
+].map(f => (
+  <div key={f.key}>
+    <label className="block text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-1">{f.label}</label>
+    <select
+      value={outletReportData[f.key] || "yes"}
+      onChange={(e) => setOutletReportData(prev => ({ ...prev, [f.key]: e.target.value }))}
+      className="w-full bg-black border border-zinc-800 text-white px-3 py-2 focus:outline-none focus:border-yellow-400 transition-colors text-sm"
+    >
+      <option value="yes">Yes</option>
+      <option value="no">No</option>
+    </select>
+  </div>
+))}
         </div>
         <button onClick={submitOutletReport} disabled={outletSubmitting} className="bg-yellow-400 text-black font-bold tracking-widest text-xs px-6 py-3 hover:opacity-90 transition-opacity uppercase disabled:opacity-50">
           {outletSubmitting ? "Submitting..." : `Submit ${activeOutlet.replace(/_/g, " ")} Report →`}
