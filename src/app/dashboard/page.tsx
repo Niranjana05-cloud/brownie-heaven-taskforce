@@ -190,7 +190,7 @@ export default function DashboardPage() {
     fetchTasks(parsed);
     fetchReports(parsed);
     fetchOutletReports(parsed);
-    if (parsed.role === "Owner") fetchAllOutletReports();
+   if (parsed.role === "Owner" || parsed.role === "Manager") fetchAllOutletReports();
   }, [router]);
 
   useEffect(() => {
