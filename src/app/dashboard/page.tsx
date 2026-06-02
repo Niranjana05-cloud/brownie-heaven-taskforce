@@ -333,10 +333,10 @@ const fetchOutletReports = async (u: Staff) => {
   setNewPin("");
   setTimeout(() => { setShowPinModal(false); setPinMsg(""); }, 1500);
 };
-  const editOutletReport = async (outletId: string) => {
+ const editOutletReport = async (outletId: string) => {
   const r = outletReports[outletId];
   if (!r) return;
-  setOutletReportData({
+  const data = {
     target: String(r.target),
     shop_sales_count: String(r.shop_sales_count),
     shop_sales_value: String(r.shop_sales_value),
@@ -355,9 +355,14 @@ const fetchOutletReports = async (u: Staff) => {
     complimentary_reason: r.complimentary_reason || "",
     issues: r.issues || "",
     action_taken: r.action_taken || "",
-  });
+  };
   await supabase.from("outlet_reports").delete().eq("id", r.id);
-  fetchOutletReports(user!);
+  setOutletReports(prev => {
+    const updated = { ...prev };
+    delete updated[outletId];
+    return updated;
+  });
+  setOutletReportData(data);
 };
 const submitOutletReport = async () => {
   if (!user || !activeOutlet) return;
