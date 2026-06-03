@@ -733,7 +733,7 @@ const submitOutletReport = async () => {
   <input
     type="date"
     value={historyDate}
-    onChange={(e) => { setHistoryDate(e.target.value); fetchAllOutletReportsByDate(e.target.value); }}
+   onChange={(e) => { setHistoryDate(e.target.value); fetchAllOutletReports(e.target.value); }}
     className="bg-black border border-zinc-800 text-white px-4 py-2.5 focus:outline-none focus:border-yellow-400 transition-colors font-mono text-sm"
   />
 </div>
