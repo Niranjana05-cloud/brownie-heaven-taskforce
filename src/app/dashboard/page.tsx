@@ -399,7 +399,7 @@ const fetchOutletReports = async (u: Staff) => {
  const editOutletReport = async (outletId: string) => {
   const r = outletReports[outletId];
   if (!r) return;
-  const data = {
+  setOutletReportData({
     target: String(r.target),
     shop_sales_count: String(r.shop_sales_count),
     shop_sales_value: String(r.shop_sales_value),
@@ -418,14 +418,14 @@ const fetchOutletReports = async (u: Staff) => {
     complimentary_reason: r.complimentary_reason || "",
     issues: r.issues || "",
     action_taken: r.action_taken || "",
-  };
-  await supabase.from("outlet_reports").delete().eq("id", r.id);
+    is_edited: "true",
+    editing_id: r.id,
+  });
   setOutletReports(prev => {
     const updated = { ...prev };
     delete updated[outletId];
     return updated;
   });
-  setOutletReportData({ ...data, is_edited: "true" })
 };
 const submitOutletReport = async () => {
   if (!user || !activeOutlet) return;
@@ -439,17 +439,14 @@ const submitOutletReport = async () => {
     isLate = new Date() > deadline;
   }
   const d = outletReportData;
-  const { error } = await supabase.from("outlet_reports").insert({
-    staff_id: user.id,
-    outlet_id: activeOutlet,
-   report_date: (() => { const d = new Date(); d.setDate(d.getDate() - 1); return d.toISOString().split("T")[0]; })(),
-   shop_sales_count: parseInt(d.shop_sales_count?.replace(/,/g, "")) || 0,
-   shop_sales_value: parseFloat(d.shop_sales_value?.replace(/,/g, "")) || 0,
-   swiggy_sales_count: parseInt(d.swiggy_sales_count?.replace(/,/g, "")) || 0,
-   swiggy_sales_value: parseFloat(d.swiggy_sales_value?.replace(/,/g, "")) || 0,
-   zomato_sales_count: parseInt(d.zomato_sales_count?.replace(/,/g, "")) || 0,
-   zomato_sales_value: parseFloat(d.zomato_sales_value?.replace(/,/g, "")) || 0,
-   target: parseFloat(d.target?.replace(/,/g, "")) || 0,
+  const payload = {
+    shop_sales_count: parseInt(d.shop_sales_count?.replace(/,/g, "")) || 0,
+    shop_sales_value: parseFloat(d.shop_sales_value?.replace(/,/g, "")) || 0,
+    swiggy_sales_count: parseInt(d.swiggy_sales_count?.replace(/,/g, "")) || 0,
+    swiggy_sales_value: parseFloat(d.swiggy_sales_value?.replace(/,/g, "")) || 0,
+    zomato_sales_count: parseInt(d.zomato_sales_count?.replace(/,/g, "")) || 0,
+    zomato_sales_value: parseFloat(d.zomato_sales_value?.replace(/,/g, "")) || 0,
+    target: parseFloat(d.target?.replace(/,/g, "")) || 0,
     swiggy_live: d.swiggy_live?.toLowerCase() === "yes",
     zomato_live: d.zomato_live?.toLowerCase() === "yes",
     discount_running: d.discount_running || "",
@@ -462,12 +459,25 @@ const submitOutletReport = async () => {
     issues: d.issues || "",
     action_taken: d.action_taken || "",
     is_late: isLate,
-    is_edited: outletReportData.is_edited === "true",
-  });
- setOutletSubmitting(false);
-if (error) { alert("Error: " + error.message); return; }
-setOutletReportData({});
-await fetchOutletReports(user!);
+    is_edited: d.is_edited === "true",
+  };
+  let error;
+  if (d.editing_id) {
+    const result = await supabase.from("outlet_reports").update(payload).eq("id", d.editing_id);
+    error = result.error;
+  } else {
+    const result = await supabase.from("outlet_reports").insert({
+      ...payload,
+      staff_id: user.id,
+      outlet_id: activeOutlet,
+      report_date: new Date().toISOString().split("T")[0],
+    });
+    error = result.error;
+  }
+  setOutletSubmitting(false);
+  if (error) { alert("Error: " + error.message); return; }
+  setOutletReportData({});
+  await fetchOutletReports(user);
 };
   const playAlert = () => {
   try {
