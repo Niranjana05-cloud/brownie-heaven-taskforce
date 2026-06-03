@@ -223,6 +223,48 @@ export default function DashboardPage() {
      if (overdue) { setOverdueTask(overdue); playAlert(); }
     }
   };
+  const exportCSV = () => {
+  if (historyOutletReports.length === 0) { alert("No outlet reports for this date."); return; }
+  const headers = ["Outlet", "Manager", "Date", "Shop Sales Value", "Shop Sales Count", "Swiggy Value", "Swiggy Count", "Zomato Value", "Zomato Count", "Total Sales", "Target", "Swiggy Live", "Zomato Live", "Discount Running", "Discount Rate Good", "Unavailable Items", "Expiry Count", "Expiry Items", "Complimentary Count", "Complimentary Reason", "Issues", "Action Taken", "Submitted At", "Late"];
+  const rows = historyOutletReports.map(r => {
+    const manager = ALL_STAFF.find(s => (s.outlets as string[]).includes(r.outlet_id))?.name || "—";
+    const total = Number(r.shop_sales_value) + Number(r.swiggy_sales_value) + Number(r.zomato_sales_value);
+    return [
+      r.outlet_id.replace(/_/g, " "),
+      manager,
+      r.report_date,
+      r.shop_sales_value,
+      r.shop_sales_count,
+      r.swiggy_sales_value,
+      r.swiggy_sales_count,
+      r.zomato_sales_value,
+      r.zomato_sales_count,
+      total,
+      r.target,
+      r.swiggy_live ? "Yes" : "No",
+      r.zomato_live ? "Yes" : "No",
+      r.discount_running || "",
+      r.discount_rate_good ? "Yes" : "No",
+      r.unavailable_items || "",
+      r.expiry_count,
+      r.expiry_items || "",
+      r.complimentary_count,
+      r.complimentary_reason || "",
+      r.issues || "",
+      r.action_taken || "",
+      new Date(r.submitted_at).toLocaleString("en-IN"),
+      r.is_late ? "Yes" : "No",
+    ];
+  });
+  const csv = [headers, ...rows].map(r => r.map(v => `"${v}"`).join(",")).join("\n");
+  const blob = new Blob([csv], { type: "text/csv" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `brownie-heaven-outlet-reports-${historyDate}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+};
   const fetchHistoryReports = async (date: string) => {
   setHistoryLoading(true);
   const start = `${date}T00:00:00.000Z`;
@@ -936,12 +978,20 @@ const submitOutletReport = async () => {
     <h2 className="text-2xl font-black tracking-tight">History</h2>
     <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mt-1">View reports by date</p>
   </div>
+ <div className="flex gap-2">
+  <button
+    onClick={exportCSV}
+    className="bg-zinc-800 border border-zinc-700 text-white font-bold tracking-widest text-xs px-5 py-3 hover:border-yellow-400 hover:text-yellow-400 transition-colors uppercase"
+  >
+    ↓ CSV
+  </button>
   <button
     onClick={() => window.print()}
     className="bg-yellow-400 text-black font-bold tracking-widest text-xs px-5 py-3 hover:opacity-90 transition-opacity uppercase"
   >
-    ↓ Export PDF
+    ↓ PDF
   </button>
+</div>
 </div>
     <div className="flex items-center gap-4 mb-8">
       <input
