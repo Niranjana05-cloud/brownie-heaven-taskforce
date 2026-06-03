@@ -697,12 +697,29 @@ const submitOutletReport = async () => {
             </div>
             {activeTab === "my_report" && hasReportDuty && (
               <div className="mb-8">
-                {todayReport ? (
-                  <div className="bg-green-400/5 border border-green-400/30 p-6">
-                    <div className="flex items-center gap-3 mb-4">
-                      <span className="text-green-400 font-mono text-xs uppercase tracking-widest">✓ Today's report submitted</span>
-                      {todayReport.is_late && <span className="text-red-500 font-mono text-[10px] uppercase bg-red-500/10 px-2 py-0.5">Late</span>}
-                    </div>
+               {todayReport ? (
+  <div className="bg-green-400/5 border border-green-400/30 p-6">
+    <div className="flex items-center justify-between mb-4">
+      <div className="flex items-center gap-3">
+        <span className="text-green-400 font-mono text-xs uppercase tracking-widest">✓ Today's report submitted</span>
+        {todayReport.is_late && <span className="text-red-500 font-mono text-[10px] uppercase bg-red-500/10 px-2 py-0.5">Late</span>}
+      </div>
+      <button
+        onClick={async () => {
+          if (!user) return;
+          const data: Record<string, string> = {};
+          if (todayReport.report_data) {
+            reportFields.forEach(f => { data[f.key] = todayReport.report_data[f.key] || ""; });
+          }
+          await supabase.from("reports").delete().eq("id", todayReport.id);
+          setTodayReport(null);
+          setReportData(data);
+        }}
+        className="font-mono text-[10px] uppercase tracking-widest px-3 py-1.5 border border-zinc-700 hover:border-yellow-400 hover:text-yellow-400 transition-colors"
+      >
+        ✏ Edit
+      </button>
+    </div>
                     {todayReport.report_data && (
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                         {reportFields.map(f => (
