@@ -896,7 +896,7 @@ const submitOutletReport = async () => {
   <div className="bg-green-400/5 border border-green-400/30 p-6 mb-4">
     <div className="flex items-center justify-between mb-4">
       <div className="flex items-center gap-2">
-  <p className="text-green-400 font-mono text-xs uppercase tracking-widest">✓ Report for {activeOutlet.replace(/_/g, " ")} — {new Date(outletHistoryDate).toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" })}</p>
+ <p className="text-green-400 font-mono text-xs uppercase tracking-widest">✓ Report for {activeOutlet.replace(/_/g, " ")} — {new Date(outletReports[activeOutlet].report_date).toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" })}</p>
   {outletReports[activeOutlet]?.is_edited && (
     <span className="font-mono text-[10px] uppercase tracking-widest px-2 py-0.5 bg-yellow-400/10 text-yellow-400">Edited</span>
   )}
