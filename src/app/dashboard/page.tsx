@@ -315,6 +315,7 @@ const fetchOutletReports = async (u: Staff) => {
   const map: Record<string, OutletReport> = {};
   (data || []).forEach((r: OutletReport) => { map[r.outlet_id] = r; });
   setOutletReports(map);
+  return map;
 };
   const fetchReports = async (u: Staff) => {
     let query = supabase.from("reports").select("*").order("submitted_at", { ascending: false });
@@ -463,10 +464,10 @@ const submitOutletReport = async () => {
     is_late: isLate,
     is_edited: outletReportData.is_edited === "true",
   });
-  setOutletSubmitting(false);
-  if (error) { alert("Error: " + error.message); return; }
-  setOutletReportData({});
-  fetchOutletReports(user);
+ setOutletSubmitting(false);
+if (error) { alert("Error: " + error.message); return; }
+setOutletReportData({});
+await fetchOutletReports(user!);
 };
   const playAlert = () => {
   try {
