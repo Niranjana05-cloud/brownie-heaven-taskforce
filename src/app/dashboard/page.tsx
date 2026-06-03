@@ -176,7 +176,7 @@ export default function DashboardPage() {
   const [outletReports, setOutletReports] = useState<Record<string, OutletReport>>({});
   const [outletReportData, setOutletReportData] = useState<Record<string, string>>({});
   const [outletSubmitting, setOutletSubmitting] = useState(false);
-  const [outletHistoryDate, setOutletHistoryDate] = useState<string>(() => { const d = new Date(); d.setDate(d.getDate() - 1); return d.toISOString().split("T")[0]; });
+  const [outletHistoryDate, setOutletHistoryDate] = useState<string>(new Date().toISOString().split("T")[0]);
   const [allOutletReports, setAllOutletReports] = useState<OutletReport[]>([]);
   const [historyDate, setHistoryDate] = useState<string>(new Date().toISOString().split("T")[0]);
   const [historyReports, setHistoryReports] = useState<Report[]>([]);
@@ -306,9 +306,7 @@ export default function DashboardPage() {
   setOutletReports(map);
 };
 const fetchOutletReports = async (u: Staff) => {
-  const d = new Date();
-  d.setDate(d.getDate() - 1);
-  const today = d.toISOString().split("T")[0];
+  const today = new Date().toISOString().split("T")[0];
   const { data } = await supabase
     .from("outlet_reports")
     .select("*")
