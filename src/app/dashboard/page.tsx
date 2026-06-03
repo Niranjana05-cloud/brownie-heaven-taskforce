@@ -176,11 +176,12 @@ export default function DashboardPage() {
   const [outletReports, setOutletReports] = useState<Record<string, OutletReport>>({});
   const [outletReportData, setOutletReportData] = useState<Record<string, string>>({});
   const [outletSubmitting, setOutletSubmitting] = useState(false);
+  const [outletHistoryDate, setOutletHistoryDate] = useState<string>(new Date().toISOString().split("T")[0]);
   const [allOutletReports, setAllOutletReports] = useState<OutletReport[]>([]);
   const [historyDate, setHistoryDate] = useState<string>(new Date().toISOString().split("T")[0]);
-const [historyReports, setHistoryReports] = useState<Report[]>([]);
-const [historyOutletReports, setHistoryOutletReports] = useState<OutletReport[]>([]);
-const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyReports, setHistoryReports] = useState<Report[]>([]);
+  const [historyOutletReports, setHistoryOutletReports] = useState<OutletReport[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
 
   useEffect(() => {
     const stored = localStorage.getItem("currentUser");
@@ -250,6 +251,17 @@ const [historyLoading, setHistoryLoading] = useState(false);
     .eq("report_date", today)
     .order("submitted_at", { ascending: false });
   setAllOutletReports(data || []);
+};
+  const fetchOutletReportsByDate = async (date: string) => {
+  if (!user) return;
+  const { data } = await supabase
+    .from("outlet_reports")
+    .select("*")
+    .eq("staff_id", user.id)
+    .eq("report_date", date);
+  const map: Record<string, OutletReport> = {};
+  (data || []).forEach((r: OutletReport) => { map[r.outlet_id] = r; });
+  setOutletReports(map);
 };
 const fetchOutletReports = async (u: Staff) => {
   const today = new Date().toISOString().split("T")[0];
@@ -787,10 +799,18 @@ const submitOutletReport = async () => {
 )}
 {activeTab === "outlet_reports" && (
   <div>
-    <div className="mb-6 pb-5 border-b border-zinc-800">
-      <h2 className="text-2xl font-black tracking-tight">Outlet Reports</h2>
-      <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mt-1">Daily tracker — fill for each outlet</p>
-    </div>
+    <div className="flex justify-between items-end mb-6 pb-5 border-b border-zinc-800">
+  <div>
+    <h2 className="text-2xl font-black tracking-tight">Outlet Reports</h2>
+    <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mt-1">Daily tracker — fill for each outlet</p>
+  </div>
+  <input
+    type="date"
+    value={outletHistoryDate}
+    onChange={(e) => { setOutletHistoryDate(e.target.value); fetchOutletReportsByDate(e.target.value); }}
+    className="bg-black border border-zinc-800 text-white px-4 py-2.5 focus:outline-none focus:border-yellow-400 transition-colors font-mono text-sm"
+  />
+</div>
 
     {/* Outlet selector tabs */}
     <div className="flex gap-2 flex-wrap mb-6">
