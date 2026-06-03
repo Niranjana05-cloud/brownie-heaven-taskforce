@@ -424,7 +424,7 @@ const fetchOutletReports = async (u: Staff) => {
     delete updated[outletId];
     return updated;
   });
-  setOutletReportData(data);
+  setOutletReportData({ ...data, is_edited: "true" })
 };
 const submitOutletReport = async () => {
   if (!user || !activeOutlet) return;
@@ -461,6 +461,7 @@ const submitOutletReport = async () => {
     issues: d.issues || "",
     action_taken: d.action_taken || "",
     is_late: isLate,
+    is_edited: outletReportData.is_edited === "true",
   });
   setOutletSubmitting(false);
   if (error) { alert("Error: " + error.message); return; }
@@ -804,8 +805,8 @@ const submitOutletReport = async () => {
               </div>
               {report ? (
                 <span className="font-mono text-[10px] uppercase tracking-widest px-2 py-1 bg-green-400/10 text-green-400">
-                  ✓ Submitted {report.is_late ? "· Late" : "· On Time"}
-                </span>
+                 ✓ Submitted {report.is_late ? "· Late" : "· On Time"}{report.is_edited ? " · Edited" : ""}
+                 </span>
               ) : (
                 <span className="font-mono text-[10px] uppercase tracking-widest px-2 py-1 bg-yellow-400/10 text-yellow-400">Pending</span>
               )}
@@ -877,7 +878,12 @@ const submitOutletReport = async () => {
    {activeOutlet && outletReports[activeOutlet] && (
   <div className="bg-green-400/5 border border-green-400/30 p-6 mb-4">
     <div className="flex items-center justify-between mb-4">
-      <p className="text-green-400 font-mono text-xs uppercase tracking-widest">✓ Report submitted for {activeOutlet.replace(/_/g, " ")}</p>
+      <div className="flex items-center gap-2">
+  <p className="text-green-400 font-mono text-xs uppercase tracking-widest">✓ Report submitted for {activeOutlet.replace(/_/g, " ")}</p>
+  {outletReports[activeOutlet]?.is_edited && (
+    <span className="font-mono text-[10px] uppercase tracking-widest px-2 py-0.5 bg-yellow-400/10 text-yellow-400">Edited</span>
+  )}
+</div>
       <button
         onClick={() => editOutletReport(activeOutlet)}
         className="font-mono text-[10px] uppercase tracking-widest px-3 py-1.5 border border-zinc-700 hover:border-yellow-400 hover:text-yellow-400 transition-colors"
