@@ -20,7 +20,7 @@ type OutletReport = {
   discount_running: string; discount_rate_good: boolean;
   unavailable_items: string; expiry_count: number; expiry_items: string;
   complimentary_count: number; complimentary_reason: string;
-  issues: string; action_taken: string; submitted_at: string; is_late: boolean; is_edited: boolean;
+ issues: string; action_taken: string; submitted_at: string; is_late: boolean; is_edited: boolean; google_rating: number; swiggy_rating: number; zomato_rating: number;
 };
 
 const ALL_STAFF = [
@@ -416,6 +416,9 @@ const fetchOutletReports = async (u: Staff) => {
     expiry_items: r.expiry_items || "",
     complimentary_count: String(r.complimentary_count),
     complimentary_reason: r.complimentary_reason || "",
+    google_rating: String(r.google_rating || ""),
+   swiggy_rating: String(r.swiggy_rating || ""),
+   zomato_rating: String(r.zomato_rating || ""),
     issues: r.issues || "",
     action_taken: r.action_taken || "",
     is_edited: "true",
@@ -458,6 +461,9 @@ const submitOutletReport = async () => {
     complimentary_reason: d.complimentary_reason || "",
     issues: d.issues || "",
     action_taken: d.action_taken || "",
+    google_rating: parseFloat(d.google_rating) || null,
+   swiggy_rating: parseFloat(d.swiggy_rating) || null,
+   zomato_rating: parseFloat(d.zomato_rating) || null,
     is_late: isLate,
     is_edited: d.is_edited === "true",
   };
@@ -939,6 +945,9 @@ const submitOutletReport = async () => {
         { label: "Discount Running", value: outletReports[activeOutlet].discount_running || "—" },
         { label: "Expiry Items", value: `${outletReports[activeOutlet].expiry_count} — ${outletReports[activeOutlet].expiry_items || "—"}` },
         { label: "Complimentary", value: `${outletReports[activeOutlet].complimentary_count} — ${outletReports[activeOutlet].complimentary_reason || "—"}` },
+        { label: "Google Rating", value: outletReports[activeOutlet].google_rating ? `⭐ ${outletReports[activeOutlet].google_rating}` : "—" },
+        { label: "Swiggy Rating", value: outletReports[activeOutlet].swiggy_rating ? `⭐ ${outletReports[activeOutlet].swiggy_rating}` : "—" },
+        { label: "Zomato Rating", value: outletReports[activeOutlet].zomato_rating ? `⭐ ${outletReports[activeOutlet].zomato_rating}` : "—" },
         { label: "Issues", value: outletReports[activeOutlet].issues || "—" },
         { label: "Action Taken", value: outletReports[activeOutlet].action_taken || "—" },
       ].map(f => (
@@ -972,6 +981,9 @@ const submitOutletReport = async () => {
   { label: "Expiry Items (list)", key: "expiry_items" },
   { label: "Complimentary Given (count)", key: "complimentary_count" },
   { label: "Complimentary Reason", key: "complimentary_reason" },
+  { label: "Google Rating", key: "google_rating" },
+  { label: "Swiggy Rating", key: "swiggy_rating" },
+  { label: "Zomato Rating", key: "zomato_rating" },
   { label: "Issues Today", key: "issues" },
   { label: "Action Taken", key: "action_taken" },
 ].map(f => (
