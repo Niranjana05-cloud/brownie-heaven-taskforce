@@ -234,8 +234,16 @@ const [historyLoading, setHistoryLoading] = useState(false);
   setHistoryOutletReports(outletReps || []);
   setHistoryLoading(false);
 };
-  const fetchAllOutletReports = async () => {
-  const today = new Date().toISOString().split("T")[0];
+  const fetchAllOutletReportsByDate = async (date: string) => {
+  const { data } = await supabase
+    .from("outlet_reports")
+    .select("*")
+    .eq("report_date", date)
+    .order("submitted_at", { ascending: false });
+  setAllOutletReports(data || []);
+};
+ const fetchAllOutletReports = async (date?: string) => {
+  const today = date || new Date().toISOString().split("T")[0];
   const { data } = await supabase
     .from("outlet_reports")
     .select("*")
@@ -717,10 +725,18 @@ const submitOutletReport = async () => {
         )}
         {activeTab === "owner_outlets" && (
   <div>
-    <div className="mb-6 pb-5 border-b border-zinc-800">
-      <h2 className="text-2xl font-black tracking-tight">Outlet Reports</h2>
-      <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mt-1">All 12 outlets — today's tracker</p>
-    </div>
+   <div className="flex justify-between items-end mb-6 pb-5 border-b border-zinc-800">
+  <div>
+    <h2 className="text-2xl font-black tracking-tight">Outlet Reports</h2>
+    <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mt-1">All 12 outlets — daily tracker</p>
+  </div>
+  <input
+    type="date"
+    value={historyDate}
+    onChange={(e) => { setHistoryDate(e.target.value); fetchAllOutletReportsByDate(e.target.value); }}
+    className="bg-black border border-zinc-800 text-white px-4 py-2.5 focus:outline-none focus:border-yellow-400 transition-colors font-mono text-sm"
+  />
+</div>
     <div className="grid grid-cols-1 gap-4">
       {OUTLETS.map(o => {
         const report = allOutletReports.find(r => r.outlet_id === o);
