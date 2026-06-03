@@ -20,7 +20,7 @@ type OutletReport = {
   discount_running: string; discount_rate_good: boolean;
   unavailable_items: string; expiry_count: number; expiry_items: string;
   complimentary_count: number; complimentary_reason: string;
-  issues: string; action_taken: string; submitted_at: string; is_late: boolean;
+  issues: string; action_taken: string; submitted_at: string; is_late: boolean; is_edited: boolean;
 };
 
 const ALL_STAFF = [
