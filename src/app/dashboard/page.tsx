@@ -987,9 +987,9 @@ await fetchOutletReports(user);
       {(user.outlets || []).map(o => {
         const submitted = !!outletReports[o];
         return (
-          <button key={o} onClick={() => { setActiveOutlet(o); setOutletReportData({}); }}
+         <button key={o} onClick={() => { setActiveOutlet(o); setOutletReportData({ target: OUTLET_TARGETS[o] || "" }); }}
             className={`font-mono text-[10px] uppercase tracking-widest px-4 py-2 border transition-colors relative ${activeOutlet === o ? "border-yellow-400 text-yellow-400" : "border-zinc-700 text-zinc-500 hover:border-zinc-500"}`}>
-            OUTLET_NAMES[o] || o.replace(/_/g, " ")
+           {OUTLET_NAMES[o] || o.replace(/_/g, " ")}
             {submitted && <span className="ml-2 text-green-400">✓</span>}
           </button>
         );
