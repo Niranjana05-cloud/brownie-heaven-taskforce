@@ -774,7 +774,7 @@ await fetchOutletReports(user);
         )}
     ) : null
   </div>
-)}
+
     ) : todayReport ? (
   <div className="bg-green-400/5 border border-green-400/30 p-6">
     <div className="flex items-center justify-between mb-4">
