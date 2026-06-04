@@ -249,7 +249,7 @@ export default function DashboardPage() {
     const manager = ALL_STAFF.find(s => (s.outlets as string[]).includes(r.outlet_id))?.name || "—";
     const total = Number(r.shop_sales_value) + Number(r.swiggy_sales_value) + Number(r.zomato_sales_value);
     return [
-      r.outlet_id.replace(/_/g, " "),
+      OUTLET_NAMES[r.outlet_id] || r.outlet_id.replace(/_/g, " "),
       manager,
       r.report_date,
       r.shop_sales_value,
@@ -726,7 +726,7 @@ await fetchOutletReports(user);
                       <div className={`w-2 h-2 rounded-full shrink-0 ${t.priority === "critical" ? "bg-red-500" : t.priority === "high" ? "bg-orange-400" : t.priority === "medium" ? "bg-yellow-400" : "bg-zinc-600"}`} />
                       <div className="flex-1 min-w-0">
                         <p className="font-semibold text-sm">{t.title}</p>
-                        <p className="text-[11px] font-mono text-zinc-500 mt-0.5">{assigneeName} · {t.due_at ? new Date(t.due_at).toLocaleString("en-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "No deadline"}{t.outlet_id ? ` · ${t.outlet_id.replace(/_/g, " ")}` : ""}</p>
+                        <p className="text-[11px] font-mono text-zinc-500 mt-0.5">{assigneeName} · {t.due_at ? new Date(t.due_at).toLocaleString("en-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "No deadline"}{t.outlet_id ? ` · ${OUTLET_NAMES[t.outlet_id] || t.outlet_id.replace(/_/g, " ")}` : ""}</p>
                       </div>
                       <span className={`font-mono text-[10px] uppercase tracking-widest px-2 py-1 ${t.status === "completed" ? "bg-green-400/10 text-green-400" : isOverdue ? "bg-red-500/10 text-red-500" : t.status === "in_progress" ? "bg-yellow-400/10 text-yellow-400" : "bg-zinc-800 text-zinc-500"}`}>
                         {isOverdue && t.status !== "completed" ? "overdue" : t.status.replace("_", " ")}
@@ -909,7 +909,7 @@ await fetchOutletReports(user);
           <div key={o} className={`bg-[#131316] border ${report ? "border-green-400/30" : "border-zinc-800"} p-5`}>
             <div className="flex items-center justify-between mb-4">
               <div>
-                <p className="font-bold text-sm uppercase tracking-widest">{o.replace(/_/g, " ")}</p>
+                <p className="font-bold text-sm uppercase tracking-widest">OUTLET_NAMES[o] || o.replace(/_/g, " ")</p>
                 <p className="text-[10px] font-mono text-zinc-500 mt-0.5">{manager?.name || "—"}</p>
               </div>
               {report ? (
@@ -975,7 +975,7 @@ await fetchOutletReports(user);
         return (
           <button key={o} onClick={() => { setActiveOutlet(o); setOutletReportData({}); }}
             className={`font-mono text-[10px] uppercase tracking-widest px-4 py-2 border transition-colors relative ${activeOutlet === o ? "border-yellow-400 text-yellow-400" : "border-zinc-700 text-zinc-500 hover:border-zinc-500"}`}>
-            {o.replace(/_/g, " ")}
+            OUTLET_NAMES[o] || o.replace(/_/g, " ")
             {submitted && <span className="ml-2 text-green-400">✓</span>}
           </button>
         );
@@ -992,7 +992,7 @@ await fetchOutletReports(user);
   <div className="bg-green-400/5 border border-green-400/30 p-6 mb-4">
     <div className="flex items-center justify-between mb-4">
       <div className="flex items-center gap-2">
-<p className="text-green-400 font-mono text-xs uppercase tracking-widest">✓ Report for {activeOutlet.replace(/_/g, " ")} — {(() => { const d = new Date(outletHistoryDate); d.setDate(d.getDate() - 1); return d.toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" }); })()}</p>
+<p className="text-green-400 font-mono text-xs uppercase tracking-widest">✓ Report for {OUTLET_NAMES[activeOutlet] || activeOutlet.replace(/_/g, " ")} — {(() => { const d = new Date(outletHistoryDate); d.setDate(d.getDate() - 1); return d.toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" }); })()}</p>
   {outletReports[activeOutlet]?.is_edited && (
     <span className="font-mono text-[10px] uppercase tracking-widest px-2 py-0.5 bg-yellow-400/10 text-yellow-400">Edited</span>
   )}
@@ -1044,7 +1044,7 @@ await fetchOutletReports(user);
     {activeOutlet && !outletReports[activeOutlet] && (
       <div className="bg-[#131316] border border-zinc-800 p-6">
         <div className="flex items-center justify-between mb-6">
-          <p className="text-sm font-bold uppercase tracking-widest">{activeOutlet.replace(/_/g, " ")} — Today's Report</p>
+          <p className="text-sm font-bold uppercase tracking-widest">{OUTLET_NAMES[activeOutlet] || activeOutlet.replace(/_/g, " ")} — Today's Report</p>
           <span className="text-yellow-400 font-mono text-xs">Due: {ALL_STAFF.find(s => s.id === user.id)?.report_time}</span>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
@@ -1106,7 +1106,7 @@ await fetchOutletReports(user);
 ))}
         </div>
         <button onClick={submitOutletReport} disabled={outletSubmitting} className="bg-yellow-400 text-black font-bold tracking-widest text-xs px-6 py-3 hover:opacity-90 transition-opacity uppercase disabled:opacity-50">
-          {outletSubmitting ? "Submitting..." : `Submit ${activeOutlet.replace(/_/g, " ")} Report →`}
+          {outletSubmitting ? "Submitting..." : `Submit ${OUTLET_NAMES[activeOutlet] || activeOutlet.replace(/_/g, " ")} Report →`}
         </button>
       </div>
     )}
@@ -1197,7 +1197,7 @@ await fetchOutletReports(user);
             <div key={r.id} className="bg-[#131316] border border-zinc-800 p-5">
               <div className="flex items-center justify-between mb-4">
                 <div>
-                  <p className="font-bold text-sm uppercase tracking-widest">{r.outlet_id.replace(/_/g, " ")}</p>
+                  <p className="font-bold text-sm uppercase tracking-widest">{OUTLET_NAMES[r.outlet_id] || r.outlet_id.replace(/_/g, " ")}</p>
                   <p className="text-[10px] font-mono text-zinc-500 mt-0.5">{staffName}</p>
                 </div>
                 <div className="flex items-center gap-2">
@@ -1292,7 +1292,7 @@ await fetchOutletReports(user);
                   const count = tasks.filter(t => t.outlet_id === o).length;
                   return (
                     <div key={o} className="flex justify-between items-center py-2 border-b border-zinc-800 last:border-0">
-                      <span className="text-sm text-zinc-400 capitalize">{o.replace(/_/g, " ")}</span>
+                      <span className="text-sm text-zinc-400 capitalize">OUTLET_NAMES[o] || o.replace(/_/g, " ")</span>
                       <span className="font-mono text-sm font-bold">{count}</span>
                     </div>
                   );
@@ -1341,7 +1341,7 @@ await fetchOutletReports(user);
                 <label className="block text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-2">Outlet (Optional)</label>
                 <select value={taskOutlet} onChange={(e) => setTaskOutlet(e.target.value)} className="w-full bg-black border border-zinc-800 text-white px-4 py-3 focus:outline-none focus:border-yellow-400 transition-colors text-sm">
                   <option value="">No specific outlet</option>
-                  {OUTLETS.map(o => <option key={o} value={o}>{o.replace(/_/g, " ")}</option>)}
+                  {OUTLETS.map(o => <option key={o} value={o}>OUTLET_NAMES[o] || o.replace(/_/g, " ")</option>)}
                 </select>
               </div>
               <div>
