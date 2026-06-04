@@ -175,6 +175,8 @@ export default function DashboardPage() {
   const [newPin, setNewPin] = useState("");
   const [pinMsg, setPinMsg] = useState("");
   const [selectedReport, setSelectedReport] = useState<Report | null>(null);
+  const [reportHistoryDate, setReportHistoryDate] = useState<string>(new Date().toISOString().split("T")[0]);
+  const [reportByDate, setReportByDate] = useState<Report | null>(null);
   const [activeOutlet, setActiveOutlet] = useState<string>("");
   const [outletReports, setOutletReports] = useState<Record<string, OutletReport>>({});
   const [outletReportData, setOutletReportData] = useState<Record<string, string>>({});
@@ -319,6 +321,19 @@ const fetchOutletReports = async (u: Staff) => {
   (data || []).forEach((r: OutletReport) => { map[r.outlet_id] = r; });
   setOutletReports(map);
   return map;
+};
+  const fetchReportByDate = async (date: string) => {
+  if (!user) return;
+  const start = `${date}T00:00:00.000Z`;
+  const end = `${date}T23:59:59.999Z`;
+  const { data } = await supabase
+    .from("reports")
+    .select("*")
+    .eq("staff_id", user.id)
+    .gte("submitted_at", start)
+    .lte("submitted_at", end)
+    .single();
+  setReportByDate(data || null);
 };
   const fetchReports = async (u: Staff) => {
     let query = supabase.from("reports").select("*").order("submitted_at", { ascending: false });
@@ -722,15 +737,45 @@ await fetchOutletReports(user);
         {(activeTab === "my_report" || activeTab === "all_reports") && (
       
           <div>
-            <div className="mb-6 pb-5 border-b border-zinc-800">
-              <h2 className="text-2xl font-black tracking-tight">{activeTab === "all_reports" ? "All Reports" : "Daily Report"}</h2>
-              <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mt-1">
-                {canAssign ? "Staff submissions overview" : `Due by ${ALL_STAFF.find(s => s.id === user.id)?.report_time || "--:--"} daily`}
-              </p>
-            </div>
-            {activeTab === "my_report" && hasReportDuty && (
-              <div className="mb-8">
-               {todayReport ? (
+           <div className="flex justify-between items-end mb-6 pb-5 border-b border-zinc-800">
+        <div>
+    <h2 className="text-2xl font-black tracking-tight">{canAssign ? "All Reports" : "Daily Report"}</h2>
+    <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mt-1">
+      {canAssign ? "Staff submissions overview" : `Due by ${ALL_STAFF.find(s => s.id === user.id)?.report_time || "--:--"} daily`}
+    </p>
+  </div>
+  {!canAssign && (
+    <input
+      type="date"
+      value={reportHistoryDate}
+      onChange={(e) => { setReportHistoryDate(e.target.value); fetchReportByDate(e.target.value); }}
+      className="bg-black border border-zinc-800 text-white px-4 py-2.5 focus:outline-none focus:border-yellow-400 transition-colors font-mono text-sm"
+    />
+  )}
+</div>
+           {activeTab === "my_report" && hasReportDuty && (
+  <div className="mb-8">
+    {reportHistoryDate !== new Date().toISOString().split("T")[0] ? (
+      <div className="bg-[#131316] border border-zinc-800 p-6">
+        <p className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-4">
+          Report for {new Date(reportHistoryDate).toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" })}
+        </p>
+        {reportByDate ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {reportFields.map(f => (
+              <div key={f.key} className="bg-black/30 px-3 py-2">
+                <p className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest">{f.label}</p>
+                <p className="text-sm text-white mt-1">{reportByDate.report_data?.[f.key] || "—"}</p>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-zinc-600 font-mono text-sm uppercase tracking-widest">No report submitted for this date</p>
+        )}
+    ) : null}
+  </div>
+)}
+    ) : todayReport ? (
   <div className="bg-green-400/5 border border-green-400/30 p-6">
     <div className="flex items-center justify-between mb-4">
       <div className="flex items-center gap-3">
