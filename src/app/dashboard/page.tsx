@@ -651,7 +651,7 @@ await fetchOutletReports(user);
               <div className="flex gap-2 flex-wrap mb-6">
                 {["all", ...OUTLETS].map(o => (
                   <button key={o} onClick={() => setOutletFilter(o)} className={`font-mono text-[10px] uppercase tracking-widest px-3 py-1.5 border transition-colors ${outletFilter === o ? "border-yellow-400 text-yellow-400" : "border-zinc-700 text-zinc-500 hover:border-zinc-500"}`}>
-                    {o === "all" ? "All" : o.replace(/_/g, " ")}
+                    {o === "all" ? "All" : OUTLET_NAMES[o] || o.replace(/_/g, " ")}
                   </button>
                 ))}
               </div>
