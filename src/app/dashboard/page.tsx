@@ -534,7 +534,7 @@ icbh_zomato_rating: parseFloat(d.icbh_zomato_rating) || null,
   ...payload,
   staff_id: user.id,
   outlet_id: activeOutlet,
-  report_date: reportDate,
+  report_date: new Date().toISOString().split("T")[0],
 }, { onConflict: "staff_id,outlet_id,report_date" });
 error = result.error;
   }
