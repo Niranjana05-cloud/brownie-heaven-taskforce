@@ -51,6 +51,20 @@ const OUTLET_NAMES: Record<string, string> = {
   tambaram: "Tambaram",
   porur: "Porur",
 };
+const OUTLET_TARGETS: Record<string, string> = {
+  royapettah: "80000",
+  adayar: "18333",
+  bsr_mall: "35000",
+  ra_puram: "21666",
+  anna_nagar: "50000",
+  porur: "50000",
+  perumbakkam: "13000",
+  tambaram: "20000",
+  velachery: "",
+  pallavaram: "",
+  vadapalani: "",
+  besant_nagar: "",
+};
 
 const REPORT_FIELDS: Record<string, { label: string; key: string; type?: string }[]> = {
   arun: [
