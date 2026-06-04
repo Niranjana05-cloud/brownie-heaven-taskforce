@@ -37,6 +37,20 @@ const ALL_STAFF = [
 ];
 
 const OUTLETS = ["royapettah","adayar","bsr_mall","velachery","ra_puram","anna_nagar","pallavaram","vadapalani","besant_nagar","perumbakkam","tambaram","porur"];
+const OUTLET_NAMES: Record<string, string> = {
+  royapettah: "Royapettah",
+  adayar: "Adyar",
+  bsr_mall: "BSR Mall",
+  velachery: "Velachery",
+  ra_puram: "RA Puram",
+  anna_nagar: "Anna Nagar",
+  pallavaram: "Pallavaram",
+  vadapalani: "Vadapalani",
+  besant_nagar: "Besant Nagar",
+  perumbakkam: "Perumbakkam",
+  tambaram: "Tambaram",
+  porur: "Porur",
+};
 
 const REPORT_FIELDS: Record<string, { label: string; key: string; type?: string }[]> = {
   arun: [
