@@ -665,7 +665,7 @@ await fetchOutletReports(user);
               <div className="flex gap-2 flex-wrap mb-6">
                 {["all", ...OUTLETS].map(o => (
                   <button key={o} onClick={() => setOutletFilter(o)} className={`font-mono text-[10px] uppercase tracking-widest px-3 py-1.5 border transition-colors ${outletFilter === o ? "border-yellow-400 text-yellow-400" : "border-zinc-700 text-zinc-500 hover:border-zinc-500"}`}>
-                    {o === "all" ? "All" : {{OUTLET_NAMES[o] || o.replace(/_/g, " ")}(/_/g, " ")}(/_/g, " ")}
+                    {o === "all" ? "All" : {OUTLET_NAMES[o] || o.replace(/_/g, " ")}
                   </button>
                 ))}
               </div>
@@ -989,7 +989,7 @@ await fetchOutletReports(user);
         return (
          <button key={o} onClick={() => { setActiveOutlet(o); setOutletReportData({ target: OUTLET_TARGETS[o] || "" }); }}
             className={`font-mono text-[10px] uppercase tracking-widest px-4 py-2 border transition-colors relative ${activeOutlet === o ? "border-yellow-400 text-yellow-400" : "border-zinc-700 text-zinc-500 hover:border-zinc-500"}`}>
-           {{{OUTLET_NAMES[o] || o.replace(/_/g, " ")}(/_/g, " ")}(/_/g, " ")}
+           {{OUTLET_NAMES[o] || o.replace(/_/g, " ")}
             {submitted && <span className="ml-2 text-green-400">✓</span>}
           </button>
         );
