@@ -516,13 +516,13 @@ icbh_zomato_rating: parseFloat(d.icbh_zomato_rating) || null,
     const result = await supabase.from("outlet_reports").update(payload).eq("id", d.editing_id);
     error = result.error;
   } else {
-    const result = await supabase.from("outlet_reports").insert({
-      ...payload,
-      staff_id: user.id,
-      outlet_id: activeOutlet,
-      report_date: new Date().toISOString().split("T")[0],
-    });
-    error = result.error;
+    const result = await supabase.from("outlet_reports").upsert({
+  ...payload,
+  staff_id: user.id,
+  outlet_id: activeOutlet,
+  report_date: reportDate,
+}, { onConflict: "staff_id,outlet_id,report_date" });
+error = result.error;
   }
   setOutletSubmitting(false);
  if (error) { alert("Error: " + error.message); return; }
