@@ -459,10 +459,10 @@ const submitOutletReport = async () => {
     zomato_sales_count: parseInt(d.zomato_sales_count?.replace(/,/g, "")) || 0,
     zomato_sales_value: parseFloat(d.zomato_sales_value?.replace(/,/g, "")) || 0,
     target: parseFloat(d.target?.replace(/,/g, "")) || 0,
-    swiggy_live: d.swiggy_live?.toLowerCase() === "yes",
-    zomato_live: d.zomato_live?.toLowerCase() === "yes",
+    swiggy_live: (d.swiggy_live || "yes").toLowerCase() === "yes",
+    zomato_live: (d.zomato_live || "yes").toLowerCase() === "yes",
     discount_running: d.discount_running || "",
-    discount_rate_good: d.discount_rate_good?.toLowerCase() === "yes",
+    discount_rate_good: (d.discount_rate_good || "yes").toLowerCase() === "yes",
     unavailable_items: d.unavailable_items || "",
     expiry_count: parseInt(d.expiry_count) || 0,
     expiry_items: d.expiry_items || "",
@@ -496,9 +496,10 @@ icbh_zomato_rating: parseFloat(d.icbh_zomato_rating) || null,
     error = result.error;
   }
   setOutletSubmitting(false);
-  if (error) { alert("Error: " + error.message); return; }
-  setOutletReportData({});
-  await fetchOutletReports(user);
+ if (error) { alert("Error: " + error.message); return; }
+setOutletReportData({});
+await new Promise(resolve => setTimeout(resolve, 500));
+await fetchOutletReports(user);
 };
   const playAlert = () => {
   try {
