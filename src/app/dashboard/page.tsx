@@ -665,7 +665,7 @@ await fetchOutletReports(user);
               <div className="flex gap-2 flex-wrap mb-6">
                 {["all", ...OUTLETS].map(o => (
                   <button key={o} onClick={() => setOutletFilter(o)} className={`font-mono text-[10px] uppercase tracking-widest px-3 py-1.5 border transition-colors ${outletFilter === o ? "border-yellow-400 text-yellow-400" : "border-zinc-700 text-zinc-500 hover:border-zinc-500"}`}>
-                    {o === "all" ? "All" : {OUTLET_NAMES[o] || o.replace(/_/g, " ")}
+                    {o === "all" ? "All" : (OUTLET_NAMES[o] || o.replace(/_/g, " "))}
                   </button>
                 ))}
               </div>
@@ -1306,7 +1306,7 @@ await fetchOutletReports(user);
                   const count = tasks.filter(t => t.outlet_id === o).length;
                   return (
                     <div key={o} className="flex justify-between items-center py-2 border-b border-zinc-800 last:border-0">
-                      <span className="text-sm text-zinc-400 capitalize">{{OUTLET_NAMES[o] || o.replace(/_/g, " ")}(/_/g, " ")}(/_/g, " ")</span>
+                      <span className="text-sm text-zinc-400 capitalize">{OUTLET_NAMES[o] || o.replace(/_/g, " ")}</span>
                       <span className="font-mono text-sm font-bold">{count}</span>
                     </div>
                   );
@@ -1355,7 +1355,7 @@ await fetchOutletReports(user);
                 <label className="block text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-2">Outlet (Optional)</label>
                 <select value={taskOutlet} onChange={(e) => setTaskOutlet(e.target.value)} className="w-full bg-black border border-zinc-800 text-white px-4 py-3 focus:outline-none focus:border-yellow-400 transition-colors text-sm">
                   <option value="">No specific outlet</option>
-                  {OUTLETS.map(o => <option key={o} value={o}>{{OUTLET_NAMES[o] || o.replace(/_/g, " ")}(/_/g, " ")}(/_/g, " ")</option>)}
+                  {OUTLETS.map(o => <option key={o} value={o}>{OUTLET_NAMES[o] || o.replace(/_/g, " ")}</option>)}
                 </select>
               </div>
               <div>
