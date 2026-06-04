@@ -909,7 +909,7 @@ await fetchOutletReports(user);
           <div key={o} className={`bg-[#131316] border ${report ? "border-green-400/30" : "border-zinc-800"} p-5`}>
             <div className="flex items-center justify-between mb-4">
               <div>
-                <p className="font-bold text-sm uppercase tracking-widest">OUTLET_NAMES[o] || o.replace(/_/g, " ")</p>
+               <p className="font-bold text-sm uppercase tracking-widest">{OUTLET_NAMES[o]}</p>
                 <p className="text-[10px] font-mono text-zinc-500 mt-0.5">{manager?.name || "—"}</p>
               </div>
               {report ? (
