@@ -772,7 +772,7 @@ await fetchOutletReports(user);
         ) : (
           <p className="text-zinc-600 font-mono text-sm uppercase tracking-widest">No report submitted for this date</p>
         )}
-    ) : null}
+    ) : null
   </div>
 )}
     ) : todayReport ? (
