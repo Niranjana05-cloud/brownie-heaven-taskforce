@@ -348,9 +348,10 @@ export default function DashboardPage() {
     .not("bh_google_rating", "is", null)
     .order("submitted_at", { ascending: false });
   const map: Record<string, OutletReport> = {};
-  (data || []).forEach((r: OutletReport) => {
+ (data || []).forEach((r: any) => {
     if (!map[r.outlet_id]) map[r.outlet_id] = r;
   });
+ 
   setLastOutletRatings(map);
 };
 const fetchOutletReports = async (u: Staff) => {
