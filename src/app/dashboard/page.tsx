@@ -210,6 +210,7 @@ export default function DashboardPage() {
   const [outletReportData, setOutletReportData] = useState<Record<string, string>>({});
   const [outletSubmitting, setOutletSubmitting] = useState(false);
   const [outletHistoryDate, setOutletHistoryDate] = useState<string>(new Date().toISOString().split("T")[0]);
+  const [lastOutletRatings, setLastOutletRatings] = useState<Record<string, OutletReport>>({});
   const [allOutletReports, setAllOutletReports] = useState<OutletReport[]>([]);
   const [historyDate, setHistoryDate] = useState<string>(new Date().toISOString().split("T")[0]);
   const [historyReports, setHistoryReports] = useState<Report[]>([]);
@@ -228,6 +229,7 @@ export default function DashboardPage() {
     fetchTasks(parsed);
     fetchReports(parsed);
     fetchOutletReports(parsed);
+    fetchLastOutletRatings(parsed);
    if (parsed.role === "Owner" || parsed.role === "Manager") fetchAllOutletReports();
   }, [router]);
 
@@ -337,6 +339,19 @@ export default function DashboardPage() {
   const map: Record<string, OutletReport> = {};
   (data || []).forEach((r: OutletReport) => { map[r.outlet_id] = r; });
   setOutletReports(map);
+};
+  const fetchLastOutletRatings = async (u: Staff) => {
+  const { data } = await supabase
+    .from("outlet_reports")
+    .select("outlet_id, bh_google_rating, bh_swiggy_rating, bh_zomato_rating, cbh_google_rating, cbh_swiggy_rating, cbh_zomato_rating, icbh_google_rating, icbh_swiggy_rating, icbh_zomato_rating")
+    .eq("staff_id", u.id)
+    .not("bh_google_rating", "is", null)
+    .order("submitted_at", { ascending: false });
+  const map: Record<string, OutletReport> = {};
+  (data || []).forEach((r: OutletReport) => {
+    if (!map[r.outlet_id]) map[r.outlet_id] = r;
+  });
+  setLastOutletRatings(map);
 };
 const fetchOutletReports = async (u: Staff) => {
   const today = new Date().toISOString().split("T")[0];
@@ -987,7 +1002,7 @@ await fetchOutletReports(user);
       {(user.outlets || []).map(o => {
         const submitted = !!outletReports[o];
         return (
-         <button key={o} onClick={() => { setActiveOutlet(o); setOutletReportData({ target: OUTLET_TARGETS[o] || "" }); }}
+         <button key={o} onClick={() => { setActiveOutlet(o); const lastRatings = lastOutletRatings[o]; setOutletReportData({ target: OUTLET_TARGETS[o] || "", bh_google_rating: lastRatings ? String(lastRatings.bh_google_rating || "") : "", bh_swiggy_rating: lastRatings ? String(lastRatings.bh_swiggy_rating || "") : "", bh_zomato_rating: lastRatings ? String(lastRatings.bh_zomato_rating || "") : "", cbh_google_rating: lastRatings ? String(lastRatings.cbh_google_rating || "") : "", cbh_swiggy_rating: lastRatings ? String(lastRatings.cbh_swiggy_rating || "") : "", cbh_zomato_rating: lastRatings ? String(lastRatings.cbh_zomato_rating || "") : "", icbh_google_rating: lastRatings ? String(lastRatings.icbh_google_rating || "") : "", icbh_swiggy_rating: lastRatings ? String(lastRatings.icbh_swiggy_rating || "") : "", icbh_zomato_rating: lastRatings ? String(lastRatings.icbh_zomato_rating || "") : "" }); }}
             className={`font-mono text-[10px] uppercase tracking-widest px-4 py-2 border transition-colors relative ${activeOutlet === o ? "border-yellow-400 text-yellow-400" : "border-zinc-700 text-zinc-500 hover:border-zinc-500"}`}>
            {OUTLET_NAMES[o] || o.replace(/_/g, " ")}
             {submitted && <span className="ml-2 text-green-400">✓</span>}
