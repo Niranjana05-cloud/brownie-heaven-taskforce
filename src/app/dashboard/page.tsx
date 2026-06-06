@@ -413,7 +413,7 @@ const fetchOutletReports = async (u: Staff) => {
     setReportSubmitting(false);
     if (error) { alert("Error: " + error.message); return; }
    setTodayReport(data);
-    celebrate(isLate ? 2 : 10);
+   if (!isLate) celebrate(10);
     setReportData({});
     fetchReports(user);
   };
