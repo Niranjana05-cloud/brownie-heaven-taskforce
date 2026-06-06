@@ -21,7 +21,7 @@ const ALL_STAFF: Staff[] = [
 ];
 
 const PTS_ONTIME = 10;
-const PTS_LATE = 2;
+const PTS_LATE = 0;
 const PTS_TASK = 5;
 const PTS_RATING = 100;
 const RATING_THRESHOLD = 4.5;
