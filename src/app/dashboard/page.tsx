@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@supabase/supabase-js";
+import { celebrate } from "../celebrate";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -411,7 +412,8 @@ const fetchOutletReports = async (u: Staff) => {
     }).select().single();
     setReportSubmitting(false);
     if (error) { alert("Error: " + error.message); return; }
-    setTodayReport(data);
+   setTodayReport(data);
+    celebrate(isLate ? 2 : 10);
     setReportData({});
     fetchReports(user);
   };
