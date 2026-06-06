@@ -559,7 +559,7 @@ error = result.error;
   setOutletSubmitting(false);
  if (error) { alert("Error: " + error.message); return; }
 setOutletReportData({});
-if (Number(payload.bh_google_rating) > 4.5) celebrate(100);
+celebrate(Number(payload.bh_google_rating) > 4.5 ? 100 : 5);
 await new Promise(resolve => setTimeout(resolve, 500));
 await fetchOutletReports(user);
 };
