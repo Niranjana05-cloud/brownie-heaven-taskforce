@@ -60,9 +60,10 @@ export default function LeaderboardPage() {
     const y = now.getFullYear();
     const m = now.getMonth();
     const pad = (n: number) => String(n).padStart(2, "0");
-    const startISO = new Date(y, m, 1).toISOString();
+    const monthStart = `${y}-${pad(m + 1)}-01`;
+    const startDate = SEASON_START > monthStart ? SEASON_START : monthStart;
+    const startISO = new Date(startDate + "T00:00:00").toISOString();
     const endISO = new Date(y, m + 1, 1).toISOString();
-    const startDate = `${y}-${pad(m + 1)}-01`;
     const endDate = m === 11 ? `${y + 1}-01-01` : `${y}-${pad(m + 2)}-01`;
 
     const [repRes, taskRes, outRes] = await Promise.all([
