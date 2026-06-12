@@ -20,6 +20,7 @@ const ALL_STAFF: Staff[] = [
   { id: "bharani", name: "Bharani", role: "Auditor" },
 ];
 
+const SEASON_START = "2026-06-12";
 const PTS_ONTIME = 10;
 const PTS_LATE = 0;
 const PTS_TASK = 5;
