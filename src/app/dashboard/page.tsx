@@ -29,12 +29,11 @@ icbh_google_rating: number; icbh_swiggy_rating: number; icbh_zomato_rating: numb
 
 const ALL_STAFF = [
   { id: "nishant", name: "Nishant Vijayakumar", role: "Owner", report_time: null, outlets: [] },
-  { id: "arun", name: "Arun Kumar", role: "Manager", report_time: "22:30", outlets: [] },
-  { id: "nilani", name: "Nilani Nallamuthu", role: "HR", report_time: "19:00", outlets: ["ra_puram","anna_nagar","pallavaram","vadapalani"] },
-  { id: "gowtham", name: "Gowtham", role: "Purchase Manager", report_time: "19:00", outlets: [] },
-  { id: "vishnu", name: "Vishnu", role: "Asst. Ops Manager", report_time: "20:30", outlets: ["velachery","perumbakkam","tambaram","porur"] },
-  { id: "ahila", name: "Ahila", role: "Custom Cakes & Asst Ops", report_time: "20:30", outlets: ["royapettah","adayar","bsr_mall","besant_nagar"] },
-  { id: "bharani", name: "Bharani", role: "Auditor", report_time: "22:00", outlets: [] },
+  { id: "arun", name: "Arun Kumar", role: "Manager", report_time: "22:00", outlets: [] },
+  { id: "nilani", name: "Nilani Nallamuthu", role: "HR", report_time: "22:00", outlets: ["ra_puram","anna_nagar","pallavaram","vadapalani"] },
+  { id: "gowtham", name: "Gowtham", role: "Purchase Manager", report_time: "22:00", outlets: [] },
+  { id: "vishnu", name: "Vishnu", role: "Asst. Ops Manager", report_time: "22:00", outlets: ["velachery","perumbakkam","tambaram","porur"] },
+  { id: "ahila", name: "Ahila", role: "Custom Cakes & Asst Ops", report_time: "22:00", outlets: ["royapettah","adayar","bsr_mall","besant_nagar"] },
 ];
 
 const OUTLETS = ["royapettah","adayar","bsr_mall","velachery","ra_puram","anna_nagar","pallavaram","vadapalani","besant_nagar","perumbakkam","tambaram","porur"];
