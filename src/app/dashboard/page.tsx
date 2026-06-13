@@ -188,6 +188,7 @@ export default function DashboardPage() {
   const [outletFilter, setOutletFilter] = useState("all");
   const [reportData, setReportData] = useState<Record<string, string>>({});
   const [reportSubmitting, setReportSubmitting] = useState(false);
+  const [reportOffDay, setReportOffDay] = useState(false);
   const [todayReport, setTodayReport] = useState<Report | null>(null);
   const [overdueTask, setOverdueTask] = useState<Task | null>(null);
   const [forceAckReason, setForceAckReason] = useState("");
@@ -404,18 +405,20 @@ const fetchOutletReports = async (u: Staff) => {
     const { data, error } = await supabase.from("reports").insert({
       staff_id: user.id,
       content,
-      is_late: isLate,
+      is_late: reportOffDay ? false : isLate,
       submitted_at: new Date().toISOString(),
       report_data: reportData,
       staff_role: user.role,
+      no_points: reportOffDay,
     }).select().single();
     setReportSubmitting(false);
     if (error) { alert("Error: " + error.message); return; }
    setTodayReport(data);
-   if (!isLate) celebrate(10);
+   if (!reportOffDay && !isLate) celebrate(10);
     setReportData({});
+    setReportOffDay(false);
     fetchReports(user);
-  };
+    };
 
   const assignTask = async () => {
     if (!taskTitle.trim() || !user) return;
@@ -879,6 +882,10 @@ await fetchOutletReports(user);
                         </div>
                       ))}
                     </div>
+                    <label className="flex items-center gap-2 mb-3 text-xs font-mono text-zinc-400 uppercase tracking-widest cursor-pointer">
+                      <input type="checkbox" checked={reportOffDay} onChange={(e) => setReportOffDay(e.target.checked)} className="accent-yellow-400 w-4 h-4" />
+                      Off day / catch-up — no points
+                    </label>
                     <button onClick={submitReport} disabled={reportSubmitting} className="bg-yellow-400 text-black font-bold tracking-widest text-xs px-6 py-3 hover:opacity-90 transition-opacity uppercase disabled:opacity-50">
                       {reportSubmitting ? "Submitting..." : "Submit Report →"}
                     </button>
