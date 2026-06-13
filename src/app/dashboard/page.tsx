@@ -189,6 +189,7 @@ export default function DashboardPage() {
   const [attendanceData, setAttendanceData] = useState({ present: "", absent: "", late: "" });
   const [attendanceSubmitting, setAttendanceSubmitting] = useState(false);
   const [todayAttendance, setTodayAttendance] = useState<any>(null);
+  const [attendanceDate, setAttendanceDate] = useState<string>(() => { const d = new Date(); d.setDate(d.getDate() - 1); return d.toISOString().split("T")[0]; });
   const [todayReport, setTodayReport] = useState<Report | null>(null);
   const [overdueTask, setOverdueTask] = useState<Task | null>(null);
   const [forceAckReason, setForceAckReason] = useState("");
@@ -229,7 +230,7 @@ export default function DashboardPage() {
     setUser(parsed);
     fetchTasks(parsed);
     fetchReports(parsed);
-    fetchAttendance(parsed);
+    fetchAttendance(parsed, new Date(Date.now() - 86400000).toISOString().split("T")[0]);
     fetchOutletReports(parsed);
     fetchLastOutletRatings(parsed);
    if (parsed.role === "Owner" || parsed.role === "Manager") fetchAllOutletReports();
@@ -420,10 +421,10 @@ const fetchOutletReports = async (u: Staff) => {
     fetchReports(user);
     };
 
- const fetchAttendance = async (u: Staff) => {
-    const today = new Date().toISOString().split("T")[0];
-    const { data } = await supabase.from("attendance").select("*").eq("staff_id", u.id).eq("attendance_date", today).maybeSingle();
-    if (data) setTodayAttendance(data);
+const fetchAttendance = async (u: Staff, date: string) => {
+    const { data } = await supabase.from("attendance").select("*").eq("staff_id", u.id).eq("attendance_date", date).maybeSingle();
+    setTodayAttendance(data || null);
+    if (!data) setAttendanceData({ present: "", absent: "", late: "" });
   };
 
   const submitAttendance = async () => {
@@ -431,7 +432,7 @@ const fetchOutletReports = async (u: Staff) => {
     setAttendanceSubmitting(true);
     const { data, error } = await supabase.from("attendance").upsert({
       staff_id: user.id,
-      attendance_date: new Date().toISOString().split("T")[0],
+      attendance_date: attendanceDate,
       present: parseInt(attendanceData.present) || 0,
       absent: parseInt(attendanceData.absent) || 0,
       late: parseInt(attendanceData.late) || 0,
@@ -841,7 +842,11 @@ await fetchOutletReports(user);
                 <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mt-1">Today's staff count</p>
               </div>
             </div>
-            <div className="bg-[#131316] border border-zinc-800 p-6 max-w-md">
+           <div className="bg-[#131316] border border-zinc-800 p-6 max-w-md">
+              <div className="mb-5">
+                <label className="block text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-1">Date</label>
+                <input type="date" value={attendanceDate} onChange={(e) => { setAttendanceDate(e.target.value); if (user) fetchAttendance(user, e.target.value); }} className="w-full bg-black border border-zinc-800 text-white px-3 py-2 focus:outline-none focus:border-yellow-400 transition-colors text-sm" />
+              </div>
               {todayAttendance ? (
                 <div>
                   <p className="text-green-400 font-mono text-sm uppercase tracking-widest mb-4">✓ Submitted for today</p>
