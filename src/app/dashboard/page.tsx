@@ -416,7 +416,6 @@ const fetchOutletReports = async (u: Staff) => {
    setTodayReport(data);
    if (!reportOffDay && !isLate) celebrate(10);
     setReportData({});
-    setReportOffDay(false);
     fetchReports(user);
     };
 
@@ -684,7 +683,18 @@ await fetchOutletReports(user);
               {canAssign && (
                 <button onClick={() => setShowModal(true)} className="bg-yellow-400 text-black font-bold tracking-widest text-xs px-4 py-3 hover:opacity-90 transition-opacity uppercase">+ Assign Task</button>
               )}
-            </div>
+           </div>
+            {user.role !== "Owner" && (
+              <div className="flex items-center justify-between bg-[#131316] border border-zinc-800 px-5 py-4 mb-6">
+                <div>
+                  <p className="text-sm font-semibold">Off day today</p>
+                  <p className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mt-0.5">Reports you submit won't earn or lose points</p>
+                </div>
+                <button onClick={() => setReportOffDay(!reportOffDay)} className={`relative w-12 h-6 rounded-full transition-colors ${reportOffDay ? "bg-yellow-400" : "bg-zinc-700"}`}>
+                  <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-black rounded-full transition-transform ${reportOffDay ? "translate-x-6" : ""}`}></span>
+                </button>
+              </div>
+            )}
             {user.role === "Owner" && (
               <div className="flex gap-2 flex-wrap mb-6">
                 {["all", ...OUTLETS].map(o => (
@@ -882,10 +892,6 @@ await fetchOutletReports(user);
                         </div>
                       ))}
                     </div>
-                    <label className="flex items-center gap-2 mb-3 text-xs font-mono text-zinc-400 uppercase tracking-widest cursor-pointer">
-                      <input type="checkbox" checked={reportOffDay} onChange={(e) => setReportOffDay(e.target.checked)} className="accent-yellow-400 w-4 h-4" />
-                      Off day / catch-up — no points
-                    </label>
                     <button onClick={submitReport} disabled={reportSubmitting} className="bg-yellow-400 text-black font-bold tracking-widest text-xs px-6 py-3 hover:opacity-90 transition-opacity uppercase disabled:opacity-50">
                       {reportSubmitting ? "Submitting..." : "Submit Report →"}
                     </button>
