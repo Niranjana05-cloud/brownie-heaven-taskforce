@@ -119,7 +119,7 @@ export default function LeaderboardPage() {
     return <div style={{ ...page, display: "flex", alignItems: "center", justifyContent: "center", color: C.accent }}>Loading scores…</div>;
   }
 
-  const isOwner = user?.role === "Owner";
+  const isOwner = user?.role === "Owner" || user?.role === "Manager";
   const me = rows.find(r => r.id === user?.id);
   const myRank = rows.findIndex(r => r.id === user?.id) + 1;
 
