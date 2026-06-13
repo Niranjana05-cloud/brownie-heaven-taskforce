@@ -146,7 +146,7 @@ const REPORT_FIELDS: Record<string, { label: string; key: string; type?: string 
     { label: "Revenue", key: "revenue" },
     { label: "Confirmed & Placed Today", key: "confirmed_placed" },
     { label: "Pending & Following", key: "pending_following" },
-    { label: "Customised Orders Today", key: "cake_orders_today" },
+    { label: "Custom Cake Orders Today", key: "cake_orders_today" },
     { label: "Orders Delivered on Time", key: "orders_on_time" },
     { label: "Cake Complaints", key: "cake_complaints" },
     { label: "Cake Wastage/Damage", key: "cake_wastage" },
