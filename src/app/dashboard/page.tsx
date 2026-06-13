@@ -186,7 +186,7 @@ export default function DashboardPage() {
   const [reports, setReports] = useState<Report[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
-  const [activeTab, setActiveTab] = useState<"tasks" | "my_report" | "all_reports" | "analytics" | "outlet_reports" | "owner_outlets" | "history" | "attendance">("tasks");
+ const [activeTab, setActiveTab] = useState<"tasks" | "my_report" | "all_reports" | "analytics" | "outlet_reports" | "owner_outlets" | "history" | "attendance" | "sales_target" | "payout">("tasks");
   const [outletFilter, setOutletFilter] = useState("all");
   const [reportData, setReportData] = useState<Record<string, string>>({});
   const [reportSubmitting, setReportSubmitting] = useState(false);
@@ -195,6 +195,10 @@ export default function DashboardPage() {
   const [attendanceSubmitting, setAttendanceSubmitting] = useState(false);
   const [todayAttendance, setTodayAttendance] = useState<any>(null);
   const [attendanceDate, setAttendanceDate] = useState<string>(() => { const d = new Date(); d.setDate(d.getDate() - 1); return d.toISOString().split("T")[0]; });
+  const [salesTargets, setSalesTargets] = useState<Record<string, any>>({});
+  const [stEditing, setStEditing] = useState<string | null>(null);
+  const [stEditValues, setStEditValues] = useState<Record<string, string>>({});
+  const [stSaving, setStSaving] = useState(false);
   const [todayReport, setTodayReport] = useState<Report | null>(null);
   const [overdueTask, setOverdueTask] = useState<Task | null>(null);
   const [forceAckReason, setForceAckReason] = useState("");
@@ -235,7 +239,8 @@ export default function DashboardPage() {
     setUser(parsed);
     fetchTasks(parsed);
     fetchReports(parsed);
-    fetchAttendance(parsed, new Date(Date.now() - 86400000).toISOString().split("T")[0]);
+   fetchAttendance(parsed, new Date(Date.now() - 86400000).toISOString().split("T")[0]);
+    fetchSalesTargets(parsed);
     fetchOutletReports(parsed);
     fetchLastOutletRatings(parsed);
    if (parsed.role === "Owner" || parsed.role === "Manager") fetchAllOutletReports();
@@ -426,7 +431,34 @@ const fetchOutletReports = async (u: Staff) => {
     fetchReports(user);
     };
 
-const fetchAttendance = async (u: Staff, date: string) => {
+const fetchSalesTargets = async (u: Staff) => {
+    const outlets = (u as Staff & { outlets?: string[] }).outlets || [];
+    if (!outlets.length) return;
+    const { data } = await supabase.from("sales_target").select("*").in("outlet_id", outlets);
+    const map: Record<string, any> = {};
+    (data || []).forEach((row: any) => {
+      if (!map[row.outlet_id]) map[row.outlet_id] = {};
+      map[row.outlet_id][row.brand] = row.line_items;
+    });
+    setSalesTargets(map);
+  };
+
+  const saveSalesTarget = async (outletId: string, brand: string, items: any[]) => {
+    setStSaving(true);
+    const curMonth = new Date().toISOString().slice(0, 7);
+    const updated = items.map((it: any) => {
+      const v = stEditValues[it.name];
+      if (v !== undefined && v !== "") return { ...it, months: { ...it.months, [curMonth]: parseFloat(v.replace(/,/g, "")) || 0 } };
+      return it;
+    });
+    const { error } = await supabase.from("sales_target").upsert({ outlet_id: outletId, brand, line_items: updated, updated_at: new Date().toISOString() }, { onConflict: "outlet_id,brand" });
+    setStSaving(false);
+    if (error) { alert("Error: " + error.message); return; }
+    setStEditing(null); setStEditValues({});
+    if (user) fetchSalesTargets(user);
+  };
+
+  const fetchAttendance = async (u: Staff, date: string) => {
     const { data } = await supabase.from("attendance").select("*").eq("staff_id", u.id).eq("attendance_date", date).maybeSingle();
     setTodayAttendance(data || null);
     if (!data) setAttendanceData({ present: "", absent: "", late: "" });
@@ -681,9 +713,19 @@ await fetchOutletReports(user);
           {(user.outlets && user.outlets.length > 0) && (
   <div onClick={() => { setActiveTab("outlet_reports"); setSidebarOpen(false); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "outlet_reports" ? "text-white bg-zinc-900 border-l-2 border-yellow-400" : "text-zinc-500 hover:text-white"}`}>
     <span>🏪</span> Outlets
-    {Object.keys(outletReports).length < (user.outlets?.length || 0) && <span className="ml-auto w-2 h-2 bg-yellow-400 rounded-full"></span>}
+  {Object.keys(outletReports).length < (user.outlets?.length || 0) && <span className="ml-auto w-2 h-2 bg-yellow-400 rounded-full"></span>}
   </div>
 )}
+          {(user.outlets && user.outlets.length > 0) && (
+            <div onClick={() => { setActiveTab("sales_target"); setSidebarOpen(false); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "sales_target" ? "text-white bg-zinc-900 border-l-2 border-yellow-400" : "text-zinc-500 hover:text-white"}`}>
+              <span>🎯</span> Sales Target
+            </div>
+          )}
+          {(user.outlets && user.outlets.length > 0) && (
+            <div onClick={() => { setActiveTab("payout"); setSidebarOpen(false); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "payout" ? "text-white bg-zinc-900 border-l-2 border-yellow-400" : "text-zinc-500 hover:text-white"}`}>
+              <span>💰</span> Payout
+            </div>
+          )}
           {canAssign && (
             <>
               <div onClick={() => { setActiveTab("all_reports"); setSidebarOpen(false); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "my_report" ? "text-white bg-zinc-900 border-l-2 border-yellow-400" : "text-zinc-500 hover:text-white"}`}>
@@ -839,6 +881,92 @@ await fetchOutletReports(user);
           </div>
         )}
 
+      {activeTab === "sales_target" && (
+          <div>
+            <div className="flex justify-between items-start mb-6 pb-5 border-b border-zinc-800">
+              <div>
+                <h2 className="text-2xl md:text-3xl font-black tracking-tight">Sales Target</h2>
+                <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mt-1">Average updates as you enter {new Date().toLocaleString("en-IN", { month: "long" })}</p>
+              </div>
+            </div>
+            {(user.outlets || []).map((oid: string) => (
+              <div key={oid} className="mb-8">
+                <h3 className="text-lg font-bold mb-3">{OUTLET_NAMES[oid] || oid}</h3>
+                {["BH", "CBH"].map((brand) => {
+                  const items = salesTargets[oid]?.[brand];
+                  if (!items) return null;
+                  const key = `${oid}_${brand}`;
+                  const editing = stEditing === key;
+                  const curMonth = new Date().toLocaleString("en-IN", { month: "short" });
+                  return (
+                    <div key={brand} className="bg-[#131316] border border-zinc-800 mb-5 overflow-x-auto">
+                      <div className="flex justify-between items-center px-4 py-3 border-b border-zinc-800">
+                        <span className="font-mono text-xs uppercase tracking-widest text-yellow-400">{brand}</span>
+                        {editing ? (
+                          <div className="flex gap-2">
+                            <button onClick={() => saveSalesTarget(oid, brand, items)} disabled={stSaving} className="bg-yellow-400 text-black font-bold text-[10px] px-3 py-1.5 uppercase tracking-widest disabled:opacity-50">{stSaving ? "Saving..." : "Save"}</button>
+                            <button onClick={() => { setStEditing(null); setStEditValues({}); }} className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest px-2">Cancel</button>
+                          </div>
+                        ) : (
+                          <button onClick={() => { setStEditing(key); setStEditValues({}); }} className="text-[10px] font-mono text-zinc-400 uppercase tracking-widest border border-zinc-700 px-3 py-1.5 hover:border-yellow-400 hover:text-yellow-400">Edit {curMonth}</button>
+                        )}
+                      </div>
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="text-[10px] font-mono text-zinc-500 uppercase">
+                            <th className="text-left px-4 py-2">Line item</th>
+                            <th className="text-right px-4 py-2">Average</th>
+                            <th className="text-right px-4 py-2">{curMonth}</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {items.map((it: any) => {
+                            const vals = Object.values(it.months || {}).map(Number);
+                            const avg = vals.length ? vals.reduce((a: number, b: number) => a + b, 0) / vals.length : 0;
+                            const curKey = new Date().toISOString().slice(0, 7);
+                            const curVal = it.months?.[curKey];
+                            return (
+                              <tr key={it.name} className="border-t border-zinc-800/60">
+                                <td className="px-4 py-2 text-zinc-300">{it.name}</td>
+                                <td className="px-4 py-2 text-right font-mono">{Math.round(avg).toLocaleString("en-IN")}</td>
+                                <td className="px-4 py-2 text-right font-mono">
+                                  {editing ? (
+                                    <input type="number" defaultValue={curVal ?? ""} onChange={(e) => setStEditValues(prev => ({ ...prev, [it.name]: e.target.value }))} className="w-28 bg-black border border-zinc-700 text-white px-2 py-1 text-right focus:outline-none focus:border-yellow-400" placeholder="—" />
+                                  ) : (curVal !== undefined ? Math.round(curVal).toLocaleString("en-IN") : "—")}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  );
+                })}
+                {!salesTargets[oid] && <p className="text-zinc-600 font-mono text-xs">No data loaded yet for this outlet.</p>}
+              </div>
+            ))}
+          </div>
+        )}
+       {activeTab === "payout" && (
+          <div>
+            <div className="flex justify-between items-start mb-6 pb-5 border-b border-zinc-800">
+              <div>
+                <h2 className="text-2xl md:text-3xl font-black tracking-tight">Payout</h2>
+                <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mt-1">Updated Fridays</p>
+              </div>
+            </div>
+            <div className="grid md:grid-cols-2 gap-5 max-w-3xl">
+              <div className="bg-[#131316] border border-zinc-800 p-5">
+                <p className="font-mono text-xs uppercase tracking-widest text-orange-400 mb-2">Swiggy</p>
+                <p className="text-zinc-600 font-mono text-xs">Coming soon — fields to be added.</p>
+              </div>
+              <div className="bg-[#131316] border border-zinc-800 p-5">
+                <p className="font-mono text-xs uppercase tracking-widest text-red-400 mb-2">Zomato</p>
+                <p className="text-zinc-600 font-mono text-xs">Coming soon — fields to be added.</p>
+              </div>
+            </div>
+          </div>
+        )}
        {activeTab === "attendance" && (
           <div>
             <div className="flex justify-between items-start mb-6 pb-5 border-b border-zinc-800">
