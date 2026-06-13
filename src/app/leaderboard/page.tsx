@@ -72,7 +72,7 @@ export default function LeaderboardPage() {
         .gte("submitted_at", startISO).lt("submitted_at", endISO),
       supabase.from("tasks").select("assigned_to,completed_at,created_at")
         .eq("status", "completed"),
-      supabase.from("outlet_reports").select("staff_id,bh_google_rating,report_date")
+      supabase.from("outlet_reports").select("staff_id,bh_google_rating,report_date,rating_bonus")
         .gte("report_date", startDate).lt("report_date", endDate),
     ]);
 
@@ -93,7 +93,7 @@ export default function LeaderboardPage() {
     });
     (outRes.data || []).forEach((o: any) => {
       const row = map[o.staff_id]; if (!row) return;
-      if (Number(o.bh_google_rating) > RATING_THRESHOLD) row.ratingHits++;
+      if (o.rating_bonus) row.ratingHits++;
     });
 
     Object.values(map).forEach(row => {
