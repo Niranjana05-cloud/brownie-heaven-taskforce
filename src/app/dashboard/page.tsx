@@ -537,6 +537,13 @@ const submitOutletReport = async () => {
     isLate = new Date() > deadline;
   }
   const d = outletReportData;
+  const newRating = parseFloat(d.bh_google_rating) || 0;
+  const todayStr = new Date().toISOString().split("T")[0];
+  const { data: prevRows } = await supabase.from("outlet_reports")
+    .select("bh_google_rating").eq("outlet_id", activeOutlet).lt("report_date", todayStr)
+    .order("report_date", { ascending: false }).limit(1);
+  const prevRating = prevRows && prevRows[0] ? Number(prevRows[0].bh_google_rating) || 0 : 0;
+  const earnedBonus = newRating > 4.5 && newRating > prevRating;
   const payload = {
     shop_sales_count: parseInt(d.shop_sales_count?.replace(/,/g, "")) || 0,
     shop_sales_value: parseFloat(d.shop_sales_value?.replace(/,/g, "")) || 0,
@@ -566,7 +573,8 @@ icbh_google_rating: parseFloat(d.icbh_google_rating) || null,
 icbh_swiggy_rating: parseFloat(d.icbh_swiggy_rating) || null,
 icbh_zomato_rating: parseFloat(d.icbh_zomato_rating) || null,
     is_late: isLate,
-    is_edited: d.is_edited === "true",
+   is_edited: d.is_edited === "true",
+    rating_bonus: earnedBonus,
   };
   let error;
   if (d.editing_id) {
@@ -584,7 +592,7 @@ error = result.error;
   setOutletSubmitting(false);
  if (error) { alert("Error: " + error.message); return; }
 setOutletReportData({});
-celebrate(Number(payload.bh_google_rating) > 4.5 ? 100 : 5);
+celebrate(earnedBonus ? 100 : 5);
 await new Promise(resolve => setTimeout(resolve, 500));
 await fetchOutletReports(user);
 };
