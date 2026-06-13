@@ -22,6 +22,7 @@ const ALL_STAFF: Staff[] = [
 
 const SEASON_START = "2026-06-12";
 const PTS_ONTIME = 10;
+const PTS_LATE = -30;
 const STARTING_POINTS: Record<string, number> = { ahila: 430, nilani: 430, vishnu: 30 };
 const PTS_TASK = 5;
 const PTS_RATING = 100;
