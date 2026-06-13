@@ -845,7 +845,16 @@ await fetchOutletReports(user);
            <div className="bg-[#131316] border border-zinc-800 p-6 max-w-md">
               <div className="mb-5">
                 <label className="block text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-1">Date</label>
-                <input type="date" value={attendanceDate} onChange={(e) => { setAttendanceDate(e.target.value); if (user) fetchAttendance(user, e.target.value); }} className="w-full bg-black border border-zinc-800 text-white px-3 py-2 focus:outline-none focus:border-yellow-400 transition-colors text-sm" />
+               <input type="date" value={attendanceDate} onChange={(e) => { setAttendanceDate(e.target.value); if (user) fetchAttendance(user, e.target.value); }} className="w-full bg-black border border-zinc-800 text-white px-3 py-2 focus:outline-none focus:border-yellow-400 transition-colors text-sm" />
+                <p className="text-[11px] font-mono text-yellow-400/80 uppercase tracking-widest mt-1.5">
+                  {(() => {
+                    const today = new Date().toISOString().split("T")[0];
+                    const y = new Date(Date.now() - 86400000).toISOString().split("T")[0];
+                    const pretty = new Date(attendanceDate + "T00:00:00").toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short", year: "numeric" });
+                    const tag = attendanceDate === today ? "Today" : attendanceDate === y ? "Yesterday" : null;
+                    return tag ? `${tag} • ${pretty}` : pretty;
+                  })()}
+                </p>
               </div>
               {todayAttendance ? (
                 <div>
