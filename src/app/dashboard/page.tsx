@@ -63,7 +63,7 @@ const OUTLET_TARGETS: Record<string, string> = {
   velachery: "",
   pallavaram: "",
   vadapalani: "",
-  besant_nagar: "",
+  besant_nagar: "11667",
 };
 
 const REPORT_FIELDS: Record<string, { label: string; key: string; type?: string }[]> = {
