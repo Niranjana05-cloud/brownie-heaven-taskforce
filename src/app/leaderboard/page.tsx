@@ -22,7 +22,7 @@ const ALL_STAFF: Staff[] = [
 
 const SEASON_START = "2026-06-12";
 const PTS_ONTIME = 10;
-const PTS_LATE = 0;
+const STARTING_POINTS: Record<string, number> = { ahila: 430, nilani: 430, vishnu: 30 };
 const PTS_TASK = 5;
 const PTS_RATING = 100;
 const RATING_THRESHOLD = 4.5;
@@ -95,7 +95,8 @@ export default function LeaderboardPage() {
     });
 
     Object.values(map).forEach(row => {
-      row.points =
+     row.points =
+        (STARTING_POINTS[row.id] || 0) +
         row.onTime * PTS_ONTIME +
         row.late * PTS_LATE +
         row.tasks * PTS_TASK +
@@ -144,6 +145,7 @@ export default function LeaderboardPage() {
           <div style={{ fontSize: "48px", color: C.accent, fontWeight: "bold", lineHeight: 1.1 }}>{me.points}</div>
           <div style={{ color: C.muted, marginBottom: "16px" }}>Rank #{myRank} of {rows.length}</div>
           <div style={{ fontSize: "13px", lineHeight: 1.9 }}>
+           {(STARTING_POINTS[me.id] || 0) > 0 && <div>Starting credit: {STARTING_POINTS[me.id]}</div>}
             <div>On-time reports: {me.onTime} × {PTS_ONTIME} = {me.onTime * PTS_ONTIME}</div>
             <div>Late reports: {me.late} × {PTS_LATE} = {me.late * PTS_LATE}</div>
             <div>Tasks completed: {me.tasks} × {PTS_TASK} = {me.tasks * PTS_TASK}</div>
