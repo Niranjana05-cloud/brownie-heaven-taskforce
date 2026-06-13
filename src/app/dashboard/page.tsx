@@ -432,9 +432,12 @@ const fetchOutletReports = async (u: Staff) => {
     };
 
 const fetchSalesTargets = async (u: Staff) => {
+    const isViewer = u.role === "Owner" || u.role === "Manager";
     const outlets = (u as Staff & { outlets?: string[] }).outlets || [];
-    if (!outlets.length) return;
-    const { data } = await supabase.from("sales_target").select("*").in("outlet_id", outlets);
+    if (!isViewer && !outlets.length) return;
+    let query = supabase.from("sales_target").select("*");
+    if (!isViewer) query = query.in("outlet_id", outlets);
+    const { data } = await query;
     const map: Record<string, any> = {};
     (data || []).forEach((row: any) => {
       if (!map[row.outlet_id]) map[row.outlet_id] = {};
@@ -716,12 +719,12 @@ await fetchOutletReports(user);
   {Object.keys(outletReports).length < (user.outlets?.length || 0) && <span className="ml-auto w-2 h-2 bg-yellow-400 rounded-full"></span>}
   </div>
 )}
-          {(user.outlets && user.outlets.length > 0) && (
+         {((user.outlets && user.outlets.length > 0) || canAssign) && (
             <div onClick={() => { setActiveTab("sales_target"); setSidebarOpen(false); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "sales_target" ? "text-white bg-zinc-900 border-l-2 border-yellow-400" : "text-zinc-500 hover:text-white"}`}>
               <span>🎯</span> Sales Target
             </div>
           )}
-          {(user.outlets && user.outlets.length > 0) && (
+         {((user.outlets && user.outlets.length > 0) || canAssign) && (
             <div onClick={() => { setActiveTab("payout"); setSidebarOpen(false); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "payout" ? "text-white bg-zinc-900 border-l-2 border-yellow-400" : "text-zinc-500 hover:text-white"}`}>
               <span>💰</span> Payout
             </div>
@@ -889,7 +892,7 @@ await fetchOutletReports(user);
                 <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mt-1">Average updates as you enter {new Date().toLocaleString("en-IN", { month: "long" })}</p>
               </div>
             </div>
-            {(user.outlets || []).map((oid: string) => (
+            {(canAssign ? OUTLETS : (user.outlets || [])).map((oid: string) => (
               <div key={oid} className="mb-8">
                 <h3 className="text-lg font-bold mb-3">{OUTLET_NAMES[oid] || oid}</h3>
                 {["BH", "CBH"].map((brand) => {
@@ -908,7 +911,7 @@ await fetchOutletReports(user);
                             <button onClick={() => { setStEditing(null); setStEditValues({}); }} className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest px-2">Cancel</button>
                           </div>
                         ) : (
-                          <button onClick={() => { setStEditing(key); setStEditValues({}); }} className="text-[10px] font-mono text-zinc-400 uppercase tracking-widest border border-zinc-700 px-3 py-1.5 hover:border-yellow-400 hover:text-yellow-400">Edit {curMonth}</button>
+                         (user.outlets || []).includes(oid) ? <button onClick={() => { setStEditing(key); setStEditValues({}); }} className="text-[10px] font-mono text-zinc-400 uppercase tracking-widest border border-zinc-700 px-3 py-1.5 hover:border-yellow-400 hover:text-yellow-400">Edit {curMonth}</button> : <span className="text-[10px] font-mono text-zinc-600 uppercase tracking-widest">View only</span>
                         )}
                       </div>
                       <table className="w-full text-sm">
