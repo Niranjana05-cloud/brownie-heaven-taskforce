@@ -67,7 +67,7 @@ export default function LeaderboardPage() {
     const endDate = m === 11 ? `${y + 1}-01-01` : `${y}-${pad(m + 2)}-01`;
 
     const [repRes, taskRes, outRes] = await Promise.all([
-      supabase.from("reports").select("staff_id,is_late")
+      supabase.from("reports").select("staff_id,is_late,no_points")
         .gte("submitted_at", startISO).lt("submitted_at", endISO),
       supabase.from("tasks").select("assigned_to,completed_at,created_at")
         .eq("status", "completed"),
@@ -82,6 +82,7 @@ export default function LeaderboardPage() {
 
     (repRes.data || []).forEach((r: any) => {
       const row = map[r.staff_id]; if (!row) return;
+      if (r.no_points) return;
       if (r.is_late) row.late++; else row.onTime++;
     });
     (taskRes.data || []).forEach((t: any) => {
