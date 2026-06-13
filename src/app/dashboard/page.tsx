@@ -89,10 +89,7 @@ const REPORT_FIELDS: Record<string, { label: string; key: string; type?: string 
     { label: "Tomorrow Action 2", key: "action_2" },
     { label: "Tomorrow Action 3", key: "action_3" },
   ],
-  nilani: [
-    { label: "Total Staff Present", key: "staff_present" },
-    { label: "Total Absent", key: "staff_absent" },
-    { label: "Total Late", key: "staff_late" },
+ nilani: [
     { label: "Replacement Required (Yes/No)", key: "replacement_required" },
     { label: "Training Conducted (Yes/No)", key: "training_conducted" },
     { label: "Training Topic", key: "training_topic" },
@@ -184,11 +181,14 @@ export default function DashboardPage() {
   const [reports, setReports] = useState<Report[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
-  const [activeTab, setActiveTab] = useState<"tasks" | "my_report" | "all_reports" | "analytics" | "outlet_reports" | "owner_outlets" | "history">("tasks");
+  const [activeTab, setActiveTab] = useState<"tasks" | "my_report" | "all_reports" | "analytics" | "outlet_reports" | "owner_outlets" | "history" | "attendance">("tasks");
   const [outletFilter, setOutletFilter] = useState("all");
   const [reportData, setReportData] = useState<Record<string, string>>({});
   const [reportSubmitting, setReportSubmitting] = useState(false);
   const [reportOffDay, setReportOffDay] = useState(false);
+  const [attendanceData, setAttendanceData] = useState({ present: "", absent: "", late: "" });
+  const [attendanceSubmitting, setAttendanceSubmitting] = useState(false);
+  const [todayAttendance, setTodayAttendance] = useState<any>(null);
   const [todayReport, setTodayReport] = useState<Report | null>(null);
   const [overdueTask, setOverdueTask] = useState<Task | null>(null);
   const [forceAckReason, setForceAckReason] = useState("");
@@ -229,6 +229,7 @@ export default function DashboardPage() {
     setUser(parsed);
     fetchTasks(parsed);
     fetchReports(parsed);
+    fetchAttendance(parsed);
     fetchOutletReports(parsed);
     fetchLastOutletRatings(parsed);
    if (parsed.role === "Owner" || parsed.role === "Manager") fetchAllOutletReports();
@@ -418,6 +419,29 @@ const fetchOutletReports = async (u: Staff) => {
     setReportData({});
     fetchReports(user);
     };
+
+ const fetchAttendance = async (u: Staff) => {
+    const today = new Date().toISOString().split("T")[0];
+    const { data } = await supabase.from("attendance").select("*").eq("staff_id", u.id).eq("attendance_date", today).maybeSingle();
+    if (data) setTodayAttendance(data);
+  };
+
+  const submitAttendance = async () => {
+    if (!user) return;
+    setAttendanceSubmitting(true);
+    const { data, error } = await supabase.from("attendance").upsert({
+      staff_id: user.id,
+      attendance_date: new Date().toISOString().split("T")[0],
+      present: parseInt(attendanceData.present) || 0,
+      absent: parseInt(attendanceData.absent) || 0,
+      late: parseInt(attendanceData.late) || 0,
+      submitted_at: new Date().toISOString(),
+    }, { onConflict: "staff_id,attendance_date" }).select().single();
+    setAttendanceSubmitting(false);
+    if (error) { alert("Error: " + error.message); return; }
+    setTodayAttendance(data);
+    setAttendanceData({ present: "", absent: "", late: "" });
+  };
 
   const assignTask = async () => {
     if (!taskTitle.trim() || !user) return;
@@ -632,7 +656,12 @@ await fetchOutletReports(user);
           {hasReportDuty && (
             <div onClick={() => { setActiveTab("my_report"); setSidebarOpen(false); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "my_report" ? "text-white bg-zinc-900 border-l-2 border-yellow-400" : "text-zinc-500 hover:text-white"}`}>
               <span>📋</span> My Report
-              {!todayReport && <span className="ml-auto w-2 h-2 bg-yellow-400 rounded-full"></span>}
+             {!todayReport && <span className="ml-auto w-2 h-2 bg-yellow-400 rounded-full"></span>}
+            </div>
+          )}
+          {user.role === "HR" && (
+            <div onClick={() => { setActiveTab("attendance"); setSidebarOpen(false); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "attendance" ? "text-white bg-zinc-900 border-l-2 border-yellow-400" : "text-zinc-500 hover:text-white"}`}>
+              <span>👥</span> Attendance
             </div>
           )}
           {(user.outlets && user.outlets.length > 0) && (
@@ -796,6 +825,41 @@ await fetchOutletReports(user);
           </div>
         )}
 
+       {activeTab === "attendance" && (
+          <div>
+            <div className="flex justify-between items-start mb-6 pb-5 border-b border-zinc-800">
+              <div>
+                <h2 className="text-2xl md:text-3xl font-black tracking-tight">Attendance</h2>
+                <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mt-1">Today's staff count</p>
+              </div>
+            </div>
+            <div className="bg-[#131316] border border-zinc-800 p-6 max-w-md">
+              {todayAttendance ? (
+                <div>
+                  <p className="text-green-400 font-mono text-sm uppercase tracking-widest mb-4">✓ Submitted for today</p>
+                  <div className="grid grid-cols-3 gap-4 text-center">
+                    <div><p className="text-3xl font-black">{todayAttendance.present}</p><p className="text-[10px] font-mono text-zinc-500 uppercase mt-1">Present</p></div>
+                    <div><p className="text-3xl font-black">{todayAttendance.absent}</p><p className="text-[10px] font-mono text-zinc-500 uppercase mt-1">Absent</p></div>
+                    <div><p className="text-3xl font-black">{todayAttendance.late}</p><p className="text-[10px] font-mono text-zinc-500 uppercase mt-1">Late</p></div>
+                  </div>
+                  <button onClick={() => { setAttendanceData({ present: String(todayAttendance.present), absent: String(todayAttendance.absent), late: String(todayAttendance.late) }); setTodayAttendance(null); }} className="mt-5 text-[10px] font-mono text-zinc-500 uppercase tracking-widest hover:text-yellow-400">Edit</button>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {[{ k: "present", l: "Total Staff Present" }, { k: "absent", l: "Total Absent" }, { k: "late", l: "Total Late" }].map(f => (
+                    <div key={f.k}>
+                      <label className="block text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-1">{f.l}</label>
+                      <input type="number" value={(attendanceData as any)[f.k]} onChange={(e) => setAttendanceData(prev => ({ ...prev, [f.k]: e.target.value }))} className="w-full bg-black border border-zinc-800 text-white px-3 py-2 focus:outline-none focus:border-yellow-400 transition-colors text-sm" placeholder="0" />
+                    </div>
+                  ))}
+                  <button onClick={submitAttendance} disabled={attendanceSubmitting} className="bg-yellow-400 text-black font-bold tracking-widest text-xs px-6 py-3 hover:opacity-90 transition-opacity uppercase disabled:opacity-50">
+                    {attendanceSubmitting ? "Submitting..." : "Submit Attendance →"}
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
         {(activeTab === "my_report" || activeTab === "all_reports") && (
       
           <div>
