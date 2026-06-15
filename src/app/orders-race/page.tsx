@@ -27,6 +27,23 @@ const OUTLET_NAMES: Record<string, string> = {
   perumbakkam: "Perumbakkam", tambaram: "Tambaram", porur: "Porur",
 };
 
+// Combined daily target (Swiggy + Zomato) per outlet.
+// Basis: March Zomato avg/day x2 (Swiggy assumed ~= Zomato). null = no baseline yet.
+const TARGET: Record<string, number | null> = {
+  royapettah: 50,
+  anna_nagar: 34,
+  porur: 30,
+  ra_puram: 13,
+  adayar: 12,
+  tambaram: 11,
+  besant_nagar: 6,
+  perumbakkam: 30,
+  bsr_mall: null,
+  velachery: null,
+  pallavaram: null,
+  vadapalani: null,
+};
+
 type Counts = { swiggy: number; zomato: number };
 
 export default function OrdersRacePage() {
@@ -94,22 +111,26 @@ export default function OrdersRacePage() {
   const zomatoTotal = ALL_OUTLETS.reduce((s, o) => s + (byOutlet[o]?.zomato || 0), 0);
   const grandTotal = swiggyTotal + zomatoTotal;
 
-  // per-manager rollup, ranked
+  // per-manager rollup, ranked by wins (outlets beating target), then total orders
   const managerRows = MANAGERS.map(m => {
-    let sw = 0, zo = 0;
+    let sw = 0, zo = 0, wins = 0;
     const outlets = m.outlets.map(o => {
       const c = byOutlet[o];
       const reported = !!c;
       const swiggy = c ? c.swiggy : 0;
       const zomato = c ? c.zomato : 0;
+      const total = swiggy + zomato;
       sw += swiggy; zo += zomato;
-      return { id: o, name: OUTLET_NAMES[o] || o, swiggy, zomato, total: swiggy + zomato, reported };
+      const target = TARGET[o] ?? null;
+      const win = reported && target !== null && total >= target;
+      if (win) wins += 1;
+      return { id: o, name: OUTLET_NAMES[o] || o, swiggy, zomato, total, reported, target, win };
     });
     const missing = outlets.filter(o => !o.reported).length;
-    return { ...m, swiggy: sw, zomato: zo, total: sw + zo, outlets, missing };
-  }).sort((a, b) => b.total - a.total);
+    return { ...m, swiggy: sw, zomato: zo, total: sw + zo, outlets, missing, wins };
+  }).sort((a, b) => (b.wins - a.wins) || (b.total - a.total));
 
-  const leaderTotal = managerRows[0]?.total || 0;
+  const leaderTotal = Math.max(0, ...managerRows.map(r => r.total));
   const niceDate = new Date(date + "T00:00:00").toLocaleDateString("en-IN", {
     weekday: "short", day: "2-digit", month: "short", year: "numeric",
   });
@@ -197,11 +218,13 @@ export default function OrdersRacePage() {
                 <div style={{ fontSize: "16px", fontWeight: "bold" }}>
                   <span style={{ color: C.accent, marginRight: "10px" }}>#{i + 1}</span>
                   {m.name}
-                  {i === 0 && m.total > 0 && <span style={{ marginLeft: "8px" }}>👑</span>}
+                  {i === 0 && m.wins > 0 && <span style={{ marginLeft: "8px" }}>👑</span>}
                 </div>
                 <div style={{ textAlign: "right" }}>
-                  <div style={{ color: C.accent, fontSize: "28px", fontWeight: "bold", lineHeight: 1 }}>{m.total}</div>
-                  <div style={{ color: C.muted, fontSize: "11px" }}>orders</div>
+                  <div style={{ color: m.wins > 0 ? C.green : C.muted, fontSize: "28px", fontWeight: "bold", lineHeight: 1 }}>
+                    {m.wins}<span style={{ color: C.muted, fontSize: "15px" }}>/4</span>
+                  </div>
+                  <div style={{ color: C.muted, fontSize: "11px" }}>beat target · {m.total} orders</div>
                 </div>
               </div>
               {/* bar relative to leader */}
@@ -225,9 +248,21 @@ export default function OrdersRacePage() {
                         <span style={{ color: C.muted, margin: "0 5px" }}>/</span>
                         <span style={{ color: C.zomato }}>{o.zomato}</span>
                         <span style={{ color: C.text, marginLeft: "10px", fontWeight: "bold" }}>{o.total}</span>
+                        {o.target !== null ? (
+                          <span style={{ marginLeft: "10px" }}>
+                            {o.win
+                              ? <span style={{ color: C.green }}>✅ +{o.total - o.target}</span>
+                              : <span style={{ color: C.zomato }}>{o.total - o.target}</span>}
+                            <span style={{ color: C.muted, marginLeft: "6px" }}>tgt {o.target}</span>
+                          </span>
+                        ) : (
+                          <span style={{ marginLeft: "10px", color: C.accent, fontStyle: "italic" }}>set target</span>
+                        )}
                       </span>
                     ) : (
-                      <span style={{ color: C.zomato, fontStyle: "italic" }}>Not reported</span>
+                      <span style={{ color: C.zomato, fontStyle: "italic" }}>
+                        Not reported{o.target !== null ? <span style={{ color: C.muted, fontStyle: "normal" }}> · tgt {o.target}</span> : null}
+                      </span>
                     )}
                   </div>
                 ))}
@@ -236,8 +271,8 @@ export default function OrdersRacePage() {
           ))}
 
           <div style={{ marginTop: "20px", color: C.muted, fontSize: "11px", lineHeight: 1.8 }}>
-            Per outlet shows <span style={{ color: C.swiggy }}>Swiggy</span> / <span style={{ color: C.zomato }}>Zomato</span> / Total ·
-            Numbers come straight from the daily outlet reports.
+            Per outlet: <span style={{ color: C.swiggy }}>Swiggy</span> / <span style={{ color: C.zomato }}>Zomato</span> / Total · then result vs target.
+            <span style={{ color: C.green }}> ✅ = beat its daily target</span>. Ranking is by outlets that beat target.
           </div>
         </>
       )}
