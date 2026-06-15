@@ -26,11 +26,12 @@ const PTS_LATE = -30;
 const STARTING_POINTS: Record<string, number> = { ahila: 630, nilani: 430, vishnu: 30 };
 const PTS_TASK = 5;
 const PTS_RATING = 100;
+const PTS_OUTLET = 5;
 const RATING_THRESHOLD = 4.5;
 
 type Row = {
   id: string; name: string; role: string;
-  onTime: number; late: number; tasks: number; ratingHits: number; points: number;
+ onTime: number; late: number; tasks: number; ratingHits: number; outlets: number; points: number;
 };
 
 export default function LeaderboardPage() {
@@ -72,13 +73,13 @@ export default function LeaderboardPage() {
         .gte("submitted_at", startISO).lt("submitted_at", endISO),
       supabase.from("tasks").select("assigned_to,completed_at,created_at")
         .eq("status", "completed"),
-      supabase.from("outlet_reports").select("staff_id,bh_google_rating,report_date,rating_bonus")
+     supabase.from("outlet_reports").select("staff_id,bh_google_rating,report_date,rating_bonus,no_points")
         .gte("report_date", startDate).lt("report_date", endDate),
     ]);
 
     const map: Record<string, Row> = {};
     ALL_STAFF.filter(s => s.role !== "Owner").forEach(s => {
-      map[s.id] = { id: s.id, name: s.name, role: s.role, onTime: 0, late: 0, tasks: 0, ratingHits: 0, points: 0 };
+     map[s.id] = { id: s.id, name: s.name, role: s.role, onTime: 0, late: 0, tasks: 0, ratingHits: 0, outlets: 0, points: 0 };
     });
 
     (repRes.data || []).forEach((r: any) => {
@@ -93,6 +94,8 @@ export default function LeaderboardPage() {
     });
     (outRes.data || []).forEach((o: any) => {
       const row = map[o.staff_id]; if (!row) return;
+     if (o.no_points) return;
+      row.outlets++;
       if (o.rating_bonus) row.ratingHits++;
     });
 
@@ -102,7 +105,8 @@ export default function LeaderboardPage() {
         row.onTime * PTS_ONTIME +
         row.late * PTS_LATE +
         row.tasks * PTS_TASK +
-        row.ratingHits * PTS_RATING;
+       row.ratingHits * PTS_RATING +
+        row.outlets * PTS_OUTLET;
     });
 
     setRows(Object.values(map).sort((a, b) => b.points - a.points));
@@ -151,6 +155,7 @@ export default function LeaderboardPage() {
             <div>On-time reports: {me.onTime} × {PTS_ONTIME} = {me.onTime * PTS_ONTIME}</div>
             <div>Late reports: {me.late} × {PTS_LATE} = {me.late * PTS_LATE}</div>
             <div>Tasks completed: {me.tasks} × {PTS_TASK} = {me.tasks * PTS_TASK}</div>
+            <div>Outlet reports: {me.outlets} × {PTS_OUTLET} = {me.outlets * PTS_OUTLET}</div>
             <div>4.5+ Google ratings: {me.ratingHits} × {PTS_RATING} = {me.ratingHits * PTS_RATING}</div>
           </div>
         </div>
