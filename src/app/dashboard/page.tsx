@@ -221,6 +221,7 @@ export default function DashboardPage() {
   const [outletReportData, setOutletReportData] = useState<Record<string, string>>({});
   const [outletSubmitting, setOutletSubmitting] = useState(false);
   const [outletEntryDate, setOutletEntryDate] = useState<string>(() => new Date().toISOString().split("T")[0]);
+  const [outletWasOff, setOutletWasOff] = useState(false);
   const [outletHistoryDate, setOutletHistoryDate] = useState<string>(new Date().toISOString().split("T")[0]);
   const [lastOutletRatings, setLastOutletRatings] = useState<Record<string, OutletReport>>({});
   const [allOutletReports, setAllOutletReports] = useState<OutletReport[]>([]);
@@ -619,6 +620,7 @@ icbh_zomato_rating: parseFloat(d.icbh_zomato_rating) || null,
    is_edited: d.is_edited === "true",
     rating_bonus: isBackfill ? false : earnedBonus,
     is_backfill: isBackfill,
+    no_points: isBackfill && outletWasOff,
   };
   let error;
   if (d.editing_id) {
@@ -636,7 +638,7 @@ error = result.error;
   setOutletSubmitting(false);
  if (error) { alert("Error: " + error.message); return; }
 setOutletReportData({});
-celebrate(isBackfill ? -30 : (earnedBonus ? 100 : 5));
+if (!(isBackfill && outletWasOff)) celebrate(isBackfill ? -30 : (earnedBonus ? 100 : 5));
 await new Promise(resolve => setTimeout(resolve, 500));
 await fetchOutletReports(user);
 };
@@ -1386,8 +1388,17 @@ await fetchOutletReports(user);
         </div>
         <div className="mb-4">
           <label className="block text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-1">Report Date</label>
-          <input type="date" max={new Date().toISOString().split("T")[0]} value={outletEntryDate} onChange={(e) => setOutletEntryDate(e.target.value)} className="bg-black border border-zinc-800 text-white px-3 py-2 focus:outline-none focus:border-yellow-400 transition-colors text-sm" />
-          {outletEntryDate < new Date().toISOString().split("T")[0] && <p className="text-[11px] font-mono text-red-400 uppercase tracking-widest mt-1.5">⚠️ Back-dated — no points, −30 penalty</p>}
+         <input type="date" max={new Date().toISOString().split("T")[0]} value={outletEntryDate} onChange={(e) => { setOutletEntryDate(e.target.value); setOutletWasOff(false); }} className="bg-black border border-zinc-800 text-white px-3 py-2 focus:outline-none focus:border-yellow-400 transition-colors text-sm" />
+          {outletEntryDate < new Date().toISOString().split("T")[0] && (
+            <div className="mt-3">
+              <p className="text-[11px] font-mono text-zinc-400 uppercase tracking-widest mb-1.5">Were you off on this day?</p>
+              <div className="flex gap-2">
+                <button type="button" onClick={() => setOutletWasOff(true)} className={`text-[11px] font-mono uppercase tracking-widest px-3 py-1.5 border transition-colors ${outletWasOff ? "border-green-400 text-green-400" : "border-zinc-700 text-zinc-500"}`}>Yes, I was off</button>
+                <button type="button" onClick={() => setOutletWasOff(false)} className={`text-[11px] font-mono uppercase tracking-widest px-3 py-1.5 border transition-colors ${!outletWasOff ? "border-red-400 text-red-400" : "border-zinc-700 text-zinc-500"}`}>No</button>
+              </div>
+              <p className={`text-[11px] font-mono uppercase tracking-widest mt-2 ${outletWasOff ? "text-green-400" : "text-red-400"}`}>{outletWasOff ? "✓ Off day — no points, no penalty" : "⚠️ Back-dated — −30 penalty"}</p>
+            </div>
+          )}
         </div>
         <button onClick={submitOutletReport} disabled={outletSubmitting} className="bg-yellow-400 text-black font-bold tracking-widest text-xs px-6 py-3 hover:opacity-90 transition-opacity uppercase disabled:opacity-50">
           {outletSubmitting ? "Submitting..." : `Submit ${OUTLET_NAMES[activeOutlet] || activeOutlet.replace(/_/g, " ")} Report →`}
