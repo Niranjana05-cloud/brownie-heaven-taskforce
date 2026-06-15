@@ -39,17 +39,19 @@ function showPopup(points: number) {
   overlay.className = "bh-celebrate";
 
   const card = document.createElement("div");
+const neg = points < 0;
   card.className = "bh-celebrate-card";
+  if (neg) card.style.borderColor = "#ef4444";
   card.innerHTML = `
-    <div class="bh-celebrate-spark">✨</div>
-    <div class="bh-celebrate-pts">+${points} PTS</div>
-    <div class="bh-celebrate-msg">You earned points!</div>
+    <div class="bh-celebrate-spark">${neg ? "⚠️" : "✨"}</div>
+    <div class="bh-celebrate-pts" style="color:${neg ? "#ef4444" : "#facc15"}">${neg ? points : "+" + points} PTS</div>
+    <div class="bh-celebrate-msg">${neg ? "Points deducted" : "You earned points!"}</div>
   `;
   overlay.appendChild(card);
 
   // confetti
   const colors = ["#facc15", "#ffffff", "#fde047", "#a3a3a3"];
-  for (let i = 0; i < 28; i++) {
+  for (let i = 0; i < 28 && points >= 0; i++) {
     const c = document.createElement("div");
     c.className = "bh-confetti";
     c.style.left = Math.random() * 100 + "vw";
