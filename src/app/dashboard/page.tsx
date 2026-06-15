@@ -220,6 +220,7 @@ export default function DashboardPage() {
   const [outletReports, setOutletReports] = useState<Record<string, OutletReport>>({});
   const [outletReportData, setOutletReportData] = useState<Record<string, string>>({});
   const [outletSubmitting, setOutletSubmitting] = useState(false);
+  const [outletEntryDate, setOutletEntryDate] = useState<string>(() => new Date().toISOString().split("T")[0]);
   const [outletHistoryDate, setOutletHistoryDate] = useState<string>(new Date().toISOString().split("T")[0]);
   const [lastOutletRatings, setLastOutletRatings] = useState<Record<string, OutletReport>>({});
   const [allOutletReports, setAllOutletReports] = useState<OutletReport[]>([]);
@@ -585,6 +586,7 @@ const submitOutletReport = async () => {
     .order("report_date", { ascending: false }).limit(1);
   const prevRating = prevRows && prevRows[0] ? Number(prevRows[0].bh_google_rating) || 0 : 0;
   const earnedBonus = newRating > 4.5 && newRating > prevRating;
+  const isBackfill = outletEntryDate < new Date().toISOString().split("T")[0];
   const payload = {
     shop_sales_count: parseInt(d.shop_sales_count?.replace(/,/g, "")) || 0,
     shop_sales_value: parseFloat(d.shop_sales_value?.replace(/,/g, "")) || 0,
@@ -615,7 +617,8 @@ icbh_swiggy_rating: parseFloat(d.icbh_swiggy_rating) || null,
 icbh_zomato_rating: parseFloat(d.icbh_zomato_rating) || null,
     is_late: isLate,
    is_edited: d.is_edited === "true",
-    rating_bonus: earnedBonus,
+    rating_bonus: isBackfill ? false : earnedBonus,
+    is_backfill: isBackfill,
   };
   let error;
   if (d.editing_id) {
@@ -626,14 +629,14 @@ icbh_zomato_rating: parseFloat(d.icbh_zomato_rating) || null,
   ...payload,
   staff_id: user.id,
   outlet_id: activeOutlet,
-  report_date: new Date().toISOString().split("T")[0],
+  report_date: outletEntryDate,
 }, { onConflict: "staff_id,outlet_id,report_date" });
 error = result.error;
   }
   setOutletSubmitting(false);
  if (error) { alert("Error: " + error.message); return; }
 setOutletReportData({});
-celebrate(earnedBonus ? 100 : 5);
+celebrate(isBackfill ? -30 : (earnedBonus ? 100 : 5));
 await new Promise(resolve => setTimeout(resolve, 500));
 await fetchOutletReports(user);
 };
@@ -1380,6 +1383,11 @@ await fetchOutletReports(user);
     </select>
   </div>
 ))}
+        </div>
+        <div className="mb-4">
+          <label className="block text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-1">Report Date</label>
+          <input type="date" max={new Date().toISOString().split("T")[0]} value={outletEntryDate} onChange={(e) => setOutletEntryDate(e.target.value)} className="bg-black border border-zinc-800 text-white px-3 py-2 focus:outline-none focus:border-yellow-400 transition-colors text-sm" />
+          {outletEntryDate < new Date().toISOString().split("T")[0] && <p className="text-[11px] font-mono text-red-400 uppercase tracking-widest mt-1.5">⚠️ Back-dated — no points, −30 penalty</p>}
         </div>
         <button onClick={submitOutletReport} disabled={outletSubmitting} className="bg-yellow-400 text-black font-bold tracking-widest text-xs px-6 py-3 hover:opacity-90 transition-opacity uppercase disabled:opacity-50">
           {outletSubmitting ? "Submitting..." : `Submit ${OUTLET_NAMES[activeOutlet] || activeOutlet.replace(/_/g, " ")} Report →`}
