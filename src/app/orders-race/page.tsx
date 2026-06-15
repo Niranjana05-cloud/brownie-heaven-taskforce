@@ -51,6 +51,10 @@ export default function OrdersRacePage() {
   const [user, setUser] = useState<Staff | null>(null);
   const [date, setDate] = useState<string>(new Date().toISOString().split("T")[0]);
   const [byOutlet, setByOutlet] = useState<Record<string, Counts>>({});
+  const [targets, setTargets] = useState<Record<string, number | null>>(TARGET);
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState<Record<string, string>>({});
+  const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
 
   // auth + access gate
@@ -65,6 +69,19 @@ export default function OrdersRacePage() {
     if (!ALLOWED.includes(parsed.id)) { router.push("/dashboard"); return; }
     setUser(parsed);
   }, [router]);
+
+  // load saved targets once
+  useEffect(() => {
+    if (!user) return;
+    (async () => {
+      const { data } = await supabase.from("outlet_targets").select("outlet_id,target");
+      if (data && data.length) {
+        const t: Record<string, number | null> = { ...TARGET };
+        (data as any[]).forEach(r => { t[r.outlet_id] = r.target === null ? null : Number(r.target); });
+        setTargets(t);
+      }
+    })();
+  }, [user]);
 
   // fetch the chosen day whenever user is set or date changes
   useEffect(() => {
@@ -100,6 +117,31 @@ export default function OrdersRacePage() {
     fontFamily: "monospace", padding: "20px",
   };
 
+  const canEdit = user?.id === "nishant";
+  const ALL_FOR_EDIT = MANAGERS.flatMap(m => m.outlets);
+
+  const openEditor = () => {
+    const d: Record<string, string> = {};
+    ALL_FOR_EDIT.forEach(o => { const t = targets[o]; d[o] = t === null || t === undefined ? "" : String(t); });
+    setDraft(d);
+    setEditing(true);
+  };
+
+  const saveTargets = async () => {
+    setSaving(true);
+    const rows = ALL_FOR_EDIT.map(o => ({
+      outlet_id: o,
+      target: draft[o]?.trim() === "" || draft[o] === undefined ? null : Number(draft[o]),
+    }));
+    const { error } = await supabase.from("outlet_targets").upsert(rows, { onConflict: "outlet_id" });
+    setSaving(false);
+    if (error) { alert("Could not save targets: " + error.message); return; }
+    const t: Record<string, number | null> = { ...targets };
+    rows.forEach(r => { t[r.outlet_id] = r.target; });
+    setTargets(t);
+    setEditing(false);
+  };
+
   // which outlets actually reported today
   const ALL_OUTLETS = MANAGERS.flatMap(m => m.outlets);
   const reportedCount = ALL_OUTLETS.filter(o => byOutlet[o]).length;
@@ -121,7 +163,7 @@ export default function OrdersRacePage() {
       const zomato = c ? c.zomato : 0;
       const total = swiggy + zomato;
       sw += swiggy; zo += zomato;
-      const target = TARGET[o] ?? null;
+      const target = targets[o] ?? null;
       const win = reported && target !== null && total >= target;
       if (win) wins += 1;
       return { id: o, name: OUTLET_NAMES[o] || o, swiggy, zomato, total, reported, target, win };
@@ -167,6 +209,50 @@ export default function OrdersRacePage() {
           style={{ background: C.panel, color: C.text, border: `1px solid ${C.border}`, padding: "8px 10px", fontFamily: "monospace", colorScheme: "dark" }}
         />
       </div>
+
+      {/* edit targets (Nishant only) */}
+      {canEdit && !editing && (
+        <div style={{ marginBottom: "22px" }}>
+          <button onClick={openEditor}
+            style={{ background: "transparent", color: C.muted, border: `1px solid ${C.border}`, padding: "7px 12px", cursor: "pointer", fontFamily: "monospace", fontSize: "12px" }}>
+            ✎ Edit targets
+          </button>
+        </div>
+      )}
+
+      {canEdit && editing && (
+        <div style={{ background: C.panel, border: `1px solid ${C.accent}`, padding: "18px", marginBottom: "22px" }}>
+          <div style={{ color: C.accent, fontSize: "13px", textTransform: "uppercase", letterSpacing: "1px", marginBottom: "4px" }}>Set daily targets</div>
+          <div style={{ color: C.muted, fontSize: "11px", marginBottom: "14px" }}>Combined Swiggy + Zomato orders per day. Leave blank for no target.</div>
+          {MANAGERS.map(m => (
+            <div key={m.id} style={{ marginBottom: "12px" }}>
+              <div style={{ color: C.muted, fontSize: "11px", textTransform: "uppercase", marginBottom: "6px" }}>{m.name}</div>
+              {m.outlets.map(o => (
+                <div key={o} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "4px 0" }}>
+                  <span style={{ fontSize: "13px" }}>{OUTLET_NAMES[o] || o}</span>
+                  <input
+                    type="number"
+                    value={draft[o] ?? ""}
+                    placeholder="—"
+                    onChange={e => setDraft({ ...draft, [o]: e.target.value })}
+                    style={{ width: "80px", background: C.bg, color: C.text, border: `1px solid ${C.border}`, padding: "6px 8px", fontFamily: "monospace", textAlign: "right" }}
+                  />
+                </div>
+              ))}
+            </div>
+          ))}
+          <div style={{ display: "flex", gap: "10px", marginTop: "10px" }}>
+            <button onClick={saveTargets} disabled={saving}
+              style={{ background: C.accent, color: "#000", border: "none", padding: "9px 18px", cursor: "pointer", fontFamily: "monospace", fontWeight: "bold" }}>
+              {saving ? "Saving…" : "Save"}
+            </button>
+            <button onClick={() => setEditing(false)} disabled={saving}
+              style={{ background: "transparent", color: C.muted, border: `1px solid ${C.border}`, padding: "9px 18px", cursor: "pointer", fontFamily: "monospace" }}>
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* reported counter */}
       <div style={{ marginBottom: "22px", fontSize: "13px" }}>
