@@ -31,6 +31,7 @@ const PTS_RATING = 100;
 const PTS_RATING_FAIL = 50;
 const RATING_THRESHOLD = 4.5;
 const BACKFILL_PENALTY = 30;
+const ARUN_TARGET = 19000;
 
 type Row = {
   id: string; name: string; role: string;
@@ -43,6 +44,7 @@ export default function LeaderboardPage() {
   const router = useRouter();
   const [user, setUser] = useState<Staff | null>(null);
   const [rows, setRows] = useState<Row[]>([]);
+  const [arun, setArun] = useState<Row | null>(null);
   const [loading, setLoading] = useState(true);
   const [giveStaff, setGiveStaff] = useState("");
   const [givePoints, setGivePoints] = useState("");
@@ -113,15 +115,20 @@ export default function LeaderboardPage() {
       if (d && d >= startISO && d < endISO) row.tasks++;
     });
 
+    const arunRow = map["arun"];
     (outRes.data || []).forEach((o: any) => {
-      const row = map[o.staff_id]; if (!row) return;
       if (o.no_points) return;
-      if (o.is_backfill) { row.backfills++; return; }
-      row.outlets++;
-      if (o.is_late) row.outletLate++;
       const total = (Number(o.shop_sales_value) || 0) + (Number(o.swiggy_sales_value) || 0) + (Number(o.zomato_sales_value) || 0);
       const tgt = Number(o.target) || 0;
-      if (tgt > 0) { if (total >= tgt) row.targetMet++; else row.targetMiss++; }
+      const credit = (row: Row | undefined, rollup: boolean) => {
+        if (!row) return;
+        if (o.is_backfill) { if (!rollup) row.backfills++; return; }
+        row.outlets++;
+        if (o.is_late) row.outletLate++;
+        if (tgt > 0) { if (total >= tgt) row.targetMet++; else row.targetMiss++; }
+      };
+      credit(map[o.staff_id], false);
+      if (o.staff_id !== "arun") credit(arunRow, true);
     });
 
     const lastDay = new Date(y, m + 1, 0).getDate();
@@ -140,8 +147,9 @@ export default function LeaderboardPage() {
         const upto = reps.filter(r => r.report_date <= cp && r.report_date >= startDate);
         if (!upto.length) return;
         const latest = upto[upto.length - 1];
-        const row = map[latest.staff_id]; if (!row) return;
-        row.ratingPoints += Number(latest.bh_google_rating) >= RATING_THRESHOLD ? PTS_RATING : -PTS_RATING_FAIL;
+        const pts = Number(latest.bh_google_rating) >= RATING_THRESHOLD ? PTS_RATING : -PTS_RATING_FAIL;
+        if (map[latest.staff_id]) map[latest.staff_id].ratingPoints += pts;
+        if (latest.staff_id !== "arun" && arunRow) arunRow.ratingPoints += pts;
       });
     });
 
@@ -162,7 +170,9 @@ export default function LeaderboardPage() {
         row.adjustments;
     });
 
-    setRows(Object.values(map).sort((a, b) => b.points - a.points));
+    const all = Object.values(map);
+    setArun(all.find(r => r.id === "arun") || null);
+    setRows(all.filter(r => r.id !== "arun").sort((a, b) => b.points - a.points));
     setLoading(false);
   };
 
@@ -200,6 +210,19 @@ export default function LeaderboardPage() {
       <div style={{ background: C.panel, border: `1px solid ${C.accent}`, padding: "12px 16px", marginBottom: "22px", fontSize: "13px", lineHeight: 1.7 }}>
         💰 Monthly cash incentive — <span style={{ color: "#22c55e", fontWeight: "bold" }}>1700+ = ₹3000</span> · <span style={{ color: "#22c55e", fontWeight: "bold" }}>1600+ = ₹2000</span> · <span style={{ color: "#ef4444", fontWeight: "bold" }}>1400 or below = -₹500</span>
       </div>
+
+      {arun && (
+        <div style={{ background: C.panel, border: `1px solid ${C.accent}`, padding: "20px", marginBottom: "26px" }}>
+          <div style={{ color: C.muted, fontSize: "12px", textTransform: "uppercase", letterSpacing: "1px" }}>Arun — Team Total (all outlets)</div>
+          <div style={{ fontSize: "40px", color: C.accent, fontWeight: "bold", lineHeight: 1.2 }}>{arun.points} <span style={{ fontSize: "16px", color: C.muted }}>/ {ARUN_TARGET}</span></div>
+          <div style={{ background: "#000", height: "10px", borderRadius: "5px", overflow: "hidden", margin: "12px 0" }}>
+            <div style={{ height: "100%", width: `${Math.min(100, Math.max(0, (arun.points / ARUN_TARGET) * 100))}%`, background: arun.points >= ARUN_TARGET ? "#22c55e" : C.accent }}></div>
+          </div>
+          <div style={{ color: arun.points >= ARUN_TARGET ? "#22c55e" : C.muted, fontSize: "13px" }}>
+            {arun.points >= ARUN_TARGET ? "🎉 Target hit!" : `${ARUN_TARGET - arun.points} points to go`}
+          </div>
+        </div>
+      )}
 
       {!isOwner && me && (
         <div style={{ background: C.panel, border: `1px solid ${C.border}`, padding: "20px", marginBottom: "26px" }}>
