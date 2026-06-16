@@ -666,7 +666,7 @@ if (isBackfill) { if (!outletWasOff) celebrate(-30); }
 else {
   const _total = (Number(payload.shop_sales_value) || 0) + (Number(payload.swiggy_sales_value) || 0) + (Number(payload.zomato_sales_value) || 0);
   const _tgt = Number(payload.target) || 0;
-  if (_tgt > 0 && _total < _tgt) celebrate(-20);
+  if (_tgt > 0 && _total < _tgt) celebrate(-20, "Boo boo! Target dodged you today 😭");
   else if (_tgt > 0) celebrate(50);
   else celebrate(20);
 }
