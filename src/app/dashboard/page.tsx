@@ -222,6 +222,7 @@ export default function DashboardPage() {
   const [outletSubmitting, setOutletSubmitting] = useState(false);
   const [outletEntryDate, setOutletEntryDate] = useState<string>(() => new Date().toISOString().split("T")[0]);
   const [outletWasOff, setOutletWasOff] = useState(false);
+  const [targetCheck, setTargetCheck] = useState<any[] | null>(null);
   const [outletHistoryDate, setOutletHistoryDate] = useState<string>(new Date().toISOString().split("T")[0]);
   const [lastOutletRatings, setLastOutletRatings] = useState<Record<string, OutletReport>>({});
   const [allOutletReports, setAllOutletReports] = useState<OutletReport[]>([]);
@@ -242,7 +243,8 @@ export default function DashboardPage() {
     fetchTasks(parsed);
     fetchReports(parsed);
    fetchAttendance(parsed, new Date(Date.now() - 86400000).toISOString().split("T")[0]);
-    fetchSalesTargets(parsed);
+   fetchSalesTargets(parsed);
+    runTargetCheck(parsed);
     fetchOutletReports(parsed);
     fetchLastOutletRatings(parsed);
    if (parsed.role === "Owner" || parsed.role === "Manager") fetchAllOutletReports();
@@ -433,7 +435,25 @@ const fetchOutletReports = async (u: Staff) => {
     fetchReports(user);
     };
 
-const fetchSalesTargets = async (u: Staff) => {
+const runTargetCheck = async (u: Staff) => {
+    const outlets = (u as Staff & { outlets?: string[] }).outlets || [];
+    if (!outlets.length) return;
+    const yest = new Date(Date.now() - 86400000).toISOString().split("T")[0];
+    const { data } = await supabase.from("outlet_reports").select("outlet_id,shop_sales_value,swiggy_sales_value,zomato_sales_value").in("outlet_id", outlets).eq("report_date", yest);
+    const byOutlet: Record<string, number> = {};
+    (data || []).forEach((r: any) => { byOutlet[r.outlet_id] = (Number(r.shop_sales_value) || 0) + (Number(r.swiggy_sales_value) || 0) + (Number(r.zomato_sales_value) || 0); });
+    const results = outlets.map((oid) => {
+      const target = parseFloat(OUTLET_TARGETS[oid] || "");
+      const actual = byOutlet[oid];
+      const name = OUTLET_NAMES[oid] || oid;
+      if (!target || isNaN(target)) return { oid, name, status: "notarget" };
+      if (actual === undefined) return { oid, name, status: "noentry", target };
+      return { oid, name, status: actual >= target ? "win" : "miss", target, actual };
+    });
+    setTargetCheck(results);
+  };
+
+  const fetchSalesTargets = async (u: Staff) => {
     const isViewer = u.role === "Owner" || u.role === "Manager";
     const outlets = (u as Staff & { outlets?: string[] }).outlets || [];
     if (!isViewer && !outlets.length) return;
@@ -692,6 +712,30 @@ await fetchOutletReports(user);
   return (
     <div className="min-h-screen bg-[#0a0a0b] text-white flex">
       {sidebarOpen && <div className="fixed inset-0 bg-black/50 z-30 md:hidden" onClick={() => setSidebarOpen(false)} />}
+      {targetCheck && targetCheck.length > 0 && (() => {
+        const wins = targetCheck.filter((r: any) => r.status === "win").length;
+        const misses = targetCheck.filter((r: any) => r.status === "miss").length;
+        const header = misses > 0 ? "Yesterday had some gaps — let's go today! 🔥" : (wins > 0 ? "Yesterday was a win! 👏🎉" : "Fresh start today 🚀");
+        const fmt = (n: number) => "₹" + Math.round(n).toLocaleString("en-IN");
+        return (
+          <div className="fixed inset-0 bg-black/70 z-[60] flex items-center justify-center p-4" onClick={() => setTargetCheck(null)}>
+            <div className="bg-[#131316] border border-yellow-400 max-w-md w-full p-6" onClick={(e) => e.stopPropagation()}>
+              <h3 className="text-xl font-black mb-4">{header}</h3>
+              <div className="space-y-2 mb-5">
+                {targetCheck.map((r: any) => (
+                  <div key={r.oid} className="text-sm font-mono border-b border-zinc-800 pb-2">
+                    {r.status === "win" && <span className="text-green-400">🎉 {r.name}: {fmt(r.actual)} vs {fmt(r.target)} — smashed it!</span>}
+                    {r.status === "miss" && <span className="text-yellow-400">💪 {r.name}: {fmt(r.actual)} vs {fmt(r.target)} — bit short, today's the bounce-back!</span>}
+                    {r.status === "noentry" && <span className="text-zinc-500">🤔 {r.name}: no entry logged yesterday</span>}
+                    {r.status === "notarget" && <span className="text-blue-400">🚀 {r.name}: new outlet — no target yet, every sale counts!</span>}
+                  </div>
+                ))}
+              </div>
+              <button onClick={() => setTargetCheck(null)} className="bg-yellow-400 text-black font-bold tracking-widest text-xs px-5 py-2.5 uppercase w-full">Let's go →</button>
+            </div>
+          </div>
+        );
+      })()}
       <button onClick={() => setSidebarOpen(!sidebarOpen)} className="fixed top-4 left-4 z-50 md:hidden bg-zinc-900 border border-zinc-700 p-2 text-white">☰</button>
 
       <aside className={`fixed inset-y-0 left-0 z-40 w-60 bg-[#131316] border-r border-zinc-800 flex flex-col shrink-0 transition-transform duration-200 md:relative md:translate-x-0 ${sidebarOpen ? "translate-x-0" : "-translate-x-full"}`}>
