@@ -21,17 +21,22 @@ const ALL_STAFF: Staff[] = [
 ];
 
 const SEASON_START = "2026-06-12";
-const PTS_ONTIME = 10;
-const PTS_LATE = -30;
 const STARTING_POINTS: Record<string, number> = { ahila: 630, nilani: 430, vishnu: 30 };
+const PTS_REPORT = 20;
+const PTS_LATE_PENALTY = 20;
+const PTS_TARGET_MET = 30;
+const PTS_TARGET_MISS = 20;
 const PTS_TASK = 5;
 const PTS_RATING = 100;
-const PTS_OUTLET = 5;
+const PTS_RATING_FAIL = 50;
 const RATING_THRESHOLD = 4.5;
+const BACKFILL_PENALTY = 30;
 
 type Row = {
   id: string; name: string; role: string;
- onTime: number; late: number; tasks: number; ratingHits: number; outlets: number; backfills: number; adjustments: number; points: number;
+  myReports: number; myLate: number;
+  outlets: number; outletLate: number; targetMet: number; targetMiss: number;
+  tasks: number; ratingPoints: number; backfills: number; adjustments: number; points: number;
 };
 
 export default function LeaderboardPage() {
@@ -45,9 +50,7 @@ export default function LeaderboardPage() {
   const [giving, setGiving] = useState(false);
 
   const now = new Date();
-  const monthLabel = now
-    .toLocaleString("en-IN", { month: "long", year: "numeric" })
-    .toUpperCase();
+  const monthLabel = now.toLocaleString("en-IN", { month: "long", year: "numeric" }).toUpperCase();
 
   useEffect(() => {
     const stored = localStorage.getItem("currentUser");
@@ -87,48 +90,75 @@ export default function LeaderboardPage() {
         .gte("submitted_at", startISO).lt("submitted_at", endISO),
       supabase.from("tasks").select("assigned_to,completed_at,created_at")
         .eq("status", "completed"),
-     supabase.from("outlet_reports").select("staff_id,bh_google_rating,report_date,rating_bonus,no_points,is_backfill")
+      supabase.from("outlet_reports").select("staff_id,outlet_id,is_late,bh_google_rating,report_date,shop_sales_value,swiggy_sales_value,zomato_sales_value,target,no_points,is_backfill")
         .gte("report_date", startDate).lt("report_date", endDate),
       supabase.from("point_adjustments").select("staff_id,points"),
     ]);
 
     const map: Record<string, Row> = {};
     ALL_STAFF.filter(s => s.role !== "Owner").forEach(s => {
-     map[s.id] = { id: s.id, name: s.name, role: s.role, onTime: 0, late: 0, tasks: 0, ratingHits: 0, outlets: 0, backfills: 0, adjustments: 0, points: 0 };
+      map[s.id] = { id: s.id, name: s.name, role: s.role, myReports: 0, myLate: 0, outlets: 0, outletLate: 0, targetMet: 0, targetMiss: 0, tasks: 0, ratingPoints: 0, backfills: 0, adjustments: 0, points: 0 };
     });
 
     (repRes.data || []).forEach((r: any) => {
       const row = map[r.staff_id]; if (!row) return;
       if (r.no_points) return;
-      if (r.is_late) row.late++; else row.onTime++;
+      row.myReports++;
+      if (r.is_late) row.myLate++;
     });
+
     (taskRes.data || []).forEach((t: any) => {
       const row = map[t.assigned_to]; if (!row) return;
       const d = t.completed_at || t.created_at;
       if (d && d >= startISO && d < endISO) row.tasks++;
     });
+
     (outRes.data || []).forEach((o: any) => {
       const row = map[o.staff_id]; if (!row) return;
-     if (o.no_points) return;
+      if (o.no_points) return;
       if (o.is_backfill) { row.backfills++; return; }
       row.outlets++;
-      if (o.rating_bonus) row.ratingHits++;
+      if (o.is_late) row.outletLate++;
+      const total = (Number(o.shop_sales_value) || 0) + (Number(o.swiggy_sales_value) || 0) + (Number(o.zomato_sales_value) || 0);
+      const tgt = Number(o.target) || 0;
+      if (tgt > 0) { if (total >= tgt) row.targetMet++; else row.targetMiss++; }
     });
 
-   (adjRes.data || []).forEach((a: any) => {
+    const lastDay = new Date(y, m + 1, 0).getDate();
+    const checkpoints = [`${y}-${pad(m + 1)}-15`, `${y}-${pad(m + 1)}-${pad(lastDay)}`];
+    const todayStr = now.toISOString().split("T")[0];
+    const byOutlet: Record<string, any[]> = {};
+    (outRes.data || []).forEach((o: any) => {
+      if (o.no_points || o.is_backfill) return;
+      if (o.bh_google_rating === null || o.bh_google_rating === undefined) return;
+      (byOutlet[o.outlet_id] = byOutlet[o.outlet_id] || []).push(o);
+    });
+    Object.values(byOutlet).forEach((reps: any[]) => {
+      reps.sort((a, b) => (a.report_date < b.report_date ? -1 : 1));
+      checkpoints.forEach(cp => {
+        if (cp > todayStr) return;
+        const upto = reps.filter(r => r.report_date <= cp && r.report_date >= startDate);
+        if (!upto.length) return;
+        const latest = upto[upto.length - 1];
+        const row = map[latest.staff_id]; if (!row) return;
+        row.ratingPoints += Number(latest.bh_google_rating) >= RATING_THRESHOLD ? PTS_RATING : -PTS_RATING_FAIL;
+      });
+    });
+
+    (adjRes.data || []).forEach((a: any) => {
       const row = map[a.staff_id]; if (!row) return;
       row.adjustments += a.points;
     });
 
     Object.values(map).forEach(row => {
-     row.points =
+      row.points =
         (STARTING_POINTS[row.id] || 0) +
-        row.onTime * PTS_ONTIME +
-        row.late * PTS_LATE +
+        row.myReports * PTS_REPORT - row.myLate * PTS_LATE_PENALTY +
+        row.outlets * PTS_REPORT - row.outletLate * PTS_LATE_PENALTY +
+        row.targetMet * PTS_TARGET_MET - row.targetMiss * PTS_TARGET_MISS +
         row.tasks * PTS_TASK +
-      row.ratingHits * PTS_RATING +
-        row.outlets * PTS_OUTLET -
-        row.backfills * 30 +
+        row.ratingPoints -
+        row.backfills * BACKFILL_PENALTY +
         row.adjustments;
     });
 
@@ -164,28 +194,28 @@ export default function LeaderboardPage() {
       </div>
       <div style={{ color: C.muted, marginBottom: "18px", fontSize: "13px" }}>{monthLabel}</div>
 
-      <div style={{ background: C.panel, border: `1px solid ${C.accent}`, padding: "12px 16px", marginBottom: "22px", fontSize: "14px" }}>
-        🏆 Monthly winner gets <span style={{ color: C.accent, fontWeight: "bold" }}>₹1000</span>
-      </div>
-
       {!isOwner && me && (
         <div style={{ background: C.panel, border: `1px solid ${C.border}`, padding: "20px", marginBottom: "26px" }}>
           <div style={{ color: C.muted, fontSize: "12px", textTransform: "uppercase" }}>Your Score</div>
           <div style={{ fontSize: "48px", color: C.accent, fontWeight: "bold", lineHeight: 1.1 }}>{me.points}</div>
           <div style={{ color: C.muted, marginBottom: "16px" }}>Rank #{myRank} of {rows.length}</div>
           <div style={{ fontSize: "13px", lineHeight: 1.9 }}>
-           {(STARTING_POINTS[me.id] || 0) > 0 && <div>Starting credit: {STARTING_POINTS[me.id]}</div>}
-            <div>On-time reports: {me.onTime} × {PTS_ONTIME} = {me.onTime * PTS_ONTIME}</div>
-            <div>Late reports: {me.late} × {PTS_LATE} = {me.late * PTS_LATE}</div>
-            <div>Tasks completed: {me.tasks} × {PTS_TASK} = {me.tasks * PTS_TASK}</div>
-          <div>Outlet reports: {me.outlets} × {PTS_OUTLET} = {me.outlets * PTS_OUTLET}</div>
-            <div>Back-dated entries: {me.backfills} × -30 = {me.backfills * -30}</div>
-            <div>4.5+ Google ratings: {me.ratingHits} × {PTS_RATING} = {me.ratingHits * PTS_RATING}</div>
+            {(STARTING_POINTS[me.id] || 0) > 0 && <div>Starting credit: {STARTING_POINTS[me.id]}</div>}
+            <div>Daily reports: {me.myReports} × {PTS_REPORT} = {me.myReports * PTS_REPORT}</div>
+            {me.myLate > 0 && <div>Late report penalty: {me.myLate} × -{PTS_LATE_PENALTY} = {-me.myLate * PTS_LATE_PENALTY}</div>}
+            <div>Outlet reports: {me.outlets} × {PTS_REPORT} = {me.outlets * PTS_REPORT}</div>
+            {me.outletLate > 0 && <div>Outlet late penalty: {me.outletLate} × -{PTS_LATE_PENALTY} = {-me.outletLate * PTS_LATE_PENALTY}</div>}
+            <div>Targets met: {me.targetMet} × {PTS_TARGET_MET} = {me.targetMet * PTS_TARGET_MET}</div>
+            <div>Targets missed: {me.targetMiss} × -{PTS_TARGET_MISS} = {-me.targetMiss * PTS_TARGET_MISS}</div>
+            <div>Tasks: {me.tasks} × {PTS_TASK} = {me.tasks * PTS_TASK}</div>
+            <div>Rating (15th & month-end): {me.ratingPoints >= 0 ? "+" : ""}{me.ratingPoints}</div>
+            {me.backfills > 0 && <div>Back-dated entries: {me.backfills} × -{BACKFILL_PENALTY} = {-me.backfills * BACKFILL_PENALTY}</div>}
+            {me.adjustments !== 0 && <div>Adjustments: {me.adjustments >= 0 ? "+" : ""}{me.adjustments}</div>}
           </div>
         </div>
       )}
 
-     {user?.role === "Owner" && (
+      {user?.role === "Owner" && (
         <div style={{ background: C.panel, border: `1px solid ${C.border}`, padding: "16px", marginBottom: "22px" }}>
           <div style={{ color: C.muted, fontSize: "12px", textTransform: "uppercase", marginBottom: "10px", letterSpacing: "1px" }}>Give Points</div>
           <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
@@ -207,10 +237,9 @@ export default function LeaderboardPage() {
               <tr>
                 <th style={{ ...th, textAlign: "left" }}>#</th>
                 <th style={{ ...th, textAlign: "left" }}>Staff</th>
-                <th style={th}>On-time</th>
-                <th style={th}>Late</th>
+                <th style={th}>Reports</th>
                 <th style={th}>Tasks</th>
-                <th style={th}>4.5★</th>
+                <th style={th}>Rating</th>
                 <th style={{ ...th, color: C.accent }}>Points</th>
               </tr>
             </thead>
@@ -220,13 +249,11 @@ export default function LeaderboardPage() {
                   <td style={{ ...td, textAlign: "left", color: C.accent }}>{i + 1}</td>
                   <td style={{ ...td, textAlign: "left" }}>
                     {r.name}
-                    {i === 0 && <span style={{ marginLeft: "8px", background: C.accent, color: "#000", padding: "2px 6px", fontSize: "11px", fontWeight: "bold" }}>₹1000</span>}
                     <div style={{ color: C.muted, fontSize: "11px" }}>{r.role}</div>
                   </td>
-                  <td style={td}>{r.onTime}</td>
-                  <td style={td}>{r.late}</td>
+                  <td style={td}>{r.myReports + r.outlets}</td>
                   <td style={td}>{r.tasks}</td>
-                  <td style={td}>{r.ratingHits}</td>
+                  <td style={td}>{r.ratingPoints >= 0 ? "+" : ""}{r.ratingPoints}</td>
                   <td style={{ ...td, color: C.accent, fontWeight: "bold", fontSize: "16px" }}>{r.points}</td>
                 </tr>
               ))}
@@ -236,7 +263,7 @@ export default function LeaderboardPage() {
       )}
 
       <div style={{ marginTop: "26px", color: C.muted, fontSize: "12px", lineHeight: 1.8 }}>
-        On-time report = {PTS_ONTIME} · Late = {PTS_LATE} · Task done = {PTS_TASK} · BH Google rating &gt; {RATING_THRESHOLD} = {PTS_RATING}
+        Report = {PTS_REPORT} · Late = -{PTS_LATE_PENALTY} · Target met = +{PTS_TARGET_MET} / miss = -{PTS_TARGET_MISS} · Task = {PTS_TASK} · Rating (15th + end): 4.5+ = +{PTS_RATING} / below = -{PTS_RATING_FAIL}
       </div>
     </div>
   );
