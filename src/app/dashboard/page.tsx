@@ -409,6 +409,9 @@ const fetchOutletReports = async (u: Staff) => {
 
   const submitReport = async () => {
     if (!user) return;
+    const _fields = REPORT_FIELDS[user.id] || [];
+    const _missing = _fields.filter((f) => !reportData[f.key] || !String(reportData[f.key]).trim());
+    if (_missing.length) { alert("Please fill all fields before submitting.\n\nMissing: " + _missing.map((f) => f.label).join(", ")); return; }
     setReportSubmitting(true);
    const deadline = new Date();
     deadline.setHours(12, 0, 0, 0);
