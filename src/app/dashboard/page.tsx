@@ -410,14 +410,9 @@ const fetchOutletReports = async (u: Staff) => {
   const submitReport = async () => {
     if (!user) return;
     setReportSubmitting(true);
-    const staffInfo = ALL_STAFF.find(s => s.id === user.id);
-    let isLate = false;
-    if (staffInfo?.report_time) {
-      const [h, m] = staffInfo.report_time.split(":").map(Number);
-      const deadline = new Date();
-      deadline.setHours(h, m, 0, 0);
-      isLate = new Date() > deadline;
-    }
+   const deadline = new Date();
+    deadline.setHours(12, 0, 0, 0);
+    const isLate = new Date() > deadline;
     const content = Object.entries(reportData).map(([k, v]) => `${k}: ${v}`).join(", ");
     const { data, error } = await supabase.from("reports").insert({
       staff_id: user.id,
@@ -431,7 +426,7 @@ const fetchOutletReports = async (u: Staff) => {
     setReportSubmitting(false);
     if (error) { alert("Error: " + error.message); return; }
    setTodayReport(data);
-   if (!reportOffDay && !isLate) celebrate(10);
+  if (!reportOffDay) celebrate(isLate ? -20 : 20);
     setReportData({});
     fetchReports(user);
     };
@@ -592,14 +587,9 @@ const runTargetCheck = async (u: Staff) => {
 const submitOutletReport = async () => {
   if (!user || !activeOutlet) return;
   setOutletSubmitting(true);
-  const staffInfo = ALL_STAFF.find(s => s.id === user.id);
-  let isLate = false;
-  if (staffInfo?.report_time) {
-    const [h, m] = staffInfo.report_time.split(":").map(Number);
-    const deadline = new Date();
-    deadline.setHours(h, m, 0, 0);
-    isLate = new Date() > deadline;
-  }
+  const deadline = new Date();
+  deadline.setHours(12, 0, 0, 0);
+  const isLate = new Date() > deadline;
   const d = outletReportData;
   const newRating = parseFloat(d.bh_google_rating) || 0;
   const todayStr = new Date().toISOString().split("T")[0];
@@ -659,7 +649,14 @@ error = result.error;
   setOutletSubmitting(false);
  if (error) { alert("Error: " + error.message); return; }
 setOutletReportData({});
-if (!(isBackfill && outletWasOff)) celebrate(isBackfill ? -30 : (earnedBonus ? 100 : 5));
+if (isBackfill) { if (!outletWasOff) celebrate(-30); }
+else {
+  const _total = (Number(payload.shop_sales_value) || 0) + (Number(payload.swiggy_sales_value) || 0) + (Number(payload.zomato_sales_value) || 0);
+  const _tgt = Number(payload.target) || 0;
+  if (_tgt > 0 && _total < _tgt) celebrate(-20);
+  else if (_tgt > 0) celebrate(50);
+  else celebrate(20);
+}
 await new Promise(resolve => setTimeout(resolve, 500));
 await fetchOutletReports(user);
 };
