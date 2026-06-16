@@ -31,7 +31,7 @@ const RATING_THRESHOLD = 4.5;
 
 type Row = {
   id: string; name: string; role: string;
- onTime: number; late: number; tasks: number; ratingHits: number; outlets: number; backfills: number; points: number;
+ onTime: number; late: number; tasks: number; ratingHits: number; outlets: number; backfills: number; adjustments: number; points: number;
 };
 
 export default function LeaderboardPage() {
@@ -39,6 +39,10 @@ export default function LeaderboardPage() {
   const [user, setUser] = useState<Staff | null>(null);
   const [rows, setRows] = useState<Row[]>([]);
   const [loading, setLoading] = useState(true);
+  const [giveStaff, setGiveStaff] = useState("");
+  const [givePoints, setGivePoints] = useState("");
+  const [giveReason, setGiveReason] = useState("");
+  const [giving, setGiving] = useState(false);
 
   const now = new Date();
   const monthLabel = now
@@ -57,6 +61,16 @@ export default function LeaderboardPage() {
     fetchScores();
   }, [router]);
 
+  const givePointsFn = async () => {
+    if (!giveStaff || !givePoints) return;
+    setGiving(true);
+    const { error } = await supabase.from("point_adjustments").insert({ staff_id: giveStaff, points: parseInt(givePoints) || 0, reason: giveReason || null });
+    setGiving(false);
+    if (error) { alert("Error: " + error.message); return; }
+    setGiveStaff(""); setGivePoints(""); setGiveReason("");
+    fetchScores();
+  };
+
   const fetchScores = async () => {
     setLoading(true);
     const y = now.getFullYear();
@@ -68,18 +82,19 @@ export default function LeaderboardPage() {
     const endISO = new Date(y, m + 1, 1).toISOString();
     const endDate = m === 11 ? `${y + 1}-01-01` : `${y}-${pad(m + 2)}-01`;
 
-    const [repRes, taskRes, outRes] = await Promise.all([
+    const [repRes, taskRes, outRes, adjRes] = await Promise.all([
       supabase.from("reports").select("staff_id,is_late,no_points")
         .gte("submitted_at", startISO).lt("submitted_at", endISO),
       supabase.from("tasks").select("assigned_to,completed_at,created_at")
         .eq("status", "completed"),
      supabase.from("outlet_reports").select("staff_id,bh_google_rating,report_date,rating_bonus,no_points,is_backfill")
         .gte("report_date", startDate).lt("report_date", endDate),
+      supabase.from("point_adjustments").select("staff_id,points"),
     ]);
 
     const map: Record<string, Row> = {};
     ALL_STAFF.filter(s => s.role !== "Owner").forEach(s => {
-     map[s.id] = { id: s.id, name: s.name, role: s.role, onTime: 0, late: 0, tasks: 0, ratingHits: 0, outlets: 0, backfills: 0, points: 0 };
+     map[s.id] = { id: s.id, name: s.name, role: s.role, onTime: 0, late: 0, tasks: 0, ratingHits: 0, outlets: 0, backfills: 0, adjustments: 0, points: 0 };
     });
 
     (repRes.data || []).forEach((r: any) => {
@@ -100,6 +115,11 @@ export default function LeaderboardPage() {
       if (o.rating_bonus) row.ratingHits++;
     });
 
+   (adjRes.data || []).forEach((a: any) => {
+      const row = map[a.staff_id]; if (!row) return;
+      row.adjustments += a.points;
+    });
+
     Object.values(map).forEach(row => {
      row.points =
         (STARTING_POINTS[row.id] || 0) +
@@ -108,7 +128,8 @@ export default function LeaderboardPage() {
         row.tasks * PTS_TASK +
       row.ratingHits * PTS_RATING +
         row.outlets * PTS_OUTLET -
-        row.backfills * 30;
+        row.backfills * 30 +
+        row.adjustments;
     });
 
     setRows(Object.values(map).sort((a, b) => b.points - a.points));
@@ -160,6 +181,21 @@ export default function LeaderboardPage() {
           <div>Outlet reports: {me.outlets} × {PTS_OUTLET} = {me.outlets * PTS_OUTLET}</div>
             <div>Back-dated entries: {me.backfills} × -30 = {me.backfills * -30}</div>
             <div>4.5+ Google ratings: {me.ratingHits} × {PTS_RATING} = {me.ratingHits * PTS_RATING}</div>
+          </div>
+        </div>
+      )}
+
+     {user?.role === "Owner" && (
+        <div style={{ background: C.panel, border: `1px solid ${C.border}`, padding: "16px", marginBottom: "22px" }}>
+          <div style={{ color: C.muted, fontSize: "12px", textTransform: "uppercase", marginBottom: "10px", letterSpacing: "1px" }}>Give Points</div>
+          <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+            <select value={giveStaff} onChange={(e) => setGiveStaff(e.target.value)} style={{ background: "#000", color: C.text, border: `1px solid ${C.border}`, padding: "8px", fontFamily: "monospace" }}>
+              <option value="">Select staff…</option>
+              {rows.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
+            </select>
+            <input type="number" placeholder="Points (+/-)" value={givePoints} onChange={(e) => setGivePoints(e.target.value)} style={{ background: "#000", color: C.text, border: `1px solid ${C.border}`, padding: "8px", width: "120px", fontFamily: "monospace" }} />
+            <input type="text" placeholder="Reason (optional)" value={giveReason} onChange={(e) => setGiveReason(e.target.value)} style={{ background: "#000", color: C.text, border: `1px solid ${C.border}`, padding: "8px", flex: "1", minWidth: "140px", fontFamily: "monospace" }} />
+            <button onClick={givePointsFn} disabled={giving} style={{ background: C.accent, color: "#000", border: "none", padding: "8px 16px", fontWeight: "bold", cursor: "pointer", fontFamily: "monospace" }}>{giving ? "..." : "GIVE"}</button>
           </div>
         </div>
       )}
