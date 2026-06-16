@@ -1,10 +1,10 @@
 // Self-contained celebration: success chime + sparkle popup.
 // Call celebrate(points) from anywhere after a successful submit.
 
-export function celebrate(points: number) {
+export function celebrate(points: number, msg?: string) {
   if (typeof window === "undefined") return;
   playChime();
-  showPopup(points);
+  showPopup(points, msg);
 }
 
 function playChime() {
@@ -32,7 +32,7 @@ function playChime() {
   }
 }
 
-function showPopup(points: number) {
+function showPopup(points: number, msg?: string) {
   injectStyles();
 
   const overlay = document.createElement("div");
@@ -45,7 +45,7 @@ const neg = points < 0;
   card.innerHTML = `
     <div class="bh-celebrate-spark">${neg ? "⚠️" : "✨"}</div>
     <div class="bh-celebrate-pts" style="color:${neg ? "#ef4444" : "#facc15"}">${neg ? points : "+" + points} PTS</div>
-    <div class="bh-celebrate-msg">${neg ? "Points deducted" : "You earned points!"}</div>
+    <div class="bh-celebrate-msg">${msg || (neg ? "Points deducted" : "You earned points!")}</div>
   `;
   overlay.appendChild(card);
 
