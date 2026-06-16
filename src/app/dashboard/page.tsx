@@ -223,6 +223,7 @@ export default function DashboardPage() {
   const [outletEntryDate, setOutletEntryDate] = useState<string>(() => new Date().toISOString().split("T")[0]);
   const [outletWasOff, setOutletWasOff] = useState(false);
   const [targetCheck, setTargetCheck] = useState<any[] | null>(null);
+  const [targetReaction, setTargetReaction] = useState(false);
   const [outletHistoryDate, setOutletHistoryDate] = useState<string>(new Date().toISOString().split("T")[0]);
   const [lastOutletRatings, setLastOutletRatings] = useState<Record<string, OutletReport>>({});
   const [allOutletReports, setAllOutletReports] = useState<OutletReport[]>([]);
@@ -712,7 +713,7 @@ await fetchOutletReports(user);
   return (
     <div className="min-h-screen bg-[#0a0a0b] text-white flex">
       {sidebarOpen && <div className="fixed inset-0 bg-black/50 z-30 md:hidden" onClick={() => setSidebarOpen(false)} />}
-      {targetCheck && targetCheck.length > 0 && (() => {
+      {targetCheck && targetCheck.length > 0 && !targetReaction && (() => {
         const wins = targetCheck.filter((r: any) => r.status === "win").length;
         const misses = targetCheck.filter((r: any) => r.status === "miss").length;
         const header = misses > 0 ? "Yesterday had some gaps — let's go today! 🔥" : (wins > 0 ? "Yesterday was a win! 👏🎉" : "Fresh start today 🚀");
@@ -731,7 +732,26 @@ await fetchOutletReports(user);
                   </div>
                 ))}
               </div>
-              <button onClick={() => setTargetCheck(null)} className="bg-yellow-400 text-black font-bold tracking-widest text-xs px-5 py-2.5 uppercase w-full">Let's go →</button>
+             <button onClick={() => setTargetReaction(true)} className="bg-yellow-400 text-black font-bold tracking-widest text-xs px-5 py-2.5 uppercase w-full">Next →</button>
+            </div>
+          </div>
+      );
+      })()}
+      {targetCheck && targetReaction && (() => {
+        const misses = targetCheck.filter((r: any) => r.status === "miss").length;
+        const wins = targetCheck.filter((r: any) => r.status === "win").length;
+        const bad = misses > 0;
+        const neutral = wins === 0 && misses === 0;
+        const close = () => { setTargetCheck(null); setTargetReaction(false); };
+        return (
+          <div className="fixed inset-0 bg-black/80 z-[60] flex items-center justify-center p-4" onClick={close}>
+            <style>{`@keyframes bhShake{0%,100%{transform:translateX(0) rotate(0)}20%{transform:translateX(-10px) rotate(-6deg)}40%{transform:translateX(10px) rotate(6deg)}60%{transform:translateX(-8px) rotate(-4deg)}80%{transform:translateX(8px) rotate(4deg)}}@keyframes bhPop{0%{transform:scale(0)}60%{transform:scale(1.3)}100%{transform:scale(1)}}`}</style>
+            <div className={`max-w-sm w-full p-8 text-center border-2 ${bad ? "bg-[#1a1010] border-red-500" : (neutral ? "bg-[#101418] border-blue-400" : "bg-[#101a12] border-green-400")}`} onClick={(e) => e.stopPropagation()}>
+              <div className="text-8xl mb-3" style={{ animation: bad ? "bhShake 0.4s ease-in-out 3" : "bhPop 0.5s ease-out", display: "inline-block" }}>{bad ? "🤚💥" : (neutral ? "🚀" : "👏")}</div>
+              {!bad && !neutral && <div className="text-3xl mb-3">🎉 🎊 🎉</div>}
+              <h3 className="text-2xl font-black mb-2">{bad ? "SLAP! 🖐️😵‍💫 Target said NO" : (neutral ? "Fresh start, let's roll! 🚀" : "BOOM! You SMASHED it! 👏")}</h3>
+              <p className="text-sm font-mono text-zinc-400 mb-6">{bad ? "That's a wake-up smack 😤 Shake it off — today you hit back twice as hard!" : (neutral ? "No target pressure — every sale's a bonus." : "Target crushed. Keep that energy going today!")}</p>
+              <button onClick={close} className={`${bad ? "bg-red-500" : (neutral ? "bg-blue-400" : "bg-green-400")} text-black font-bold tracking-widest text-xs px-6 py-3 uppercase w-full`}>Let's go →</button>
             </div>
           </div>
         );
