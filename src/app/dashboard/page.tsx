@@ -589,6 +589,16 @@ const runTargetCheck = async (u: Staff) => {
 };
 const submitOutletReport = async () => {
   if (!user || !activeOutlet) return;
+  const _req = [
+    { k: "shop_sales_count", label: "Shop Sales Count" },
+    { k: "shop_sales_value", label: "Shop Sales Value" },
+    { k: "swiggy_sales_count", label: "Swiggy Sales Count" },
+    { k: "swiggy_sales_value", label: "Swiggy Sales Value" },
+    { k: "zomato_sales_count", label: "Zomato Sales Count" },
+    { k: "zomato_sales_value", label: "Zomato Sales Value" },
+  ];
+  const _miss = _req.filter((f) => !(outletReportData as any)[f.k] || !String((outletReportData as any)[f.k]).trim());
+  if (_miss.length) { alert("Please fill all sales fields before submitting.\n\nMissing: " + _miss.map((f) => f.label).join(", ")); return; }
   setOutletSubmitting(true);
   const deadline = new Date();
   deadline.setHours(12, 0, 0, 0);
