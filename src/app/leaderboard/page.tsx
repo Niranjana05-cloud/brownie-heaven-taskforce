@@ -25,7 +25,7 @@ const STARTING_POINTS: Record<string, number> = { ahila: 630, nilani: 430, vishn
 const PTS_REPORT = 20;
 const PTS_LATE_PENALTY = 20;
 const PTS_TARGET_MET = 30;
-const PTS_TARGET_MISS = 20;
+const PTS_TARGET_MISS = 30;
 const PTS_TASK = 5;
 const PTS_RATING = 100;
 const PTS_RATING_FAIL = 50;
@@ -122,8 +122,8 @@ export default function LeaderboardPage() {
       const credit = (row: Row | undefined, rollup: boolean) => {
         if (!row) return;
         if (o.is_backfill) { if (!rollup) row.backfills++; return; }
-        row.outlets++;
-        if (o.is_late) row.outletLate++;
+       row.outlets++;
+        if (o.is_late) { row.outletLate++; return; }
         if (tgt > 0) { if (total >= tgt) row.targetMet++; else row.targetMiss++; }
       };
       credit(map[o.staff_id], false);
@@ -158,8 +158,8 @@ export default function LeaderboardPage() {
     Object.values(map).forEach(row => {
       row.points =
         (STARTING_POINTS[row.id] || 0) +
-        row.myReports * PTS_REPORT - row.myLate * PTS_LATE_PENALTY +
-        row.outlets * PTS_REPORT - row.outletLate * PTS_LATE_PENALTY +
+       (row.myReports - row.myLate) * PTS_REPORT +
+        (row.outlets - row.outletLate) * PTS_REPORT +
         row.targetMet * PTS_TARGET_MET - row.targetMiss * PTS_TARGET_MISS +
         row.tasks * PTS_TASK +
         row.ratingPoints -
@@ -232,10 +232,10 @@ export default function LeaderboardPage() {
           <div style={{ marginBottom: "16px", fontSize: "15px" }}>This month&apos;s cash: <span style={{ color: cashColor(me.points), fontWeight: "bold" }}>{cashLabel(me.points)}</span></div>
           <div style={{ fontSize: "13px", lineHeight: 1.9 }}>
             {(STARTING_POINTS[me.id] || 0) > 0 && <div>Starting credit: {STARTING_POINTS[me.id]}</div>}
-            <div>Daily reports: {me.myReports} × {PTS_REPORT} = {me.myReports * PTS_REPORT}</div>
-            {me.myLate > 0 && <div>Late report penalty: {me.myLate} × -{PTS_LATE_PENALTY} = {-me.myLate * PTS_LATE_PENALTY}</div>}
-            <div>Outlet reports: {me.outlets} × {PTS_REPORT} = {me.outlets * PTS_REPORT}</div>
-            {me.outletLate > 0 && <div>Outlet late penalty: {me.outletLate} × -{PTS_LATE_PENALTY} = {-me.outletLate * PTS_LATE_PENALTY}</div>}
+            <div>Daily reports (on time): {me.myReports - me.myLate} × {PTS_REPORT} = {(me.myReports - me.myLate) * PTS_REPORT}</div>
+            {me.myLate > 0 && <div>Daily after cut-off: {me.myLate} × 0 = 0</div>}
+            <div>Outlet reports (on time): {me.outlets - me.outletLate} × {PTS_REPORT} = {(me.outlets - me.outletLate) * PTS_REPORT}</div>
+            {me.outletLate > 0 && <div>Outlet after cut-off: {me.outletLate} × 0 = 0</div>}
             <div>Targets met: {me.targetMet} × {PTS_TARGET_MET} = {me.targetMet * PTS_TARGET_MET}</div>
             <div>Targets missed: {me.targetMiss} × -{PTS_TARGET_MISS} = {-me.targetMiss * PTS_TARGET_MISS}</div>
             <div>Tasks: {me.tasks} × {PTS_TASK} = {me.tasks * PTS_TASK}</div>
@@ -296,7 +296,7 @@ export default function LeaderboardPage() {
       )}
 
       <div style={{ marginTop: "26px", color: C.muted, fontSize: "12px", lineHeight: 1.8 }}>
-        Report = {PTS_REPORT} · Late = -{PTS_LATE_PENALTY} · Target met = +{PTS_TARGET_MET} / miss = -{PTS_TARGET_MISS} · Task = {PTS_TASK} · Rating (15th + end): 4.5+ = +{PTS_RATING} / below = -{PTS_RATING_FAIL}
+       On-time report = {PTS_REPORT} · After cut-off = 0 · Target met = +{PTS_TARGET_MET} / miss = -{PTS_TARGET_MISS} · Task = {PTS_TASK} · Rating (15th + end): 4.5+ = +{PTS_RATING} / below = -{PTS_RATING_FAIL}
       </div>
     </div>
   );
