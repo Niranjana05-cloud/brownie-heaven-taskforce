@@ -23,6 +23,7 @@ const ALL_STAFF: Staff[] = [
 const SEASON_START = "2026-06-12";
 const STARTING_POINTS: Record<string, number> = { ahila: 630, nilani: 430, vishnu: 30 };
 const PTS_REPORT = 20;
+const PTS_DAILY = 10;
 const PTS_LATE_PENALTY = 20;
 const PTS_TARGET_MET = 30;
 const PTS_TARGET_MISS = 0;
@@ -88,7 +89,7 @@ export default function LeaderboardPage() {
     const endDate = m === 11 ? `${y + 1}-01-01` : `${y}-${pad(m + 2)}-01`;
 
     const [repRes, taskRes, outRes, adjRes] = await Promise.all([
-      supabase.from("reports").select("staff_id,is_late,no_points")
+      supabase.from("reports").select("staff_id,is_late,no_points,submitted_at")
         .gte("submitted_at", startISO).lt("submitted_at", endISO),
       supabase.from("tasks").select("assigned_to,completed_at,created_at")
         .eq("status", "completed"),
@@ -102,11 +103,19 @@ export default function LeaderboardPage() {
       map[s.id] = { id: s.id, name: s.name, role: s.role, myReports: 0, myLate: 0, outlets: 0, outletLate: 0, targetMet: 0, targetMiss: 0, tasks: 0, ratingPoints: 0, backfills: 0, adjustments: 0, points: 0 };
     });
 
+    const dayMap: Record<string, { sid: string; at: string; late: boolean }> = {};
     (repRes.data || []).forEach((r: any) => {
-      const row = map[r.staff_id]; if (!row) return;
+      if (!map[r.staff_id]) return;
       if (r.no_points) return;
+      const key = r.staff_id + "|" + r.submitted_at.split("T")[0];
+      if (!dayMap[key] || r.submitted_at < dayMap[key].at) {
+        dayMap[key] = { sid: r.staff_id, at: r.submitted_at, late: !!r.is_late };
+      }
+    });
+    Object.values(dayMap).forEach(d => {
+      const row = map[d.sid]; if (!row) return;
       row.myReports++;
-      if (r.is_late) row.myLate++;
+      if (d.late) row.myLate++;
     });
 
     (taskRes.data || []).forEach((t: any) => {
@@ -166,7 +175,7 @@ export default function LeaderboardPage() {
     Object.values(map).forEach(row => {
       row.points =
         (STARTING_POINTS[row.id] || 0) +
-       (row.myReports - row.myLate) * PTS_REPORT +
+       (row.myReports - row.myLate) * PTS_DAILY +
         (row.outlets - row.outletLate) * PTS_REPORT +
         row.targetMet * PTS_TARGET_MET - row.targetMiss * PTS_TARGET_MISS +
         row.tasks * PTS_TASK +
@@ -240,7 +249,7 @@ export default function LeaderboardPage() {
           <div style={{ marginBottom: "16px", fontSize: "15px" }}>This month&apos;s cash: <span style={{ color: cashColor(me.points), fontWeight: "bold" }}>{cashLabel(me.points)}</span></div>
           <div style={{ fontSize: "13px", lineHeight: 1.9 }}>
             {(STARTING_POINTS[me.id] || 0) > 0 && <div>Starting credit: {STARTING_POINTS[me.id]}</div>}
-            <div>Daily reports (on time): {me.myReports - me.myLate} × {PTS_REPORT} = {(me.myReports - me.myLate) * PTS_REPORT}</div>
+            <div>Daily reports (on time): {me.myReports - me.myLate} × {PTS_DAILY} = {(me.myReports - me.myLate) * PTS_DAILY}</div>
             {me.myLate > 0 && <div>Daily after cut-off: {me.myLate} × 0 = 0</div>}
             <div>Outlet reports (on time): {me.outlets - me.outletLate} × {PTS_REPORT} = {(me.outlets - me.outletLate) * PTS_REPORT}</div>
             {me.outletLate > 0 && <div>Outlet after cut-off: {me.outletLate} × 0 = 0</div>}
@@ -304,7 +313,7 @@ export default function LeaderboardPage() {
       )}
 
       <div style={{ marginTop: "26px", color: C.muted, fontSize: "12px", lineHeight: 1.8 }}>
-       On-time report = {PTS_REPORT} · After cut-off = 0 · Target met = +{PTS_TARGET_MET} / miss = -{PTS_TARGET_MISS} · Task = {PTS_TASK} · Rating weekly: below 4.5 = -{PTS_RATING_FAIL}/wk · maintain 4.5 = +{PTS_RATING} at 15th & month-end
+       Daily report = {PTS_DAILY} · Outlet report = {PTS_REPORT} · After cut-off = 0 · Target met = +{PTS_TARGET_MET} / miss = -{PTS_TARGET_MISS} · Task = {PTS_TASK} · Rating weekly: below 4.5 = -{PTS_RATING_FAIL}/wk · maintain 4.5 = +{PTS_RATING} at 15th & month-end
       </div>
     </div>
   );
