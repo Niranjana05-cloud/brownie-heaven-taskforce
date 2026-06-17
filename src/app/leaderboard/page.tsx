@@ -25,7 +25,7 @@ const STARTING_POINTS: Record<string, number> = { ahila: 630, nilani: 430, vishn
 const PTS_REPORT = 20;
 const PTS_LATE_PENALTY = 20;
 const PTS_TARGET_MET = 30;
-const PTS_TARGET_MISS = 30;
+const PTS_TARGET_MISS = 0;
 const PTS_TASK = 5;
 const PTS_RATING = 100;
 const PTS_RATING_FAIL = 50;
@@ -237,7 +237,7 @@ export default function LeaderboardPage() {
             <div>Outlet reports (on time): {me.outlets - me.outletLate} × {PTS_REPORT} = {(me.outlets - me.outletLate) * PTS_REPORT}</div>
             {me.outletLate > 0 && <div>Outlet after cut-off: {me.outletLate} × 0 = 0</div>}
             <div>Targets met: {me.targetMet} × {PTS_TARGET_MET} = {me.targetMet * PTS_TARGET_MET}</div>
-            <div>Targets missed: {me.targetMiss} × -{PTS_TARGET_MISS} = {-me.targetMiss * PTS_TARGET_MISS}</div>
+            <div>Targets missed: {me.targetMiss} (no bonus, kept the +20)</div>
             <div>Tasks: {me.tasks} × {PTS_TASK} = {me.tasks * PTS_TASK}</div>
             <div>Rating (15th & month-end): {me.ratingPoints >= 0 ? "+" : ""}{me.ratingPoints}</div>
             {me.backfills > 0 && <div>Back-dated entries: {me.backfills} × -{BACKFILL_PENALTY} = {-me.backfills * BACKFILL_PENALTY}</div>}
