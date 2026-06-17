@@ -429,7 +429,7 @@ const fetchOutletReports = async (u: Staff) => {
     setReportSubmitting(false);
     if (error) { alert("Error: " + error.message); return; }
    setTodayReport(data);
-  if (!reportOffDay) celebrate(isLate ? -20 : 20);
+  if (!reportOffDay) { if (isLate) celebrate(0, "After 10 PM cut-off — 0 points"); else celebrate(20); }
     setReportData({});
     fetchReports(user);
     };
@@ -665,10 +665,11 @@ error = result.error;
  if (error) { alert("Error: " + error.message); return; }
 setOutletReportData({});
 if (isBackfill) { if (!outletWasOff) celebrate(-30); }
+else if (isLate) { celebrate(0, "After 12 PM cut-off — 0 points"); }
 else {
   const _total = (Number(payload.shop_sales_value) || 0) + (Number(payload.swiggy_sales_value) || 0) + (Number(payload.zomato_sales_value) || 0);
   const _tgt = Number(payload.target) || 0;
-  if (_tgt > 0 && _total < _tgt) celebrate(-20, "Boo boo! Target dodged you today 😭");
+  if (_tgt > 0 && _total < _tgt) celebrate(-10, "Boo boo! Target dodged you today 😭");
   else if (_tgt > 0) celebrate(50);
   else celebrate(20);
 }
