@@ -3,7 +3,7 @@
 
 export function celebrate(points: number, msg?: string) {
   if (typeof window === "undefined") return;
-  playChime();
+  if (points < 0) playSad(); else playChime();
   showPopup(points, msg);
 }
 
@@ -27,6 +27,33 @@ function playChime() {
       osc.stop(t + 0.4);
     });
     setTimeout(() => ctx.close(), 800);
+ } catch {
+    // sound blocked — popup still shows
+  }
+}
+
+function playSad() {
+  try {
+    const AC = window.AudioContext || (window as any).webkitAudioContext;
+    const ctx = new AC();
+    const steps = [392.0, 349.23, 311.13, 261.63]; // G4 F4 Eb4 C4 — descending "wah wah wah waaah"
+    steps.forEach((freq, i) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "sawtooth";
+      const t = ctx.currentTime + i * 0.22;
+      const dur = i === steps.length - 1 ? 0.6 : 0.2;
+      osc.frequency.setValueAtTime(freq * 1.06, t);
+      osc.frequency.exponentialRampToValueAtTime(freq, t + dur);
+      gain.gain.setValueAtTime(0, t);
+      gain.gain.linearRampToValueAtTime(0.22, t + 0.03);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + dur);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(t);
+      osc.stop(t + dur + 0.05);
+    });
+    setTimeout(() => ctx.close(), 1500);
   } catch {
     // sound blocked — popup still shows
   }
