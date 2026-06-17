@@ -412,9 +412,9 @@ const fetchOutletReports = async (u: Staff) => {
     const _fields = REPORT_FIELDS[user.id] || [];
     const _missing = _fields.filter((f) => !reportData[f.key] || !String(reportData[f.key]).trim());
     if (_missing.length) { alert("Please fill all fields before submitting.\n\nMissing: " + _missing.map((f) => f.label).join(", ")); return; }
-    setReportSubmitting(true);
+   setReportSubmitting(true);
    const deadline = new Date();
-    deadline.setHours(12, 0, 0, 0);
+    deadline.setHours(22, 0, 0, 0);
     const isLate = new Date() > deadline;
     const content = Object.entries(reportData).map(([k, v]) => `${k}: ${v}`).join(", ");
     const { data, error } = await supabase.from("reports").insert({
