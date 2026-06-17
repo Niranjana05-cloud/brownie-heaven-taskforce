@@ -871,7 +871,7 @@ await fetchOutletReports(user);
                 </button>
               </div>
             )}
-            {user.role === "Owner" && (
+           {canAssign && (
               <div className="flex gap-2 flex-wrap mb-6">
                 {["all", ...OUTLETS].map(o => (
                   <button key={o} onClick={() => setOutletFilter(o)} className={`font-mono text-[10px] uppercase tracking-widest px-3 py-1.5 border transition-colors ${outletFilter === o ? "border-yellow-400 text-yellow-400" : "border-zinc-700 text-zinc-500 hover:border-zinc-500"}`}>
@@ -914,6 +914,54 @@ await fetchOutletReports(user);
                           {hasReport ? `✓ ${new Date(todayReport!.submitted_at).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}${todayReport!.is_late ? " late" : ""}` : "Pending"}
                         </span>
                       </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+           {canAssign && (
+              <div className="bg-[#131316] border border-zinc-800 mb-6">
+                <div className="px-5 py-3 border-b border-zinc-800">
+                  <p className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest">Outlet Reports — Today{outletFilter !== "all" ? ` · ${OUTLET_NAMES[outletFilter] || outletFilter.replace(/_/g, " ")}` : ""}</p>
+                </div>
+                {(outletFilter === "all" ? OUTLETS : [outletFilter]).map(o => {
+                  const rep = allOutletReports.find(r => r.outlet_id === o);
+                  const mgr = ALL_STAFF.find(s => (s.outlets as string[]).includes(o));
+                  const oTotal = rep ? (Number(rep.shop_sales_value) || 0) + (Number(rep.swiggy_sales_value) || 0) + (Number(rep.zomato_sales_value) || 0) : 0;
+                  const oTgt = rep ? Number(rep.target) || 0 : 0;
+                  const hit = oTgt > 0 && oTotal >= oTgt;
+                  return (
+                    <div key={o} className="border-b border-zinc-800 last:border-0 px-5 py-4">
+                      <div className="flex items-center justify-between mb-2">
+                        <div>
+                          <p className="font-semibold text-sm uppercase tracking-widest">{OUTLET_NAMES[o] || o.replace(/_/g, " ")}</p>
+                          <p className="text-[10px] font-mono text-zinc-600">{mgr?.name || "—"}</p>
+                        </div>
+                        {rep ? (
+                          <span className={`font-mono text-[10px] uppercase tracking-widest px-2 py-1 ${rep.is_late ? "bg-red-500/10 text-red-500" : "bg-green-400/10 text-green-400"}`}>✓ {new Date(rep.submitted_at).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}{rep.is_late ? " late" : ""}</span>
+                        ) : (
+                          <span className="font-mono text-[10px] uppercase tracking-widest px-2 py-1 bg-yellow-400/10 text-yellow-400">Pending</span>
+                        )}
+                      </div>
+                      {rep && (
+                        <div className="text-[11px] font-mono text-zinc-400 space-y-1">
+                          <div className="flex flex-wrap gap-x-5 gap-y-1">
+                            <span>Shop ₹{rep.shop_sales_value} ({rep.shop_sales_count})</span>
+                            <span>Swiggy ₹{rep.swiggy_sales_value} ({rep.swiggy_sales_count})</span>
+                            <span>Zomato ₹{rep.zomato_sales_value} ({rep.zomato_sales_count})</span>
+                            <span className="text-white">Total ₹{oTotal}</span>
+                            {oTgt > 0 && <span className={hit ? "text-green-400" : "text-red-500"}>Target ₹{oTgt} {hit ? "✓ hit" : "✗ miss"}</span>}
+                          </div>
+                          {(rep.bh_google_rating || rep.expiry_count || rep.issues || rep.action_taken) && (
+                            <div className="flex flex-wrap gap-x-5 gap-y-1 text-zinc-500">
+                              {rep.bh_google_rating ? <span>Google {rep.bh_google_rating}</span> : null}
+                              {rep.expiry_count ? <span>Expiry {rep.expiry_count}</span> : null}
+                              {rep.issues ? <span>Issues: {rep.issues}</span> : null}
+                              {rep.action_taken ? <span>Action: {rep.action_taken}</span> : null}
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
                   );
                 })}
