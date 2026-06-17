@@ -406,22 +406,26 @@ const fetchOutletReports = async (u: Staff) => {
     setTodayReport(mine || null);
   };
 
-  const submitReport = async () => {
+ const submitReport = async () => {
     if (!user) return;
     const _fields = REPORT_FIELDS[user.id] || [];
     const _missing = _fields.filter((f) => !reportData[f.key] || !String(reportData[f.key]).trim());
     if (_missing.length) { alert("Please fill all fields before submitting.\n\nMissing: " + _missing.map((f) => f.label).join(", ")); return; }
-   setReportSubmitting(true);
-   const deadline = new Date();
-    deadline.setHours(22, 0, 0, 0);
-    const isLate = new Date() > deadline;
+    setReportSubmitting(true);
     const _today = new Date().toISOString().split("T")[0];
-    const { data: _existing } = await supabase.from("reports").select("id").eq("staff_id", user.id).gte("submitted_at", _today + "T00:00:00").lte("submitted_at", _today + "T23:59:59.999");
+    const _date = reportHistoryDate || _today;
+    const _isBackfill = _date < _today;
+    const deadline = new Date();
+    deadline.setHours(22, 0, 0, 0);
+    const isLate = !_isBackfill && new Date() > deadline;
+    const { data: _existing } = await supabase.from("reports").select("id").eq("staff_id", user.id).eq("report_date", _date);
     const _isEdit = (_existing?.length || 0) > 0;
     const content = Object.entries(reportData).map(([k, v]) => `${k}: ${v}`).join(", ");
     const { data, error } = await supabase.from("reports").insert({
       staff_id: user.id,
       content,
+      report_date: _date,
+      is_backfill: _isBackfill,
       is_late: reportOffDay ? false : isLate,
       submitted_at: new Date().toISOString(),
       report_data: reportData,
@@ -430,11 +434,17 @@ const fetchOutletReports = async (u: Staff) => {
     }).select().single();
     setReportSubmitting(false);
     if (error) { alert("Error: " + error.message); return; }
-   setTodayReport(data);
- if (!reportOffDay) { if (_isEdit) celebrate(0, "Report updated — no extra points"); else if (isLate) celebrate(0, "After 10 PM cut-off — 0 points"); else celebrate(10); }
+    if (_date === _today) setTodayReport(data);
+    if (!reportOffDay) {
+      if (_isEdit) celebrate(0, "Report updated — no extra points");
+      else if (_isBackfill) celebrate(-5, "Back-dated report — -5");
+      else if (isLate) celebrate(-5, "After 10 PM — -5");
+      else celebrate(10);
+    }
     setReportData({});
     fetchReports(user);
-    };
+    if (_date !== _today) fetchReportByDate(_date);
+  };
 
 const runTargetCheck = async (u: Staff) => {
     const outlets = (u as Staff & { outlets?: string[] }).outlets || [];
@@ -1206,8 +1216,21 @@ await fetchOutletReports(user);
               </div>
             ))}
           </div>
-        ) : (
-          <p className="text-zinc-600 font-mono text-sm uppercase tracking-widest">No report submitted for this date</p>
+       ) : (
+          <div>
+            <p className="text-[10px] font-mono text-yellow-400 uppercase tracking-widest mb-4">Back-dated entry — counts as -5</p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+              {reportFields.map(f => (
+                <div key={f.key}>
+                  <label className="block text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-1">{f.label}</label>
+                  <input type="text" value={reportData[f.key] || ""} onChange={(e) => setReportData(prev => ({ ...prev, [f.key]: e.target.value }))} className="w-full bg-black border border-zinc-800 text-white px-3 py-2 focus:outline-none focus:border-yellow-400 transition-colors text-sm" placeholder="—" />
+                </div>
+              ))}
+            </div>
+            <button onClick={submitReport} disabled={reportSubmitting} className="bg-yellow-400 text-black font-bold tracking-widest text-xs px-6 py-3 hover:opacity-90 transition-opacity uppercase disabled:opacity-50">
+              {reportSubmitting ? "Submitting..." : "Submit Back-dated Report →"}
+            </button>
+          </div>
         )}
     ) : null
   </div>
