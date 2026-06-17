@@ -245,8 +245,7 @@ export default function DashboardPage() {
     fetchReports(parsed);
    fetchAttendance(parsed, new Date(Date.now() - 86400000).toISOString().split("T")[0]);
    fetchSalesTargets(parsed);
-    runTargetCheck(parsed);
-    fetchOutletReports(parsed);
+   fetchOutletReports(parsed);
     fetchLastOutletRatings(parsed);
    if (parsed.role === "Owner" || parsed.role === "Manager") fetchAllOutletReports();
   }, [router]);
