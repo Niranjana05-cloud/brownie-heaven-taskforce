@@ -130,7 +130,13 @@ export default function LeaderboardPage() {
     });
 
     const lastDay = new Date(y, m + 1, 0).getDate();
-    const checkpoints = [`${y}-${pad(m + 1)}-15`, `${y}-${pad(m + 1)}-${pad(lastDay)}`];
+    const RATING_START = "2026-06-18"; // ratings begin 3rd week of June; no retroactive deductions
+    const weeks = [
+      { day: 7, reward: false },
+      { day: 15, reward: true },
+      { day: 22, reward: false },
+      { day: lastDay, reward: true },
+    ].filter(wk => `${y}-${pad(m + 1)}-${pad(wk.day)}` >= RATING_START);
     const todayStr = now.toISOString().split("T")[0];
     const byOutlet: Record<string, any[]> = {};
     (outRes.data || []).forEach((o: any) => {
@@ -140,13 +146,15 @@ export default function LeaderboardPage() {
     });
     Object.values(byOutlet).forEach((reps: any[]) => {
       reps.sort((a, b) => (a.report_date < b.report_date ? -1 : 1));
-      checkpoints.forEach(cp => {
+      weeks.forEach(wk => {
+        const cp = `${y}-${pad(m + 1)}-${pad(wk.day)}`;
         if (cp > todayStr) return;
         const upto = reps.filter(r => r.report_date <= cp && r.report_date >= startDate);
         if (!upto.length) return;
         const latest = upto[upto.length - 1];
-        const pts = Number(latest.bh_google_rating) >= RATING_THRESHOLD ? PTS_RATING : -PTS_RATING_FAIL;
-      if (map[latest.staff_id]) map[latest.staff_id].ratingPoints += pts;
+        const ok = Number(latest.bh_google_rating) >= RATING_THRESHOLD;
+        const pts = ok ? (wk.reward ? PTS_RATING : 0) : -PTS_RATING_FAIL;
+        if (pts !== 0 && map[latest.staff_id]) map[latest.staff_id].ratingPoints += pts;
       });
     });
 
@@ -296,7 +304,7 @@ export default function LeaderboardPage() {
       )}
 
       <div style={{ marginTop: "26px", color: C.muted, fontSize: "12px", lineHeight: 1.8 }}>
-       On-time report = {PTS_REPORT} · After cut-off = 0 · Target met = +{PTS_TARGET_MET} / miss = -{PTS_TARGET_MISS} · Task = {PTS_TASK} · Rating (15th + end): 4.5+ = +{PTS_RATING} / below = -{PTS_RATING_FAIL}
+       On-time report = {PTS_REPORT} · After cut-off = 0 · Target met = +{PTS_TARGET_MET} / miss = -{PTS_TARGET_MISS} · Task = {PTS_TASK} · Rating weekly: below 4.5 = -{PTS_RATING_FAIL}/wk · maintain 4.5 = +{PTS_RATING} at 15th & month-end
       </div>
     </div>
   );
