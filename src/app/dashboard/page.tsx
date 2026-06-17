@@ -415,6 +415,9 @@ const fetchOutletReports = async (u: Staff) => {
    const deadline = new Date();
     deadline.setHours(22, 0, 0, 0);
     const isLate = new Date() > deadline;
+    const _today = new Date().toISOString().split("T")[0];
+    const { data: _existing } = await supabase.from("reports").select("id").eq("staff_id", user.id).gte("submitted_at", _today + "T00:00:00").lte("submitted_at", _today + "T23:59:59.999");
+    const _isEdit = (_existing?.length || 0) > 0;
     const content = Object.entries(reportData).map(([k, v]) => `${k}: ${v}`).join(", ");
     const { data, error } = await supabase.from("reports").insert({
       staff_id: user.id,
@@ -428,7 +431,7 @@ const fetchOutletReports = async (u: Staff) => {
     setReportSubmitting(false);
     if (error) { alert("Error: " + error.message); return; }
    setTodayReport(data);
-  if (!reportOffDay) { if (isLate) celebrate(0, "After 10 PM cut-off — 0 points"); else celebrate(20); }
+ if (!reportOffDay) { if (_isEdit) celebrate(0, "Report updated — no extra points"); else if (isLate) celebrate(0, "After 10 PM cut-off — 0 points"); else celebrate(10); }
     setReportData({});
     fetchReports(user);
     };
