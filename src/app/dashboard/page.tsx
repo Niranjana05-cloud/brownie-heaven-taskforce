@@ -880,18 +880,19 @@ await fetchOutletReports(user);
                 ))}
               </div>
             )}
-            {user.role === "Owner" && (
+            {canAssign && (
               <div className="bg-[#131316] border border-zinc-800 mb-6">
                 <div className="px-5 py-3 border-b border-zinc-800">
-                  <p className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest">Staff Status — Today</p>
+                  <p className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest">Staff Status — Today (report time)</p>
                 </div>
                 {ALL_STAFF.filter(s => s.id !== "nishant").map(s => {
                   const staffTasks = tasks.filter(t => t.assigned_to === s.id);
                   const staffOverdue = staffTasks.filter(t => t.status !== "completed" && new Date(t.due_at) < new Date()).length;
                   const staffCompleted = staffTasks.filter(t => t.status === "completed").length;
-                  const hasReport = reports.some(r => r.staff_id === s.id && new Date(r.submitted_at).toDateString() === new Date().toDateString());
+                 const todayReport = reports.find(r => r.staff_id === s.id && new Date(r.submitted_at).toDateString() === new Date().toDateString());
+                  const hasReport = !!todayReport;
                   return (
-                    <div key={s.id} className="grid grid-cols-[1fr_60px_60px_60px_90px] gap-2 items-center px-5 py-3 border-b border-zinc-800 last:border-0">
+                    <div key={s.id} className="grid grid-cols-[1fr_56px_56px_56px_130px] gap-2 items-center px-5 py-3 border-b border-zinc-800 last:border-0">
                       <div>
                         <p className="font-semibold text-sm">{s.name}</p>
                         <p className="text-[10px] font-mono text-zinc-600 uppercase tracking-widest">{s.role}</p>
@@ -909,8 +910,8 @@ await fetchOutletReports(user);
                         <p className="text-[9px] font-mono text-zinc-600 uppercase">Done</p>
                       </div>
                       <div className="text-center">
-                        <span className={`font-mono text-[10px] uppercase tracking-widest px-2 py-1 ${hasReport ? "bg-green-400/10 text-green-400" : "bg-yellow-400/10 text-yellow-400"}`}>
-                          {hasReport ? "✓ Done" : "Pending"}
+                        <span className={`font-mono text-[10px] uppercase tracking-widest px-2 py-1 ${hasReport ? (todayReport!.is_late ? "bg-red-500/10 text-red-500" : "bg-green-400/10 text-green-400") : "bg-yellow-400/10 text-yellow-400"}`}>
+                          {hasReport ? `✓ ${new Date(todayReport!.submitted_at).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}${todayReport!.is_late ? " late" : ""}` : "Pending"}
                         </span>
                       </div>
                     </div>
@@ -936,13 +937,13 @@ await fetchOutletReports(user);
               <div className="bg-[#131316] border border-zinc-800 p-10 text-center">
                 <p className="text-zinc-600 font-mono text-sm uppercase tracking-widest">Loading...</p>
               </div>
-            ) : tasks.filter(t => outletFilter === "all" || t.outlet_id === outletFilter).length === 0 ? (
+            ) : tasks.filter(t => (outletFilter === "all" || t.outlet_id === outletFilter) && t.status !== "completed").length === 0 ? (
               <div className="bg-[#131316] border border-zinc-800 p-10 text-center">
                 <p className="text-zinc-600 font-mono text-sm uppercase tracking-widest">No tasks yet</p>
               </div>
             ) : (
               <div className="bg-[#131316] border border-zinc-800">
-                {tasks.filter(t => outletFilter === "all" || t.outlet_id === outletFilter).map((t) => {
+                {tasks.filter(t => (outletFilter === "all" || t.outlet_id === outletFilter) && t.status !== "completed").map((t) => {
                   const assigneeName = ALL_STAFF.find(s => s.id === t.assigned_to)?.name || t.assigned_to;
                   const isOverdue = t.status !== "completed" && new Date(t.due_at) < new Date();
                   return (
