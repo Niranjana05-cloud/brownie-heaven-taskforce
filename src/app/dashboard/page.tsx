@@ -191,7 +191,7 @@ export default function DashboardPage() {
   const [reportData, setReportData] = useState<Record<string, string>>({});
   const [reportSubmitting, setReportSubmitting] = useState(false);
   const [reportOffDay, setReportOffDay] = useState(false);
-  const [attendanceData, setAttendanceData] = useState({ present: "", absent: "", late: "" });
+  const [attendanceData, setAttendanceData] = useState({ present: "", absent: "", late: "", absent_names: "", late_names: "" });
   const [attendanceSubmitting, setAttendanceSubmitting] = useState(false);
   const [todayAttendance, setTodayAttendance] = useState<any>(null);
   const [attendanceDate, setAttendanceDate] = useState<string>(() => { const d = new Date(); d.setDate(d.getDate() - 1); return d.toISOString().split("T")[0]; });
@@ -485,7 +485,7 @@ const runTargetCheck = async (u: Staff) => {
   const fetchAttendance = async (u: Staff, date: string) => {
     const { data } = await supabase.from("attendance").select("*").eq("staff_id", u.id).eq("attendance_date", date).maybeSingle();
     setTodayAttendance(data || null);
-    if (!data) setAttendanceData({ present: "", absent: "", late: "" });
+    if (!data) setAttendanceData({ present: "", absent: "", late: "", absent_names: "", late_names: "" });
   };
 
   const submitAttendance = async () => {
@@ -494,15 +494,17 @@ const runTargetCheck = async (u: Staff) => {
     const { data, error } = await supabase.from("attendance").upsert({
       staff_id: user.id,
       attendance_date: attendanceDate,
-      present: parseInt(attendanceData.present) || 0,
+     present: parseInt(attendanceData.present) || 0,
       absent: parseInt(attendanceData.absent) || 0,
       late: parseInt(attendanceData.late) || 0,
+      absent_names: attendanceData.absent_names.trim() || null,
+      late_names: attendanceData.late_names.trim() || null,
       submitted_at: new Date().toISOString(),
     }, { onConflict: "staff_id,attendance_date" }).select().single();
     setAttendanceSubmitting(false);
     if (error) { alert("Error: " + error.message); return; }
     setTodayAttendance(data);
-    setAttendanceData({ present: "", absent: "", late: "" });
+    setAttendanceData({ present: "", absent: "", late: "", absent_names: "", late_names: "" });
   };
 
   const assignTask = async () => {
@@ -1085,7 +1087,13 @@ await fetchOutletReports(user);
                     <div><p className="text-3xl font-black">{todayAttendance.absent}</p><p className="text-[10px] font-mono text-zinc-500 uppercase mt-1">Absent</p></div>
                     <div><p className="text-3xl font-black">{todayAttendance.late}</p><p className="text-[10px] font-mono text-zinc-500 uppercase mt-1">Late</p></div>
                   </div>
-                  <button onClick={() => { setAttendanceData({ present: String(todayAttendance.present), absent: String(todayAttendance.absent), late: String(todayAttendance.late) }); setTodayAttendance(null); }} className="mt-5 text-[10px] font-mono text-zinc-500 uppercase tracking-widest hover:text-yellow-400">Edit</button>
+                  {(todayAttendance.absent_names || todayAttendance.late_names) && (
+                    <div className="mt-4 space-y-2 text-sm">
+                      {todayAttendance.absent_names && <p><span className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest">Absent:</span> {todayAttendance.absent_names}</p>}
+                      {todayAttendance.late_names && <p><span className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest">Late:</span> {todayAttendance.late_names}</p>}
+                    </div>
+                  )}
+                  <button onClick={() => { setAttendanceData({ present: String(todayAttendance.present), absent: String(todayAttendance.absent), late: String(todayAttendance.late), absent_names: todayAttendance.absent_names || "", late_names: todayAttendance.late_names || "" }); setTodayAttendance(null); }} className="mt-5 text-[10px] font-mono text-zinc-500 uppercase tracking-widest hover:text-yellow-400">Edit</button>
                 </div>
               ) : (
                 <div className="space-y-4">
@@ -1095,6 +1103,14 @@ await fetchOutletReports(user);
                       <input type="number" value={(attendanceData as any)[f.k]} onChange={(e) => setAttendanceData(prev => ({ ...prev, [f.k]: e.target.value }))} className="w-full bg-black border border-zinc-800 text-white px-3 py-2 focus:outline-none focus:border-yellow-400 transition-colors text-sm" placeholder="0" />
                     </div>
                   ))}
+                  <div>
+                    <label className="block text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-1">Absent — Names</label>
+                    <textarea value={attendanceData.absent_names} onChange={(e) => setAttendanceData(prev => ({ ...prev, absent_names: e.target.value }))} rows={2} className="w-full bg-black border border-zinc-800 text-white px-3 py-2 focus:outline-none focus:border-yellow-400 transition-colors text-sm" placeholder="e.g. Ravi, Priya" />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-1">Late — Names</label>
+                    <textarea value={attendanceData.late_names} onChange={(e) => setAttendanceData(prev => ({ ...prev, late_names: e.target.value }))} rows={2} className="w-full bg-black border border-zinc-800 text-white px-3 py-2 focus:outline-none focus:border-yellow-400 transition-colors text-sm" placeholder="e.g. Kumar" />
+                  </div>
                   <button onClick={submitAttendance} disabled={attendanceSubmitting} className="bg-yellow-400 text-black font-bold tracking-widest text-xs px-6 py-3 hover:opacity-90 transition-opacity uppercase disabled:opacity-50">
                     {attendanceSubmitting ? "Submitting..." : "Submit Attendance →"}
                   </button>
