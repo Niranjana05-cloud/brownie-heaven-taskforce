@@ -269,7 +269,7 @@ export default function LeaderboardPage() {
         </div>
       )}
 
-      {isOwner && (
+     {rows.length > 0 && (
         <div style={{ overflowX: "auto" }}>
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
             <thead>
