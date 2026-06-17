@@ -3,7 +3,7 @@
 
 export function celebrate(points: number, msg?: string) {
   if (typeof window === "undefined") return;
-  if (points < 0) playSad(); else playChime();
+ if (points > 0) playChime(); else playSad();
   showPopup(points, msg);
 }
 
@@ -67,18 +67,20 @@ function showPopup(points: number, msg?: string) {
 
   const card = document.createElement("div");
 const neg = points < 0;
+  const zero = points === 0;
   card.className = "bh-celebrate-card";
   if (neg) card.style.borderColor = "#ef4444";
+  if (zero) card.style.borderColor = "#888888";
   card.innerHTML = `
-    <div class="bh-celebrate-spark">${neg ? "⚠️" : "✨"}</div>
-    <div class="bh-celebrate-pts" style="color:${neg ? "#ef4444" : "#facc15"}">${neg ? points : "+" + points} PTS</div>
-    <div class="bh-celebrate-msg">${msg || (neg ? "Points deducted" : "You earned points!")}</div>
+    <div class="bh-celebrate-spark">${zero ? "⏰" : neg ? "⚠️" : "✨"}</div>
+    <div class="bh-celebrate-pts" style="color:${zero ? "#888888" : neg ? "#ef4444" : "#facc15"}">${zero ? "0" : neg ? points : "+" + points} PTS</div>
+    <div class="bh-celebrate-msg">${msg || (zero ? "No points" : neg ? "Points deducted" : "You earned points!")}</div>
   `;
   overlay.appendChild(card);
 
   // confetti
   const colors = ["#facc15", "#ffffff", "#fde047", "#a3a3a3"];
-  for (let i = 0; i < 28 && points >= 0; i++) {
+  for (let i = 0; i < 28 && points > 0; i++) {
     const c = document.createElement("div");
     c.className = "bh-confetti";
     c.style.left = Math.random() * 100 + "vw";
