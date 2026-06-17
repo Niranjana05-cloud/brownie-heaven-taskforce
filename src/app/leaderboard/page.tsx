@@ -115,8 +115,7 @@ export default function LeaderboardPage() {
       if (d && d >= startISO && d < endISO) row.tasks++;
     });
 
-    const arunRow = map["arun"];
-    (outRes.data || []).forEach((o: any) => {
+   (outRes.data || []).forEach((o: any) => {
       if (o.no_points) return;
       const total = (Number(o.shop_sales_value) || 0) + (Number(o.swiggy_sales_value) || 0) + (Number(o.zomato_sales_value) || 0);
       const tgt = Number(o.target) || 0;
@@ -128,7 +127,6 @@ export default function LeaderboardPage() {
         if (tgt > 0) { if (total >= tgt) row.targetMet++; else row.targetMiss++; }
       };
       credit(map[o.staff_id], false);
-      if (o.staff_id !== "arun") credit(arunRow, true);
     });
 
     const lastDay = new Date(y, m + 1, 0).getDate();
@@ -148,8 +146,7 @@ export default function LeaderboardPage() {
         if (!upto.length) return;
         const latest = upto[upto.length - 1];
         const pts = Number(latest.bh_google_rating) >= RATING_THRESHOLD ? PTS_RATING : -PTS_RATING_FAIL;
-        if (map[latest.staff_id]) map[latest.staff_id].ratingPoints += pts;
-        if (latest.staff_id !== "arun" && arunRow) arunRow.ratingPoints += pts;
+      if (map[latest.staff_id]) map[latest.staff_id].ratingPoints += pts;
       });
     });
 
@@ -170,8 +167,11 @@ export default function LeaderboardPage() {
         row.adjustments;
     });
 
-    const all = Object.values(map);
-    setArun(all.find(r => r.id === "arun") || null);
+   const all = Object.values(map);
+    const teamTotal = all.reduce((s, r) => (r.id === "arun" ? s : s + r.points), 0);
+    const arunRow = all.find(r => r.id === "arun");
+    if (arunRow) arunRow.points = teamTotal;
+    setArun(arunRow || null);
     setRows(all.filter(r => r.id !== "arun").sort((a, b) => b.points - a.points));
     setLoading(false);
   };
@@ -213,7 +213,7 @@ export default function LeaderboardPage() {
 
       {arun && (
         <div style={{ background: C.panel, border: `1px solid ${C.accent}`, padding: "20px", marginBottom: "26px" }}>
-          <div style={{ color: C.muted, fontSize: "12px", textTransform: "uppercase", letterSpacing: "1px" }}>Arun — Team Total (all outlets)</div>
+          <div style={{ color: C.muted, fontSize: "12px", textTransform: "uppercase", letterSpacing: "1px" }}>Arun — Team Total (everyone's points)</div>
           <div style={{ fontSize: "40px", color: C.accent, fontWeight: "bold", lineHeight: 1.2 }}>{arun.points} <span style={{ fontSize: "16px", color: C.muted }}>/ {ARUN_TARGET}</span></div>
           <div style={{ background: "#000", height: "10px", borderRadius: "5px", overflow: "hidden", margin: "12px 0" }}>
             <div style={{ height: "100%", width: `${Math.min(100, Math.max(0, (arun.points / ARUN_TARGET) * 100))}%`, background: arun.points >= ARUN_TARGET ? "#22c55e" : C.accent }}></div>
