@@ -142,11 +142,11 @@ const REPORT_FIELDS: Record<string, { label: string; key: string; type?: string 
   ],
   
    ahila: [
-    { label: "Total No Of Cakes", key: "total_cakes" },
+    { label: "Total No Of Customizations", key: "total_cakes" },
     { label: "Revenue", key: "revenue" },
     { label: "Confirmed & Placed Today", key: "confirmed_placed" },
-    { label: "Pending & Following", key: "pending_following" },
-    { label: "Customised Cake Order", key: "cake_orders_today" },
+    { label: "Pending & Following Leads", key: "pending_following" },
+    { label: "Customisations Done Today", key: "cake_orders_today" },
     { label: "Orders Delivered on Time", key: "orders_on_time" },
     { label: "Cake Complaints", key: "cake_complaints" },
     { label: "Cake Wastage/Damage", key: "cake_wastage" },
