@@ -51,6 +51,7 @@ export default function OrdersRacePage() {
   const [user, setUser] = useState<Staff | null>(null);
   const [date, setDate] = useState<string>(new Date().toISOString().split("T")[0]);
   const [byOutlet, setByOutlet] = useState<Record<string, Counts>>({});
+  const [monthTotals, setMonthTotals] = useState<Counts>({ swiggy: 0, zomato: 0 });
   const [targets, setTargets] = useState<Record<string, number | null>>(TARGET);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState<Record<string, string>>({});
@@ -102,6 +103,18 @@ export default function OrdersRacePage() {
         };
       });
       setByOutlet(map);
+      const ym = date.slice(0, 7);
+      const [yy, mm] = ym.split("-").map(Number);
+      const mStart = ym + "-01";
+      const mEnd = mm === 12 ? `${yy + 1}-01-01` : `${yy}-${String(mm + 1).padStart(2, "0")}-01`;
+      const { data: mData } = await supabase
+        .from("outlet_reports")
+        .select("swiggy_sales_count,zomato_sales_count")
+        .gte("report_date", mStart).lt("report_date", mEnd);
+      if (cancelled) return;
+      let ms = 0, mz = 0;
+      (mData || []).forEach((r: any) => { ms += Number(r.swiggy_sales_count) || 0; mz += Number(r.zomato_sales_count) || 0; });
+      setMonthTotals({ swiggy: ms, zomato: mz });
       setLoading(false);
     })();
     return () => { cancelled = true; };
@@ -184,7 +197,13 @@ export default function OrdersRacePage() {
   const swiggyPct = grandTotal ? (swiggyTotal / grandTotal) * 100 : 50;
   const zomatoPct = grandTotal ? (zomatoTotal / grandTotal) * 100 : 50;
   const platformGap = Math.abs(swiggyTotal - zomatoTotal);
-  const platformLeader = swiggyTotal === zomatoTotal ? null : (swiggyTotal > zomatoTotal ? "Swiggy" : "Zomato");
+ const platformLeader = swiggyTotal === zomatoTotal ? null : (swiggyTotal > zomatoTotal ? "Swiggy" : "Zomato");
+  const monthTotal = monthTotals.swiggy + monthTotals.zomato;
+  const monthSwiggyPct = monthTotal ? (monthTotals.swiggy / monthTotal) * 100 : 50;
+  const monthZomatoPct = monthTotal ? (monthTotals.zomato / monthTotal) * 100 : 50;
+  const monthGap = Math.abs(monthTotals.swiggy - monthTotals.zomato);
+  const monthLeader = monthTotals.swiggy === monthTotals.zomato ? null : (monthTotals.swiggy > monthTotals.zomato ? "Swiggy" : "Zomato");
+  const monthLabel = new Date(date + "T00:00:00").toLocaleDateString("en-IN", { month: "long", year: "numeric" });
 
   return (
     <div style={page}>
@@ -260,6 +279,32 @@ export default function OrdersRacePage() {
         <span style={{ color: C.muted }}> / {totalOutlets} outlets reported</span>
         {missingCount > 0 && <span style={{ color: C.zomato, marginLeft: "10px" }}>· {missingCount} missing</span>}
       </div>
+
+      <div style={{ background: C.panel, border: `1px solid ${C.accent}`, padding: "20px", marginBottom: "26px" }}>
+        <div style={{ color: C.muted, fontSize: "11px", textTransform: "uppercase", letterSpacing: "1px", marginBottom: "12px" }}>This Month · {monthLabel}</div>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: "12px" }}>
+          <div>
+            <div style={{ color: C.swiggy, fontSize: "12px", textTransform: "uppercase", fontWeight: "bold" }}>Swiggy</div>
+            <div style={{ color: C.swiggy, fontSize: "40px", fontWeight: "bold", lineHeight: 1 }}>{monthTotals.swiggy}</div>
+          </div>
+          <div style={{ color: C.muted, fontSize: "14px", paddingBottom: "6px" }}>VS</div>
+          <div style={{ textAlign: "right" }}>
+            <div style={{ color: C.zomato, fontSize: "12px", textTransform: "uppercase", fontWeight: "bold" }}>Zomato</div>
+            <div style={{ color: C.zomato, fontSize: "40px", fontWeight: "bold", lineHeight: 1 }}>{monthTotals.zomato}</div>
+          </div>
+        </div>
+        <div style={{ display: "flex", height: "16px", borderRadius: "3px", overflow: "hidden", border: `1px solid ${C.border}` }}>
+          <div style={{ width: `${monthSwiggyPct}%`, background: C.swiggy }} />
+          <div style={{ width: `${monthZomatoPct}%`, background: C.zomato }} />
+        </div>
+        <div style={{ textAlign: "center", marginTop: "12px", fontSize: "13px" }}>
+          {monthLeader
+            ? <span><span style={{ color: monthLeader === "Swiggy" ? C.swiggy : C.zomato, fontWeight: "bold" }}>{monthLeader}</span> leads by {monthGap} order{monthGap === 1 ? "" : "s"}</span>
+            : <span style={{ color: C.muted }}>Dead heat — {monthTotals.swiggy} each</span>}
+        </div>
+      </div>
+
+      <div style={{ color: C.muted, fontSize: "11px", textTransform: "uppercase", letterSpacing: "1px", marginBottom: "12px" }}>Selected Day</div>
 
       {reportedCount === 0 ? (
         <div style={{ background: C.panel, border: `1px solid ${C.border}`, padding: "26px", textAlign: "center", color: C.muted }}>
