@@ -797,8 +797,7 @@ await fetchOutletReports(user);
         <div onClick={() => { router.push("/leaderboard"); }} className="flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors text-zinc-500 hover:text-white">
             <span>🏆</span> Leaderboard
           </div>
-         
-          {["nishant","nilani","vishnu","ahila"].includes(user?.id ?? "") && (
+         {["nishant","arun","nilani","vishnu","ahila"].includes(user?.id ?? "") && (
             <div onClick={() => { router.push("/orders-race"); }} className="flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors text-zinc-500 hover:text-white">
               <span>⚔️</span> Orders Race
             </div>
