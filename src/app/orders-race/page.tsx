@@ -11,7 +11,7 @@ const supabase = createClient(
 type Staff = { id: string; name: string; role: string };
 
 // Only these people can open the race
-const ALLOWED = ["nishant", "nilani", "vishnu", "ahila"];
+const ALLOWED = ["nishant", "arun", "nilani", "vishnu", "ahila"];
 
 // The 3 managers and their 4 outlets each
 const MANAGERS = [
