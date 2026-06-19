@@ -409,7 +409,10 @@ const fetchOutletReports = async (u: Staff) => {
  const submitReport = async () => {
     if (!user) return;
     const _fields = REPORT_FIELDS[user.id] || [];
-    const _missing = _fields.filter((f) => !reportData[f.key] || !String(reportData[f.key]).trim());
+    const _missing = _fields.filter((f) => {
+      if (user.id === "arun" && (f.key === "achievement" || f.key === "target")) return false;
+      return !reportData[f.key] || !String(reportData[f.key]).trim();
+    });
     if (_missing.length) { alert("Please fill all fields before submitting.\n\nMissing: " + _missing.map((f) => f.label).join(", ")); return; }
     setReportSubmitting(true);
     const _today = new Date().toISOString().split("T")[0];
@@ -420,7 +423,14 @@ const fetchOutletReports = async (u: Staff) => {
     const isLate = !_isBackfill && new Date() > deadline;
     const { data: _existing } = await supabase.from("reports").select("id").eq("staff_id", user.id).eq("report_date", _date);
     const _isEdit = (_existing?.length || 0) > 0;
-    const content = Object.entries(reportData).map(([k, v]) => `${k}: ${v}`).join(", ");
+    const finalData: Record<string, string> = { ...reportData };
+    if (user.id === "arun") {
+      if (!finalData.target || !String(finalData.target).trim()) finalData.target = "299666";
+      const _ts = parseFloat(finalData.total_sales || "0");
+      const _tg = parseFloat(finalData.target || "299666");
+      finalData.achievement = _tg ? (_ts / _tg * 100).toFixed(1) + "%" : "";
+    }
+    const content = Object.entries(finalData).map(([k, v]) => `${k}: ${v}`).join(", ");
     const { data, error } = await supabase.from("reports").insert({
       staff_id: user.id,
       content,
@@ -428,7 +438,7 @@ const fetchOutletReports = async (u: Staff) => {
       is_backfill: _isBackfill,
       is_late: reportOffDay ? false : isLate,
       submitted_at: new Date().toISOString(),
-      report_data: reportData,
+      report_data: finalData,
       staff_role: user.role,
       no_points: reportOffDay,
     }).select().single();
@@ -729,6 +739,16 @@ await fetchOutletReports(user);
   const canAssign = user?.role === "Owner" || user?.role === "Manager";
   const hasReportDuty = user?.role !== "Owner";
   const reportFields = user ? REPORT_FIELDS[user.id] || [] : [];
+  const reportInput = (f: { label: string; key: string }) => {
+    if (user && user.id === "arun" && f.key === "achievement") {
+      const ts = parseFloat(reportData.total_sales || "0");
+      const tg = parseFloat(reportData.target || "299666");
+      const pct = tg ? (ts / tg * 100).toFixed(1) + "%" : "";
+      return <input type="text" readOnly value={pct} className="w-full bg-zinc-900 border border-zinc-800 text-yellow-400 px-3 py-2 text-sm cursor-not-allowed" placeholder="—" />;
+    }
+    const val = (user && user.id === "arun" && f.key === "target") ? (reportData.target ?? "299666") : (reportData[f.key] || "");
+    return <input type="text" value={val} onChange={(e) => setReportData(prev => ({ ...prev, [f.key]: e.target.value }))} className="w-full bg-black border border-zinc-800 text-white px-3 py-2 focus:outline-none focus:border-yellow-400 transition-colors text-sm" placeholder="—" />;
+  };
 
   if (!user) return (
     <div className="min-h-screen bg-black flex items-center justify-center">
@@ -1223,7 +1243,7 @@ await fetchOutletReports(user);
               {reportFields.map(f => (
                 <div key={f.key}>
                   <label className="block text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-1">{f.label}</label>
-                  <input type="text" value={reportData[f.key] || ""} onChange={(e) => setReportData(prev => ({ ...prev, [f.key]: e.target.value }))} className="w-full bg-black border border-zinc-800 text-white px-3 py-2 focus:outline-none focus:border-yellow-400 transition-colors text-sm" placeholder="—" />
+                  {reportInput(f)}
                 </div>
               ))}
             </div>
@@ -1280,13 +1300,7 @@ await fetchOutletReports(user);
                       {reportFields.map(f => (
                         <div key={f.key}>
                           <label className="block text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-1">{f.label}</label>
-                          <input
-                            type="text"
-                            value={reportData[f.key] || ""}
-                            onChange={(e) => setReportData(prev => ({ ...prev, [f.key]: e.target.value }))}
-                            className="w-full bg-black border border-zinc-800 text-white px-3 py-2 focus:outline-none focus:border-yellow-400 transition-colors text-sm"
-                            placeholder="—"
-                          />
+                          {reportInput(f)}
                         </div>
                       ))}
                     </div>
