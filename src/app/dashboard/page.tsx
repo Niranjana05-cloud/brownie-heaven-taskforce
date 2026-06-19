@@ -665,9 +665,10 @@ icbh_zomato_rating: parseFloat(d.icbh_zomato_rating) || null,
     const result = await supabase.from("outlet_reports").update(payload).eq("id", d.editing_id);
     error = result.error;
   } else {
+   const _owner = ALL_STAFF.find(s => (s.outlets as string[] | undefined)?.includes(activeOutlet));
     const result = await supabase.from("outlet_reports").upsert({
   ...payload,
-  staff_id: user.id,
+  staff_id: _owner ? _owner.id : user.id,
   outlet_id: activeOutlet,
   report_date: outletEntryDate,
 }, { onConflict: "staff_id,outlet_id,report_date" });
@@ -813,7 +814,7 @@ await fetchOutletReports(user);
               <span>👥</span> Attendance
             </div>
           )}
-          {(user.outlets && user.outlets.length > 0) && (
+         {((user.outlets && user.outlets.length > 0) || canAssign) && (
   <div onClick={() => { setActiveTab("outlet_reports"); setSidebarOpen(false); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "outlet_reports" ? "text-white bg-zinc-900 border-l-2 border-yellow-400" : "text-zinc-500 hover:text-white"}`}>
     <span>🏪</span> Outlets
   {Object.keys(outletReports).length < (user.outlets?.length || 0) && <span className="ml-auto w-2 h-2 bg-yellow-400 rounded-full"></span>}
@@ -1416,7 +1417,7 @@ await fetchOutletReports(user);
 
     {/* Outlet selector tabs */}
     <div className="flex gap-2 flex-wrap mb-6">
-      {(user.outlets || []).map(o => {
+     {(canAssign ? OUTLETS : (user.outlets || [])).map(o => {
         const submitted = !!outletReports[o];
         return (
          <button key={o} onClick={() => { setActiveOutlet(o); const lastRatings = lastOutletRatings[o]; setOutletReportData({ target: OUTLET_TARGETS[o] || "", bh_google_rating: lastRatings ? String(lastRatings.bh_google_rating || "") : "", bh_swiggy_rating: lastRatings ? String(lastRatings.bh_swiggy_rating || "") : "", bh_zomato_rating: lastRatings ? String(lastRatings.bh_zomato_rating || "") : "", cbh_google_rating: lastRatings ? String(lastRatings.cbh_google_rating || "") : "", cbh_swiggy_rating: lastRatings ? String(lastRatings.cbh_swiggy_rating || "") : "", cbh_zomato_rating: lastRatings ? String(lastRatings.cbh_zomato_rating || "") : "", icbh_google_rating: lastRatings ? String(lastRatings.icbh_google_rating || "") : "", icbh_swiggy_rating: lastRatings ? String(lastRatings.icbh_swiggy_rating || "") : "", icbh_zomato_rating: lastRatings ? String(lastRatings.icbh_zomato_rating || "") : "" }); }}
