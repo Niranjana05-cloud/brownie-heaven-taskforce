@@ -1192,7 +1192,7 @@ await fetchOutletReports(user);
       {canAssign ? "Staff submissions overview" : `Due by ${ALL_STAFF.find(s => s.id === user.id)?.report_time || "--:--"} daily`}
     </p>
   </div>
-  {!canAssign && (
+  {hasReportDuty && (
     <input
       type="date"
       value={reportHistoryDate}
