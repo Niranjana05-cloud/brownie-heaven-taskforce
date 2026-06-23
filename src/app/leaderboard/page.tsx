@@ -211,7 +211,7 @@ export default function LeaderboardPage() {
   const me = rows.find(r => r.id === user?.id);
   const myRank = rows.findIndex(r => r.id === user?.id) + 1;
   const noOutlet = (id: string) => { const s = ALL_STAFF.find(x => x.id === id); return !s || !s.outlets || (s.outlets as string[]).length === 0; };
-  const cashFor = (p: number, id: string) => { if (noOutlet(id)) return 0; return p >= 6800 ? 3000 : p >= 6000 ? 2000 : p <= 4000 ? -500 : 0; };
+  const cashFor = (p: number, id: string) => { if (noOutlet(id)) return 0; return p >= 6800 ? 3000 : p >= 6400 ? 2000 : p <= 5600 ? -500 : 0; };
   const cashLabel = (p: number, id: string) => { const c = cashFor(p, id); return c > 0 ? `+₹${c}` : c < 0 ? `-₹${Math.abs(c)}` : "—"; };
   const cashColor = (p: number, id: string) => { const c = cashFor(p, id); return c > 0 ? "#22c55e" : c < 0 ? "#ef4444" : C.muted; };
 
@@ -230,7 +230,7 @@ export default function LeaderboardPage() {
       <div style={{ color: C.muted, marginBottom: "18px", fontSize: "13px" }}>{monthLabel}</div>
 
       <div style={{ background: C.panel, border: `1px solid ${C.accent}`, padding: "12px 16px", marginBottom: "22px", fontSize: "13px", lineHeight: 1.7 }}>
-       💰 Monthly cash incentive (outlet managers) — <span style={{ color: "#22c55e", fontWeight: "bold" }}>6800+ = ₹3000</span> · <span style={{ color: "#22c55e", fontWeight: "bold" }}>6000+ = ₹2000</span> · <span style={{ color: "#ef4444", fontWeight: "bold" }}>4000 or below = -₹500</span>
+      💰 Monthly cash incentive (outlet managers) — <span style={{ color: "#22c55e", fontWeight: "bold" }}>6800+ = ₹3000</span> · <span style={{ color: "#22c55e", fontWeight: "bold" }}>6400+ = ₹2000</span> · <span style={{ color: "#ef4444", fontWeight: "bold" }}>5600 or below = -₹500</span>
       </div>
 
       {arun && (
