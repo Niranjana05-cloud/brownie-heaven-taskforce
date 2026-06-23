@@ -210,9 +210,10 @@ export default function LeaderboardPage() {
   const isOwner = user?.role === "Owner" || user?.role === "Manager";
   const me = rows.find(r => r.id === user?.id);
   const myRank = rows.findIndex(r => r.id === user?.id) + 1;
-  const cashFor = (p: number) => (p >= 1700 ? 3000 : p >= 1600 ? 2000 : p <= 1400 ? -500 : 0);
-  const cashLabel = (p: number) => { const c = cashFor(p); return c > 0 ? `+₹${c}` : c < 0 ? `-₹${Math.abs(c)}` : "—"; };
-  const cashColor = (p: number) => { const c = cashFor(p); return c > 0 ? "#22c55e" : c < 0 ? "#ef4444" : C.muted; };
+  const noOutlet = (id: string) => { const s = ALL_STAFF.find(x => x.id === id); return !s || !s.outlets || (s.outlets as string[]).length === 0; };
+  const cashFor = (p: number, id: string) => { if (noOutlet(id)) return 0; return p >= 6800 ? 3000 : p >= 6000 ? 2000 : p <= 4000 ? -500 : 0; };
+  const cashLabel = (p: number, id: string) => { const c = cashFor(p, id); return c > 0 ? `+₹${c}` : c < 0 ? `-₹${Math.abs(c)}` : "—"; };
+  const cashColor = (p: number, id: string) => { const c = cashFor(p, id); return c > 0 ? "#22c55e" : c < 0 ? "#ef4444" : C.muted; };
 
   const th: React.CSSProperties = { textAlign: "right", padding: "10px 12px", color: C.muted, fontSize: "12px", borderBottom: `1px solid ${C.border}`, textTransform: "uppercase" };
   const td: React.CSSProperties = { textAlign: "right", padding: "12px", borderBottom: `1px solid ${C.border}` };
@@ -229,7 +230,7 @@ export default function LeaderboardPage() {
       <div style={{ color: C.muted, marginBottom: "18px", fontSize: "13px" }}>{monthLabel}</div>
 
       <div style={{ background: C.panel, border: `1px solid ${C.accent}`, padding: "12px 16px", marginBottom: "22px", fontSize: "13px", lineHeight: 1.7 }}>
-        💰 Monthly cash incentive — <span style={{ color: "#22c55e", fontWeight: "bold" }}>1700+ = ₹3000</span> · <span style={{ color: "#22c55e", fontWeight: "bold" }}>1600+ = ₹2000</span> · <span style={{ color: "#ef4444", fontWeight: "bold" }}>1400 or below = -₹500</span>
+        💰 Monthly cash incentive (outlet managers) — <span style={{ color: "#22c55e", fontWeight: "bold" }}>6800+ = ₹3000</span> · <span style={{ color: "#22c55e", fontWeight: "bold" }}>6000+ = ₹2000</span>
       </div>
 
       {arun && (
@@ -250,7 +251,7 @@ export default function LeaderboardPage() {
           <div style={{ color: C.muted, fontSize: "12px", textTransform: "uppercase" }}>Your Score</div>
           <div style={{ fontSize: "48px", color: C.accent, fontWeight: "bold", lineHeight: 1.1 }}>{me.points}</div>
          <div style={{ color: C.muted, marginBottom: "10px" }}>Rank #{myRank} of {rows.length}</div>
-          <div style={{ marginBottom: "16px", fontSize: "15px" }}>This month&apos;s cash: <span style={{ color: cashColor(me.points), fontWeight: "bold" }}>{cashLabel(me.points)}</span></div>
+          <div style={{ marginBottom: "16px", fontSize: "15px" }}>This month&apos;s cash: <span style={{ color: cashColor(me.points, me.id), fontWeight: "bold" }}>{cashLabel(me.points, me.id)}</span></div>
           <div style={{ fontSize: "13px", lineHeight: 1.9 }}>
             {(STARTING_POINTS[me.id] || 0) > 0 && <div>Starting credit: {STARTING_POINTS[me.id]}</div>}
             <div>Daily reports: {me.myReports} filed → {me.dailyPoints >= 0 ? "+" : ""}{me.dailyPoints} (on-time +{PTS_DAILY}, late/back-dated -{PTS_DAILY_PENALTY})</div>
@@ -308,7 +309,7 @@ export default function LeaderboardPage() {
                   <td style={td}>{r.tasks}</td>
                  <td style={td}>{r.ratingPoints >= 0 ? "+" : ""}{r.ratingPoints}</td>
                   <td style={{ ...td, color: C.accent, fontWeight: "bold", fontSize: "16px" }}>{r.points}</td>
-                  <td style={{ ...td, color: cashColor(r.points), fontWeight: "bold" }}>{cashLabel(r.points)}</td>
+                 <td style={{ ...td, color: cashColor(r.points, r.id), fontWeight: "bold" }}>{cashLabel(r.points, r.id)}</td>
                 </tr>
               ))}
             </tbody>
