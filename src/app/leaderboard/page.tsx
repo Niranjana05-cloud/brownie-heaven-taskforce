@@ -188,8 +188,9 @@ export default function LeaderboardPage() {
     });
 
    const all = Object.values(map);
-    const teamTotal = all.reduce((s, r) => (r.id === "arun" ? s : s + r.points), 0);
     const arunRow = all.find(r => r.id === "arun");
+    const arunOwn = arunRow ? arunRow.points : 0;
+    const teamTotal = all.reduce((s, r) => (r.id === "arun" ? s : s + r.points), 0) + arunOwn;
     if (arunRow) arunRow.points = teamTotal;
     setArun(arunRow || null);
     setRows(all.filter(r => r.id !== "arun").sort((a, b) => b.points - a.points));
