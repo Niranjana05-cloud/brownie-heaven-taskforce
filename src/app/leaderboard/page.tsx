@@ -210,7 +210,8 @@ export default function LeaderboardPage() {
   const isOwner = user?.role === "Owner" || user?.role === "Manager";
   const me = rows.find(r => r.id === user?.id);
   const myRank = rows.findIndex(r => r.id === user?.id) + 1;
-  const noOutlet = (id: string) => { const s = ALL_STAFF.find(x => x.id === id) as { outlets?: string[] } | undefined; return !s || !s.outlets || s.outlets.length === 0; };
+  const OUTLET_MANAGERS = ["nilani", "vishnu", "ahila"];
+  const noOutlet = (id: string) => !OUTLET_MANAGERS.includes(id);
   const cashFor = (p: number, id: string) => { if (noOutlet(id)) return 0; return p >= 6800 ? 3000 : p >= 6400 ? 2000 : p <= 5600 ? -500 : 0; };
   const cashLabel = (p: number, id: string) => { const c = cashFor(p, id); return c > 0 ? `+₹${c}` : c < 0 ? `-₹${Math.abs(c)}` : "—"; };
   const cashColor = (p: number, id: string) => { const c = cashFor(p, id); return c > 0 ? "#22c55e" : c < 0 ? "#ef4444" : C.muted; };
