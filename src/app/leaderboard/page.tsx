@@ -230,7 +230,7 @@ export default function LeaderboardPage() {
       <div style={{ color: C.muted, marginBottom: "18px", fontSize: "13px" }}>{monthLabel}</div>
 
       <div style={{ background: C.panel, border: `1px solid ${C.accent}`, padding: "12px 16px", marginBottom: "22px", fontSize: "13px", lineHeight: 1.7 }}>
-        💰 Monthly cash incentive (outlet managers) — <span style={{ color: "#22c55e", fontWeight: "bold" }}>6800+ = ₹3000</span> · <span style={{ color: "#22c55e", fontWeight: "bold" }}>6000+ = ₹2000</span>
+       💰 Monthly cash incentive (outlet managers) — <span style={{ color: "#22c55e", fontWeight: "bold" }}>6800+ = ₹3000</span> · <span style={{ color: "#22c55e", fontWeight: "bold" }}>6000+ = ₹2000</span> · <span style={{ color: "#ef4444", fontWeight: "bold" }}>4000 or below = -₹500</span>
       </div>
 
       {arun && (
