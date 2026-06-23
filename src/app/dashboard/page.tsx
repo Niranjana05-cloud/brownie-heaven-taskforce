@@ -1423,7 +1423,7 @@ await fetchOutletReports(user);
   <input
     type="date"
     value={outletHistoryDate}
-    onChange={(e) => { setOutletHistoryDate(e.target.value); fetchOutletReportsByDate(e.target.value); }}
+    onChange={(e) => { setOutletHistoryDate(e.target.value); setOutletEntryDate(e.target.value); setOutletWasOff(false); fetchOutletReportsByDate(e.target.value); }}
     className="bg-black border border-zinc-800 text-white px-4 py-2.5 focus:outline-none focus:border-yellow-400 transition-colors font-mono text-sm"
   />
 </div>
@@ -1567,7 +1567,7 @@ await fetchOutletReports(user);
         </div>
         <div className="mb-4">
           <label className="block text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-1">Report Date</label>
-         <input type="date" max={new Date().toISOString().split("T")[0]} value={outletEntryDate} onChange={(e) => { setOutletEntryDate(e.target.value); setOutletWasOff(false); }} className="bg-black border border-zinc-800 text-white px-3 py-2 focus:outline-none focus:border-yellow-400 transition-colors text-sm" />
+         <input type="date" max={new Date().toISOString().split("T")[0]} value={outletEntryDate} onChange={(e) => { setOutletEntryDate(e.target.value); setOutletHistoryDate(e.target.value); setOutletWasOff(false); fetchOutletReportsByDate(e.target.value); }} className="bg-black border border-zinc-800 text-white px-3 py-2 focus:outline-none focus:border-yellow-400 transition-colors text-sm" />
           {outletEntryDate < new Date().toISOString().split("T")[0] && (
             <div className="mt-3">
               <p className="text-[11px] font-mono text-zinc-400 uppercase tracking-widest mb-1.5">Were you off on this day?</p>
