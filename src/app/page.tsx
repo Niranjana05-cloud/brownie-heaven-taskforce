@@ -16,6 +16,7 @@ const STAFF = [
   { id: "vishnu", name: "Vishnu", role: "Asst. Ops Manager" },
   { id: "ahila", name: "Ahila", role: "Custom Cakes & Asst Ops" },
   { id: "bharani", name: "Bharani", role: "Auditor" },
+  { id: "niranjana", name: "Niranjana", role: "Founder's Office" },
 ];
 
 export default function LoginPage() {
