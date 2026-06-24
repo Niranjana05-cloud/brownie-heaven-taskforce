@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import * as XLSX from "xlsx";
 import { supabase } from "@/lib/supabase";
 
@@ -125,13 +125,13 @@ export default function PayoutTab({ user }: { user: Staff }) {
   const [reports, setReports] = useState<Rep[]>([]);
   const [loading, setLoading] = useState(false);
 
-  const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<Form>({});
   const [saving, setSaving] = useState(false);
   const [pasteText, setPasteText] = useState("");
   const [detected, setDetected] = useState("");
   const [parseErr, setParseErr] = useState("");
+  const formRef = useRef<HTMLDivElement>(null);
 
   const canEdit = canViewAll || myOutlets.includes(outlet);
 
@@ -160,11 +160,10 @@ export default function PayoutTab({ user }: { user: Staff }) {
     return { repOrders, repValue, actualOrders, actualValue, ordersDiff, valueDiff, days: inRange.length };
   };
 
-  const resetParse = () => { setPasteText(""); setDetected(""); setParseErr(""); };
-  const openAdd = () => { setEditingId(null); setForm({}); resetParse(); setShowForm(true); };
+  const resetForm = () => { setEditingId(null); setForm({}); setPasteText(""); setDetected(""); setParseErr(""); };
   const openEdit = (p: Payout) => {
     setEditingId(p.id);
-    resetParse();
+    setPasteText(""); setDetected(""); setParseErr("");
     setForm({
       period_start: p.period_start || "", period_end: p.period_end || "",
       total_orders: p.total_orders?.toString() || "",
@@ -173,9 +172,8 @@ export default function PayoutTab({ user }: { user: Staff }) {
       amount_transferable: p.amount_transferable?.toString() || "", next_payout_cycle: p.next_payout_cycle || "",
       next_payout_date: p.next_payout_date || "", net_payout: p.net_payout?.toString() || "", bank_utr: p.bank_utr || "",
     });
-    setShowForm(true);
+    formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
-  const closeForm = () => { setShowForm(false); setEditingId(null); setForm({}); resetParse(); };
   const setF = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }));
 
   const applyParsed = (r: Parsed) => {
@@ -248,12 +246,11 @@ export default function PayoutTab({ user }: { user: Staff }) {
     }
     setSaving(false);
     if (error) { alert("Error: " + error.message); return; }
-    closeForm();
+    resetForm();
     load();
   };
 
   const accent = platform === "swiggy" ? "text-orange-400" : "text-red-400";
-  const accentBorder = platform === "swiggy" ? "border-orange-400" : "border-red-400";
   const inputCls = "w-full bg-black border border-zinc-800 text-white px-3 py-2 focus:outline-none focus:border-yellow-400 transition-colors text-sm";
   const lblCls = "block text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-1";
 
@@ -273,15 +270,12 @@ export default function PayoutTab({ user }: { user: Staff }) {
           <h2 className="text-2xl md:text-3xl font-black tracking-tight">Payout</h2>
           <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mt-1">Weekly · reported vs actual</p>
         </div>
-        {canEdit && !showForm && (
-          <button onClick={openAdd} className={`text-[11px] font-mono uppercase tracking-widest px-3 py-2 border ${accentBorder} ${accent} hover:bg-zinc-900 transition-colors`}>+ Add Entry</button>
-        )}
       </div>
 
       {/* Platform toggle */}
       <div className="flex gap-2 mb-4">
         {(["swiggy", "zomato"] as const).map((pf) => (
-          <button key={pf} onClick={() => { setPlatform(pf); closeForm(); }}
+          <button key={pf} onClick={() => { setPlatform(pf); resetForm(); }}
             className={`px-4 py-2 text-xs font-mono uppercase tracking-widest border transition-colors ${platform === pf ? (pf === "swiggy" ? "border-orange-400 text-orange-400" : "border-red-400 text-red-400") : "border-zinc-800 text-zinc-500 hover:text-white"}`}>
             {pf}
           </button>
@@ -291,15 +285,18 @@ export default function PayoutTab({ user }: { user: Staff }) {
       {/* Outlet selector */}
       <div className="mb-6">
         <label className={lblCls}>Outlet</label>
-        <select value={outlet} onChange={(e) => { setOutlet(e.target.value); closeForm(); }} className={inputCls + " max-w-xs"}>
+        <select value={outlet} onChange={(e) => { setOutlet(e.target.value); resetForm(); }} className={inputCls + " max-w-xs"}>
           {visibleOutlets.map((o) => <option key={o} value={o}>{OUTLET_NAMES[o] || o}</option>)}
         </select>
       </div>
 
-      {/* Add / Edit form */}
-      {showForm && (
-        <div className="bg-[#131316] border border-zinc-800 p-5 mb-6 max-w-3xl">
-          <p className={`font-mono text-xs uppercase tracking-widest ${accent} mb-4`}>{editingId ? "Edit" : "Add"} {platform} payout · {OUTLET_NAMES[outlet]}</p>
+      {/* Entry form (always visible for editors) */}
+      {canEdit && (
+        <div ref={formRef} className="bg-[#131316] border border-zinc-800 p-5 mb-6 max-w-3xl">
+          <div className="flex justify-between items-center mb-4">
+            <p className={`font-mono text-xs uppercase tracking-widest ${accent}`}>{editingId ? "Edit" : "New"} {platform} payout · {OUTLET_NAMES[outlet]}</p>
+            {editingId && <button onClick={resetForm} className="text-[10px] font-mono uppercase tracking-widest px-2 py-1 border border-zinc-700 text-zinc-400 hover:text-white transition-colors">+ New instead</button>}
+          </div>
 
           {/* Auto-fill */}
           {!editingId && (
@@ -342,14 +339,17 @@ export default function PayoutTab({ user }: { user: Staff }) {
             )}
           </div>
           <div className="flex gap-2">
-            <button onClick={save} disabled={saving} className="text-[11px] font-mono uppercase tracking-widest px-4 py-2 bg-yellow-400 text-black font-bold hover:bg-yellow-300 transition-colors disabled:opacity-50">{saving ? "Saving…" : "Save"}</button>
-            <button onClick={closeForm} className="text-[11px] font-mono uppercase tracking-widest px-4 py-2 border border-zinc-700 text-zinc-400 hover:text-white transition-colors">Cancel</button>
+            <button onClick={save} disabled={saving} className="text-[11px] font-mono uppercase tracking-widest px-4 py-2 bg-yellow-400 text-black font-bold hover:bg-yellow-300 transition-colors disabled:opacity-50">{saving ? "Saving…" : editingId ? "Update" : "Save"}</button>
+            <button onClick={resetForm} className="text-[11px] font-mono uppercase tracking-widest px-4 py-2 border border-zinc-700 text-zinc-400 hover:text-white transition-colors">Clear</button>
           </div>
         </div>
       )}
 
+      {/* History header */}
+      <p className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-3">{OUTLET_NAMES[outlet]} · {platform} history</p>
+
       {loading && <p className="text-zinc-600 font-mono text-xs">Loading…</p>}
-      {!loading && payouts.length === 0 && !showForm && (
+      {!loading && payouts.length === 0 && (
         <p className="text-zinc-600 font-mono text-xs">No {platform} payouts entered for {OUTLET_NAMES[outlet]} yet.</p>
       )}
 
