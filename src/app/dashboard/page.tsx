@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@supabase/supabase-js";
 import { celebrate } from "../celebrate";
+import PayoutTab from "./PayoutTab";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -1121,26 +1122,7 @@ else await fetchOutletReportsByDate(outletEntryDate);
             ))}
           </div>
         )}
-       {activeTab === "payout" && (
-          <div>
-            <div className="flex justify-between items-start mb-6 pb-5 border-b border-zinc-800">
-              <div>
-                <h2 className="text-2xl md:text-3xl font-black tracking-tight">Payout</h2>
-                <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mt-1">Updated Fridays</p>
-              </div>
-            </div>
-            <div className="grid md:grid-cols-2 gap-5 max-w-3xl">
-              <div className="bg-[#131316] border border-zinc-800 p-5">
-                <p className="font-mono text-xs uppercase tracking-widest text-orange-400 mb-2">Swiggy</p>
-                <p className="text-zinc-600 font-mono text-xs">Coming soon — fields to be added.</p>
-              </div>
-              <div className="bg-[#131316] border border-zinc-800 p-5">
-                <p className="font-mono text-xs uppercase tracking-widest text-red-400 mb-2">Zomato</p>
-                <p className="text-zinc-600 font-mono text-xs">Coming soon — fields to be added.</p>
-              </div>
-            </div>
-          </div>
-        )}
+      {activeTab === "payout" && user && <PayoutTab user={user} />}
        {activeTab === "attendance" && (
           <div>
             <div className="flex justify-between items-start mb-6 pb-5 border-b border-zinc-800">
