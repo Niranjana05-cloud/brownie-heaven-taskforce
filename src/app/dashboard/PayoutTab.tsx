@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState, useCallback } from "react";
+import * as XLSX from "xlsx";
 import { supabase } from "@/lib/supabase";
 
 type Staff = { id: string; name: string; role: string; outlets?: string[] };
@@ -26,11 +27,92 @@ type Rep = {
   zomato_sales_count: number; zomato_sales_value: number;
 };
 type Form = Record<string, string>;
+type Parsed = {
+  period_start: string | null; period_end: string | null;
+  total_orders: string | number | null;
+  customer_payable?: string | null; swiggy_service_fee?: string | null;
+  other_charges_refund?: string | null; govt_taxes?: string | null;
+  amount_transferable?: string | null; next_payout_cycle?: string | null; next_payout_date?: string | null;
+  net_payout?: string | number | null; bank_utr?: string | null;
+  _detected: string;
+};
 
 const fmt = (n: number | null | undefined) => "₹" + Math.round(Number(n) || 0).toLocaleString("en-IN");
 const prettyD = (d: string) => new Date(d + "T00:00:00").toLocaleDateString("en-IN", { day: "numeric", month: "short" });
 const num = (s: string | undefined) => { const v = parseFloat(String(s ?? "").replace(/,/g, "")); return isNaN(v) ? null : v; };
 const int = (s: string | undefined) => { const v = parseInt(String(s ?? "").replace(/,/g, "")); return isNaN(v) ? null : v; };
+
+const MON: Record<string, string> = { jan:"01",feb:"02",mar:"03",apr:"04",may:"05",jun:"06",jul:"07",aug:"08",sep:"09",oct:"10",nov:"11",dec:"12" };
+const toISO = (s: string | null | undefined) => {
+  if (!s) return null;
+  const m = String(s).match(/(\d{1,2})(?:st|nd|rd|th)?\s+([A-Za-z]+)\s+(\d{4})/);
+  if (!m) return null;
+  const mm = MON[m[2].slice(0, 3).toLowerCase()];
+  if (!mm) return null;
+  return `${m[3]}-${mm}-${m[1].padStart(2, "0")}`;
+};
+const cleanNum = (s: unknown): number | null => {
+  if (s == null || s === "") return null;
+  if (typeof s === "number") return s;
+  const v = parseFloat(String(s).replace(/[₹,]/g, "").trim());
+  return isNaN(v) ? null : v;
+};
+
+function parseSwiggy(text: string): Parsed {
+  const t = text.replace(/\u00a0/g, " ");
+  const grabBefore = (labelRe: RegExp) => {
+    const m = labelRe.exec(t);
+    if (!m) return null;
+    const before = t.slice(0, m.index);
+    const nums = before.match(/-?[\d,]+(?:\.\d+)?/g);
+    if (!nums) return null;
+    return nums[nums.length - 1].replace(/,/g, "");
+  };
+  const range = t.match(/(\d{1,2}(?:st|nd|rd|th)?\s+[A-Za-z]+\s+\d{4})\s*[-\u2013]\s*(\d{1,2}(?:st|nd|rd|th)?\s+[A-Za-z]+\s+\d{4})/);
+  const cycleM = t.match(/Next Payout Cycle[\s\S]{0,80}?(\d{1,2}(?:st|nd|rd|th)?\s+[A-Za-z]+\s+\d{4}\s*[-\u2013]\s*\d{1,2}(?:st|nd|rd|th)?\s+[A-Za-z]+\s+\d{4})/i);
+  const payM = t.match(/Next Payout on[\s\S]{0,40}?(\d{1,2}(?:st|nd|rd|th)?\s+[A-Za-z]+\s+\d{4})/i);
+  const idM = t.match(/Rest\.?\s*ID\s*:?\s*(\d+)/i);
+  const lines = t.split(/\n/).map((l) => l.trim()).filter(Boolean);
+  const idxRest = lines.findIndex((l) => /Rest\.?\s*ID/i.test(l));
+  const name = idxRest > 0 ? lines[idxRest - 1] : null;
+  return {
+    period_start: range ? toISO(range[1]) : null,
+    period_end: range ? toISO(range[2]) : null,
+    total_orders: grabBefore(/Total Orders/i),
+    customer_payable: grabBefore(/Total Customer Payable/i),
+    swiggy_service_fee: grabBefore(/Swiggy Service Fee/i),
+    other_charges_refund: grabBefore(/Other Charges\s*\/?\s*Refund/i),
+    govt_taxes: grabBefore(/Government Taxes/i),
+    amount_transferable: grabBefore(/Amount Transferable/i),
+    next_payout_cycle: cycleM ? cycleM[1] : null,
+    next_payout_date: payM ? toISO(payM[1]) : null,
+    _detected: (name || "") + (idM ? ` \u00b7 Rest ID ${idM[1]}` : ""),
+  };
+}
+
+function parseZomato(rows: unknown[][]): Parsed {
+  const find = (re: RegExp): unknown => {
+    for (let i = 0; i < rows.length; i++) {
+      const b = String(rows[i]?.[1] ?? "").trim();
+      if (re.test(b)) {
+        let c = rows[i]?.[2];
+        if ((c === "" || c == null) && rows[i + 1]) c = rows[i + 1]?.[2];
+        return c;
+      }
+    }
+    return null;
+  };
+  const period = String(find(/report period/i) ?? "");
+  const pm = period.match(/(\d{1,2}\s+[A-Za-z]+\s+\d{4})\s*[-\u2013]\s*(\d{1,2}\s+[A-Za-z]+\s+\d{4})/);
+  return {
+    period_start: pm ? toISO(pm[1]) : null,
+    period_end: pm ? toISO(pm[2]) : null,
+    total_orders: cleanNum(find(/total orders/i)),
+    net_payout: cleanNum(find(/net\s*pay-?out/i)),
+    bank_utr: (String(find(/bank\s*utr/i) ?? "").trim()) || null,
+    _detected: `${String(find(/res\s*name/i) || "").trim()} \u00b7 Res id ${String(find(/^res\s*id/i) || "").trim()}`,
+  };
+}
 
 export default function PayoutTab({ user }: { user: Staff }) {
   const canViewAll = user.role === "Owner" || user.role === "Manager";
@@ -47,6 +129,9 @@ export default function PayoutTab({ user }: { user: Staff }) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<Form>({});
   const [saving, setSaving] = useState(false);
+  const [pasteText, setPasteText] = useState("");
+  const [detected, setDetected] = useState("");
+  const [parseErr, setParseErr] = useState("");
 
   const canEdit = canViewAll || myOutlets.includes(outlet);
 
@@ -75,9 +160,11 @@ export default function PayoutTab({ user }: { user: Staff }) {
     return { repOrders, repValue, actualOrders, actualValue, ordersDiff, valueDiff, days: inRange.length };
   };
 
-  const openAdd = () => { setEditingId(null); setForm({}); setShowForm(true); };
+  const resetParse = () => { setPasteText(""); setDetected(""); setParseErr(""); };
+  const openAdd = () => { setEditingId(null); setForm({}); resetParse(); setShowForm(true); };
   const openEdit = (p: Payout) => {
     setEditingId(p.id);
+    resetParse();
     setForm({
       period_start: p.period_start || "", period_end: p.period_end || "",
       total_orders: p.total_orders?.toString() || "",
@@ -88,8 +175,50 @@ export default function PayoutTab({ user }: { user: Staff }) {
     });
     setShowForm(true);
   };
-  const closeForm = () => { setShowForm(false); setEditingId(null); setForm({}); };
+  const closeForm = () => { setShowForm(false); setEditingId(null); setForm({}); resetParse(); };
   const setF = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }));
+
+  const applyParsed = (r: Parsed) => {
+    setForm((f) => ({
+      ...f,
+      period_start: r.period_start || f.period_start || "",
+      period_end: r.period_end || f.period_end || "",
+      total_orders: r.total_orders != null ? String(r.total_orders) : (f.total_orders || ""),
+      ...(platform === "swiggy"
+        ? {
+            customer_payable: r.customer_payable ?? "", swiggy_service_fee: r.swiggy_service_fee ?? "",
+            other_charges_refund: r.other_charges_refund ?? "", govt_taxes: r.govt_taxes ?? "",
+            amount_transferable: r.amount_transferable ?? "", next_payout_cycle: r.next_payout_cycle ?? "",
+            next_payout_date: r.next_payout_date ?? "",
+          }
+        : { net_payout: r.net_payout != null ? String(r.net_payout) : "", bank_utr: r.bank_utr ?? "" }),
+    }));
+    setDetected(r._detected || "");
+  };
+
+  const extractSwiggy = () => {
+    const r = parseSwiggy(pasteText);
+    if (!r.period_start) { setParseErr("Couldn't find a period — paste the full email body."); return; }
+    setParseErr("");
+    applyParsed(r);
+  };
+  const uploadZomato = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const buf = await file.arrayBuffer();
+      const wb = XLSX.read(buf, { type: "array" });
+      const sheetName = wb.SheetNames.find((n) => /summary/i.test(n)) || wb.SheetNames[0];
+      const rows = XLSX.utils.sheet_to_json(wb.Sheets[sheetName], { header: 1, raw: true, defval: "" }) as unknown[][];
+      const r = parseZomato(rows);
+      if (!r.period_start) { setParseErr("Couldn't read the Summary sheet — is this the right file?"); return; }
+      setParseErr("");
+      applyParsed(r);
+    } catch (err) {
+      setParseErr("Could not read file: " + (err instanceof Error ? err.message : String(err)));
+    }
+    e.target.value = "";
+  };
 
   const save = async () => {
     if (!form.period_start || !form.period_end) { alert("Period start and end are required."); return; }
@@ -99,7 +228,7 @@ export default function PayoutTab({ user }: { user: Staff }) {
       outlet_id: outlet, platform,
       period_start: form.period_start, period_end: form.period_end,
       total_orders: int(form.total_orders),
-      entry_method: "manual", entered_by: user.id, updated_at: new Date().toISOString(),
+      entry_method: pasteText || detected ? "upload" : "manual", entered_by: user.id, updated_at: new Date().toISOString(),
     };
     const payload = platform === "swiggy"
       ? { ...base,
@@ -171,6 +300,25 @@ export default function PayoutTab({ user }: { user: Staff }) {
       {showForm && (
         <div className="bg-[#131316] border border-zinc-800 p-5 mb-6 max-w-3xl">
           <p className={`font-mono text-xs uppercase tracking-widest ${accent} mb-4`}>{editingId ? "Edit" : "Add"} {platform} payout · {OUTLET_NAMES[outlet]}</p>
+
+          {/* Auto-fill */}
+          {!editingId && (
+            <div className="border border-zinc-800 bg-black/40 p-4 mb-5">
+              <p className={lblCls}>{platform === "swiggy" ? "Paste Swiggy email, then Extract" : "Upload Zomato .xlsx"}</p>
+              {platform === "swiggy" ? (
+                <div className="space-y-2">
+                  <textarea value={pasteText} onChange={(e) => setPasteText(e.target.value)} rows={4} placeholder="Paste the full Swiggy weekly payout email here…" className={inputCls + " font-mono text-xs"} />
+                  <button onClick={extractSwiggy} className="text-[11px] font-mono uppercase tracking-widest px-3 py-2 border border-orange-400 text-orange-400 hover:bg-zinc-900 transition-colors">Extract</button>
+                </div>
+              ) : (
+                <input type="file" accept=".xlsx,.xls" onChange={uploadZomato} className="block text-xs text-zinc-400 file:mr-3 file:py-2 file:px-3 file:border file:border-red-400 file:bg-transparent file:text-red-400 file:text-[11px] file:font-mono file:uppercase file:tracking-widest" />
+              )}
+              {detected && <p className="text-[11px] font-mono text-green-400 mt-2">Detected: {detected}</p>}
+              {parseErr && <p className="text-[11px] font-mono text-red-400 mt-2">{parseErr}</p>}
+              <p className="text-[10px] font-mono text-zinc-600 mt-2">Check the outlet above matches, then review fields below before saving.</p>
+            </div>
+          )}
+
           <div className="grid grid-cols-2 gap-4 mb-4">
             <div><label className={lblCls}>Period Start</label><input type="date" value={form.period_start || ""} onChange={(e) => setF("period_start", e.target.value)} className={inputCls} /></div>
             <div><label className={lblCls}>Period End</label><input type="date" value={form.period_end || ""} onChange={(e) => setF("period_end", e.target.value)} className={inputCls} /></div>
@@ -226,7 +374,6 @@ export default function PayoutTab({ user }: { user: Staff }) {
                 </div>
               </div>
 
-              {/* Platform fields */}
               <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm mb-4">
                 <div className="flex justify-between"><span className="text-zinc-500">Total Orders</span><span>{p.total_orders ?? "—"}</span></div>
                 {platform === "swiggy" ? (
@@ -247,7 +394,6 @@ export default function PayoutTab({ user }: { user: Staff }) {
                 )}
               </div>
 
-              {/* Reconciliation */}
               <div className="border-t border-zinc-800 pt-3">
                 <p className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-2">Reported vs Actual · {rc.days} day{rc.days === 1 ? "" : "s"} of reports</p>
                 <div className="grid grid-cols-3 gap-2 text-xs font-mono">
@@ -261,7 +407,7 @@ export default function PayoutTab({ user }: { user: Staff }) {
 
                   <div className="text-zinc-400">{platform === "swiggy" ? "Value (gross)" : "Value"}</div>
                   <div className="text-right">{fmt(rc.repValue)}</div>
-                  <div className={`text-right ${valueOk ? "" : "text-red-400"}`}>{fmt(rc.actualValue)}{valueOk ? "" : ` (${rc.valueDiff > 0 ? "+" : "−"}${fmt(Math.abs(rc.valueDiff))})`}</div>
+                  <div className={`text-right ${valueOk ? "" : "text-red-400"}`}>{fmt(rc.actualValue)}{valueOk ? "" : ` (${rc.valueDiff > 0 ? "+" : "\u2212"}${fmt(Math.abs(rc.valueDiff))})`}</div>
                 </div>
                 {platform === "swiggy" && (
                   <p className="text-[10px] font-mono text-zinc-600 mt-2">Net transferable {fmt(p.amount_transferable)} (after fees/taxes — shown for reference, flag is on gross).</p>
