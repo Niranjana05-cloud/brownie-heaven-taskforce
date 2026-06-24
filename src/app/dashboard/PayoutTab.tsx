@@ -25,9 +25,12 @@ type Rep = {
   swiggy_sales_count: number; swiggy_sales_value: number;
   zomato_sales_count: number; zomato_sales_value: number;
 };
+type Form = Record<string, string>;
 
 const fmt = (n: number | null | undefined) => "₹" + Math.round(Number(n) || 0).toLocaleString("en-IN");
 const prettyD = (d: string) => new Date(d + "T00:00:00").toLocaleDateString("en-IN", { day: "numeric", month: "short" });
+const num = (s: string | undefined) => { const v = parseFloat(String(s ?? "").replace(/,/g, "")); return isNaN(v) ? null : v; };
+const int = (s: string | undefined) => { const v = parseInt(String(s ?? "").replace(/,/g, "")); return isNaN(v) ? null : v; };
 
 export default function PayoutTab({ user }: { user: Staff }) {
   const canViewAll = user.role === "Owner" || user.role === "Manager";
@@ -39,6 +42,13 @@ export default function PayoutTab({ user }: { user: Staff }) {
   const [payouts, setPayouts] = useState<Payout[]>([]);
   const [reports, setReports] = useState<Rep[]>([]);
   const [loading, setLoading] = useState(false);
+
+  const [showForm, setShowForm] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [form, setForm] = useState<Form>({});
+  const [saving, setSaving] = useState(false);
+
+  const canEdit = canViewAll || myOutlets.includes(outlet);
 
   const load = useCallback(async () => {
     if (!outlet) return;
@@ -65,7 +75,58 @@ export default function PayoutTab({ user }: { user: Staff }) {
     return { repOrders, repValue, actualOrders, actualValue, ordersDiff, valueDiff, days: inRange.length };
   };
 
+  const openAdd = () => { setEditingId(null); setForm({}); setShowForm(true); };
+  const openEdit = (p: Payout) => {
+    setEditingId(p.id);
+    setForm({
+      period_start: p.period_start || "", period_end: p.period_end || "",
+      total_orders: p.total_orders?.toString() || "",
+      customer_payable: p.customer_payable?.toString() || "", swiggy_service_fee: p.swiggy_service_fee?.toString() || "",
+      other_charges_refund: p.other_charges_refund?.toString() || "", govt_taxes: p.govt_taxes?.toString() || "",
+      amount_transferable: p.amount_transferable?.toString() || "", next_payout_cycle: p.next_payout_cycle || "",
+      next_payout_date: p.next_payout_date || "", net_payout: p.net_payout?.toString() || "", bank_utr: p.bank_utr || "",
+    });
+    setShowForm(true);
+  };
+  const closeForm = () => { setShowForm(false); setEditingId(null); setForm({}); };
+  const setF = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }));
+
+  const save = async () => {
+    if (!form.period_start || !form.period_end) { alert("Period start and end are required."); return; }
+    if (form.period_end < form.period_start) { alert("Period end is before start."); return; }
+    setSaving(true);
+    const base = {
+      outlet_id: outlet, platform,
+      period_start: form.period_start, period_end: form.period_end,
+      total_orders: int(form.total_orders),
+      entry_method: "manual", entered_by: user.id, updated_at: new Date().toISOString(),
+    };
+    const payload = platform === "swiggy"
+      ? { ...base,
+          customer_payable: num(form.customer_payable), swiggy_service_fee: num(form.swiggy_service_fee),
+          other_charges_refund: num(form.other_charges_refund), govt_taxes: num(form.govt_taxes),
+          amount_transferable: num(form.amount_transferable), next_payout_cycle: form.next_payout_cycle || null,
+          next_payout_date: form.next_payout_date || null }
+      : { ...base, net_payout: num(form.net_payout), bank_utr: form.bank_utr || null };
+
+    let error;
+    if (editingId) {
+      const r = await supabase.from("outlet_payouts").update(payload as Record<string, unknown>).eq("id", editingId);
+      error = r.error;
+    } else {
+      const r = await supabase.from("outlet_payouts").upsert(payload as Record<string, unknown>, { onConflict: "outlet_id,platform,period_start,period_end" });
+      error = r.error;
+    }
+    setSaving(false);
+    if (error) { alert("Error: " + error.message); return; }
+    closeForm();
+    load();
+  };
+
   const accent = platform === "swiggy" ? "text-orange-400" : "text-red-400";
+  const accentBorder = platform === "swiggy" ? "border-orange-400" : "border-red-400";
+  const inputCls = "w-full bg-black border border-zinc-800 text-white px-3 py-2 focus:outline-none focus:border-yellow-400 transition-colors text-sm";
+  const lblCls = "block text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-1";
 
   if (!outlet) {
     return (
@@ -83,12 +144,15 @@ export default function PayoutTab({ user }: { user: Staff }) {
           <h2 className="text-2xl md:text-3xl font-black tracking-tight">Payout</h2>
           <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mt-1">Weekly · reported vs actual</p>
         </div>
+        {canEdit && !showForm && (
+          <button onClick={openAdd} className={`text-[11px] font-mono uppercase tracking-widest px-3 py-2 border ${accentBorder} ${accent} hover:bg-zinc-900 transition-colors`}>+ Add Entry</button>
+        )}
       </div>
 
       {/* Platform toggle */}
       <div className="flex gap-2 mb-4">
         {(["swiggy", "zomato"] as const).map((pf) => (
-          <button key={pf} onClick={() => setPlatform(pf)}
+          <button key={pf} onClick={() => { setPlatform(pf); closeForm(); }}
             className={`px-4 py-2 text-xs font-mono uppercase tracking-widest border transition-colors ${platform === pf ? (pf === "swiggy" ? "border-orange-400 text-orange-400" : "border-red-400 text-red-400") : "border-zinc-800 text-zinc-500 hover:text-white"}`}>
             {pf}
           </button>
@@ -97,15 +161,47 @@ export default function PayoutTab({ user }: { user: Staff }) {
 
       {/* Outlet selector */}
       <div className="mb-6">
-        <label className="block text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-1">Outlet</label>
-        <select value={outlet} onChange={(e) => setOutlet(e.target.value)}
-          className="w-full max-w-xs bg-black border border-zinc-800 text-white px-3 py-2 focus:outline-none focus:border-yellow-400 transition-colors text-sm">
+        <label className={lblCls}>Outlet</label>
+        <select value={outlet} onChange={(e) => { setOutlet(e.target.value); closeForm(); }} className={inputCls + " max-w-xs"}>
           {visibleOutlets.map((o) => <option key={o} value={o}>{OUTLET_NAMES[o] || o}</option>)}
         </select>
       </div>
 
+      {/* Add / Edit form */}
+      {showForm && (
+        <div className="bg-[#131316] border border-zinc-800 p-5 mb-6 max-w-3xl">
+          <p className={`font-mono text-xs uppercase tracking-widest ${accent} mb-4`}>{editingId ? "Edit" : "Add"} {platform} payout · {OUTLET_NAMES[outlet]}</p>
+          <div className="grid grid-cols-2 gap-4 mb-4">
+            <div><label className={lblCls}>Period Start</label><input type="date" value={form.period_start || ""} onChange={(e) => setF("period_start", e.target.value)} className={inputCls} /></div>
+            <div><label className={lblCls}>Period End</label><input type="date" value={form.period_end || ""} onChange={(e) => setF("period_end", e.target.value)} className={inputCls} /></div>
+            <div><label className={lblCls}>Total Orders</label><input inputMode="numeric" value={form.total_orders || ""} onChange={(e) => setF("total_orders", e.target.value)} className={inputCls} /></div>
+
+            {platform === "swiggy" ? (
+              <>
+                <div><label className={lblCls}>Customer Payable</label><input inputMode="decimal" value={form.customer_payable || ""} onChange={(e) => setF("customer_payable", e.target.value)} className={inputCls} /></div>
+                <div><label className={lblCls}>Service Fee</label><input inputMode="decimal" value={form.swiggy_service_fee || ""} onChange={(e) => setF("swiggy_service_fee", e.target.value)} className={inputCls} /></div>
+                <div><label className={lblCls}>Other Charges / Refund</label><input inputMode="decimal" value={form.other_charges_refund || ""} onChange={(e) => setF("other_charges_refund", e.target.value)} className={inputCls} /></div>
+                <div><label className={lblCls}>Govt Taxes</label><input inputMode="decimal" value={form.govt_taxes || ""} onChange={(e) => setF("govt_taxes", e.target.value)} className={inputCls} /></div>
+                <div><label className={lblCls}>Amount Transferable</label><input inputMode="decimal" value={form.amount_transferable || ""} onChange={(e) => setF("amount_transferable", e.target.value)} className={inputCls} /></div>
+                <div><label className={lblCls}>Next Payout Cycle</label><input value={form.next_payout_cycle || ""} onChange={(e) => setF("next_payout_cycle", e.target.value)} className={inputCls} /></div>
+                <div><label className={lblCls}>Next Payout Date</label><input type="date" value={form.next_payout_date || ""} onChange={(e) => setF("next_payout_date", e.target.value)} className={inputCls} /></div>
+              </>
+            ) : (
+              <>
+                <div><label className={lblCls}>Net Pay-out</label><input inputMode="decimal" value={form.net_payout || ""} onChange={(e) => setF("net_payout", e.target.value)} className={inputCls} /></div>
+                <div className="col-span-2"><label className={lblCls}>Bank UTR</label><input value={form.bank_utr || ""} onChange={(e) => setF("bank_utr", e.target.value)} className={inputCls} /></div>
+              </>
+            )}
+          </div>
+          <div className="flex gap-2">
+            <button onClick={save} disabled={saving} className="text-[11px] font-mono uppercase tracking-widest px-4 py-2 bg-yellow-400 text-black font-bold hover:bg-yellow-300 transition-colors disabled:opacity-50">{saving ? "Saving…" : "Save"}</button>
+            <button onClick={closeForm} className="text-[11px] font-mono uppercase tracking-widest px-4 py-2 border border-zinc-700 text-zinc-400 hover:text-white transition-colors">Cancel</button>
+          </div>
+        </div>
+      )}
+
       {loading && <p className="text-zinc-600 font-mono text-xs">Loading…</p>}
-      {!loading && payouts.length === 0 && (
+      {!loading && payouts.length === 0 && !showForm && (
         <p className="text-zinc-600 font-mono text-xs">No {platform} payouts entered for {OUTLET_NAMES[outlet]} yet.</p>
       )}
 
@@ -122,9 +218,12 @@ export default function PayoutTab({ user }: { user: Staff }) {
                   <p className={`font-mono text-xs uppercase tracking-widest ${accent}`}>{platform}</p>
                   <p className="text-lg font-bold mt-0.5">{prettyD(p.period_start)} – {prettyD(p.period_end)}</p>
                 </div>
-                <span className={`text-[10px] font-mono uppercase tracking-widest px-2 py-1 border ${allOk ? "border-green-500/40 text-green-400" : "border-red-500/40 text-red-400"}`}>
-                  {allOk ? "✓ matched" : "⚠ mismatch"}
-                </span>
+                <div className="flex items-center gap-2">
+                  {canEdit && <button onClick={() => openEdit(p)} className="text-[10px] font-mono uppercase tracking-widest px-2 py-1 border border-zinc-700 text-zinc-400 hover:text-white transition-colors">Edit</button>}
+                  <span className={`text-[10px] font-mono uppercase tracking-widest px-2 py-1 border ${allOk ? "border-green-500/40 text-green-400" : "border-red-500/40 text-red-400"}`}>
+                    {allOk ? "✓ matched" : "⚠ mismatch"}
+                  </span>
+                </div>
               </div>
 
               {/* Platform fields */}
