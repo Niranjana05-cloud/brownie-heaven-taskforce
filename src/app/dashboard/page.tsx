@@ -35,6 +35,7 @@ const ALL_STAFF = [
   { id: "gowtham", name: "Gowtham", role: "Purchase Manager", report_time: "22:00", outlets: [] },
   { id: "vishnu", name: "Vishnu", role: "Asst. Ops Manager", report_time: "22:00", outlets: ["velachery","perumbakkam","tambaram","porur"] },
   { id: "ahila", name: "Ahila", role: "Custom Cakes & Asst Ops", report_time: "22:00", outlets: ["royapettah","adayar","bsr_mall","besant_nagar"] },
+  { id: "niranjana", name: "Niranjana", role: "Founder's Office", report_time: null, outlets: [] },
 ];
 
 const OUTLETS = ["royapettah","adayar","bsr_mall","velachery","ra_puram","anna_nagar","pallavaram","vadapalani","besant_nagar","perumbakkam","tambaram","porur"];
@@ -742,7 +743,7 @@ else await fetchOutletReportsByDate(outletEntryDate);
   const overdue = tasks.filter(t => t.status !== "completed" && new Date(t.due_at) < new Date()).length;
   const rate = total > 0 ? Math.round(completed / total * 100) : 0;
   const canAssign = user?.role === "Owner" || user?.role === "Manager";
-  const hasReportDuty = user?.role !== "Owner";
+  const hasReportDuty = user?.role !== "Owner" && user?.role !== "Founder's Office";
   const reportFields = user ? REPORT_FIELDS[user.id] || [] : [];
   const reportInput = (f: { label: string; key: string }) => {
     if (user && user.id === "arun" && f.key === "achievement") {
