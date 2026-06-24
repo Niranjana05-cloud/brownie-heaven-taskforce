@@ -490,14 +490,16 @@ const runTargetCheck = async (u: Staff) => {
     setSalesTargets(map);
   };
 
-  const saveSalesTarget = async (outletId: string, brand: string, items: any[]) => {
+ const saveSalesTarget = async (outletId: string, brand: string, li: any) => {
     setStSaving(true);
     const curMonth = new Date().toISOString().slice(0, 7);
-    const updated = items.map((it: any) => {
-      const v = stEditValues[it.name];
-      if (v !== undefined && v !== "") return { ...it, months: { ...it.months, [curMonth]: parseFloat(v.replace(/,/g, "")) || 0 } };
-      return it;
-    });
+    const num = (k: string, fb: number) => { const v = stEditValues[k]; return v !== undefined && v !== "" ? (parseFloat(String(v).replace(/,/g, "")) || 0) : fb; };
+    const f = li?.fixed || {}; const t = li?.targets || {};
+    const updated = {
+      sales: { ...(li?.sales || {}), [curMonth]: { net: num("net", Number(li?.sales?.[curMonth]?.net) || 0), online: num("online", Number(li?.sales?.[curMonth]?.online) || 0) } },
+      fixed: { staff: num("staff", Number(f.staff) || 0), rent: num("rent", Number(f.rent) || 0), eb: num("eb", Number(f.eb) || 0), transport: num("transport", Number(f.transport) || 0), pest: num("pest", Number(f.pest) || 0), water: num("water", Number(f.water) || 0), airtel: num("airtel", Number(f.airtel) || 0) },
+      targets: { a: num("a", Number(t.a) || 0), b: num("b", Number(t.b) || 0) },
+    };
     const { error } = await supabase.from("sales_target").upsert({ outlet_id: outletId, brand, line_items: updated, updated_at: new Date().toISOString() }, { onConflict: "outlet_id,brand" });
     setStSaving(false);
     if (error) { alert("Error: " + error.message); return; }
@@ -1067,57 +1069,87 @@ else await fetchOutletReportsByDate(outletEntryDate);
             {(canAssign ? OUTLETS : (user.outlets || [])).map((oid: string) => (
               <div key={oid} className="mb-8">
                 <h3 className="text-lg font-bold mb-3">{OUTLET_NAMES[oid] || oid}</h3>
-                {["BH", "CBH"].map((brand) => {
-                  const items = salesTargets[oid]?.[brand];
-                  if (!items) return null;
+              {["BH", "CBH"].map((brand) => {
+                  const li = salesTargets[oid]?.[brand];
+                  if (!li) return null;
                   const key = `${oid}_${brand}`;
                   const editing = stEditing === key;
-                  const curMonth = new Date().toLocaleString("en-IN", { month: "short" });
+                  const mk = new Date().toISOString().slice(0, 7);
+                  const ml = new Date().toLocaleString("en-IN", { month: "short" });
+                  const net = Number(li.sales?.[mk]?.net) || 0;
+                  const online = Number(li.sales?.[mk]?.online) || 0;
+                  const f = li.fixed || {}; const t = li.targets || {};
+                  const cogs = 0.294 * net, wastage = 0.05 * net, comm = 0.5 * online;
+                  const contrib = net - cogs - wastage - comm;
+                  const rm = 0.2 * (Number(f.rent) || 0);
+                  const totalFixed = (Number(f.staff)||0)+(Number(f.rent)||0)+(Number(f.eb)||0)+(Number(f.transport)||0)+rm+(Number(f.pest)||0)+(Number(f.water)||0)+(Number(f.airtel)||0);
+                  const netProfit = contrib - totalFixed;
+                  const cMargin = net ? contrib / net : 0;
+                  const nMargin = net ? netProfit / net : 0;
+                  const cmSame = cMargin > 0 ? cMargin : 0.156;
+                  const cmDine = 0.656;
+                  const ta = Number(t.a) || 0, tb = Number(t.b) || 0;
+                  const req = (p: number, cm: number) => cm > 0 ? (totalFixed + p) / cm : 0;
+                  const m = (n: number) => Math.round(n).toLocaleString("en-IN");
+                  const inp = (k: string, fb: number) => editing
+                    ? <input type="number" defaultValue={fb || ""} onChange={(e) => setStEditValues(prev => ({ ...prev, [k]: e.target.value }))} className="w-24 bg-black border border-zinc-700 text-white px-2 py-1 text-right focus:outline-none focus:border-yellow-400" placeholder="0" />
+                    : <span>{m(fb)}</span>;
+                  const row = (label: string, val: any, opts?: { neg?: boolean; bold?: boolean }) => (
+                    <tr key={label} className="border-t border-zinc-800/60">
+                      <td className={`px-4 py-2 ${opts?.bold ? "text-white font-bold" : "text-zinc-300"}`}>{label}</td>
+                      <td className={`px-4 py-2 text-right font-mono ${opts?.neg ? "text-red-400" : opts?.bold ? "text-yellow-400 font-bold" : ""}`}>{val}</td>
+                    </tr>
+                  );
                   return (
                     <div key={brand} className="bg-[#131316] border border-zinc-800 mb-5 overflow-x-auto">
                       <div className="flex justify-between items-center px-4 py-3 border-b border-zinc-800">
                         <span className="font-mono text-xs uppercase tracking-widest text-yellow-400">{brand}</span>
                         {editing ? (
                           <div className="flex gap-2">
-                            <button onClick={() => saveSalesTarget(oid, brand, items)} disabled={stSaving} className="bg-yellow-400 text-black font-bold text-[10px] px-3 py-1.5 uppercase tracking-widest disabled:opacity-50">{stSaving ? "Saving..." : "Save"}</button>
+                            <button onClick={() => saveSalesTarget(oid, brand, li)} disabled={stSaving} className="bg-yellow-400 text-black font-bold text-[10px] px-3 py-1.5 uppercase tracking-widest disabled:opacity-50">{stSaving ? "Saving..." : "Save"}</button>
                             <button onClick={() => { setStEditing(null); setStEditValues({}); }} className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest px-2">Cancel</button>
                           </div>
                         ) : (
-                         (user.outlets || []).includes(oid) ? <button onClick={() => { setStEditing(key); setStEditValues({}); }} className="text-[10px] font-mono text-zinc-400 uppercase tracking-widest border border-zinc-700 px-3 py-1.5 hover:border-yellow-400 hover:text-yellow-400">Edit {curMonth}</button> : <span className="text-[10px] font-mono text-zinc-600 uppercase tracking-widest">View only</span>
+                          (canAssign || (user.outlets || []).includes(oid)) ? <button onClick={() => { setStEditing(key); setStEditValues({}); }} className="text-[10px] font-mono text-zinc-400 uppercase tracking-widest border border-zinc-700 px-3 py-1.5 hover:border-yellow-400 hover:text-yellow-400">Edit {ml}</button> : <span className="text-[10px] font-mono text-zinc-600 uppercase tracking-widest">View only</span>
                         )}
                       </div>
                       <table className="w-full text-sm">
-                        <thead>
-                          <tr className="text-[10px] font-mono text-zinc-500 uppercase">
-                            <th className="text-left px-4 py-2">Line item</th>
-                            <th className="text-right px-4 py-2">Average</th>
-                            <th className="text-right px-4 py-2">{curMonth}</th>
-                          </tr>
-                        </thead>
+                        <thead><tr className="text-[10px] font-mono text-zinc-500 uppercase"><th className="text-left px-4 py-2">Line item</th><th className="text-right px-4 py-2">{ml}</th></tr></thead>
                         <tbody>
-                          {items.map((it: any) => {
-                            const vals = Object.values(it.months || {}).map(Number);
-                            const avg = vals.length ? vals.reduce((a: number, b: number) => a + b, 0) / vals.length : 0;
-                            const curKey = new Date().toISOString().slice(0, 7);
-                            const curVal = it.months?.[curKey];
-                            return (
-                              <tr key={it.name} className="border-t border-zinc-800/60">
-                                <td className="px-4 py-2 text-zinc-300">{it.name}</td>
-                                <td className="px-4 py-2 text-right font-mono">{Math.round(avg).toLocaleString("en-IN")}</td>
-                                <td className="px-4 py-2 text-right font-mono">
-                                  {editing ? (
-                                    <input type="number" defaultValue={curVal ?? ""} onChange={(e) => setStEditValues(prev => ({ ...prev, [it.name]: e.target.value }))} className="w-28 bg-black border border-zinc-700 text-white px-2 py-1 text-right focus:outline-none focus:border-yellow-400" placeholder="—" />
-                                  ) : (curVal !== undefined ? Math.round(curVal).toLocaleString("en-IN") : "—")}
-                                </td>
-                              </tr>
-                            );
-                          })}
+                          {row("Net Sales (excl GST)", inp("net", net))}
+                          {row("Online Sales (Swiggy+Zomato, excl GST)", inp("online", online))}
+                          {row("Less: COGS (food cost) @ 29.4%", m(cogs), { neg: true })}
+                          {row("Less: Wastage @ 5%", m(wastage), { neg: true })}
+                          {row("Less: Commission @ 50% (online)", m(comm), { neg: true })}
+                          {row("Contribution (before fixed)", m(contrib), { bold: true })}
+                          {row("   Contribution margin %", (cMargin * 100).toFixed(1) + "%")}
+                          {row("Less: Staff salaries", inp("staff", Number(f.staff) || 0), { neg: true })}
+                          {row("Less: Rent", inp("rent", Number(f.rent) || 0), { neg: true })}
+                          {row("Less: Electricity / EB", inp("eb", Number(f.eb) || 0), { neg: true })}
+                          {row("Less: Transport", inp("transport", Number(f.transport) || 0), { neg: true })}
+                          {row("Less: Repair & Maintenance (20% of rent)", m(rm), { neg: true })}
+                          {row("Less: Pest control", inp("pest", Number(f.pest) || 0), { neg: true })}
+                          {row("Less: Water", inp("water", Number(f.water) || 0), { neg: true })}
+                          {row("Less: Airtel / WiFi", inp("airtel", Number(f.airtel) || 0), { neg: true })}
+                          {row("NET PROFIT / (LOSS)", m(netProfit), { bold: true })}
+                          {row("   Net margin %", (nMargin * 100).toFixed(1) + "%")}
                         </tbody>
                       </table>
+                      <div className="px-4 py-3 border-t border-zinc-800">
+                        <p className="font-mono text-[10px] uppercase tracking-widest text-zinc-500 mb-2">Sales needed to hit target profit</p>
+                        <div className="mb-3 text-xs text-zinc-400 flex gap-4 items-center">Target A: {inp("a", ta)} &nbsp; Target B: {inp("b", tb)}</div>
+                        <table className="w-full text-xs">
+                          <thead><tr className="text-[10px] font-mono text-zinc-500 uppercase"><th className="text-left px-2 py-1">Goal</th><th className="text-right px-2 py-1">Same mix</th><th className="text-right px-2 py-1">Via dine-in</th></tr></thead>
+                          <tbody>
+                            <tr className="border-t border-zinc-800/60"><td className="px-2 py-1 text-zinc-300">Breakeven (₹0)</td><td className="px-2 py-1 text-right font-mono">{m(req(0, cmSame))}</td><td className="px-2 py-1 text-right font-mono">{m(req(0, cmDine))}</td></tr>
+                            <tr className="border-t border-zinc-800/60"><td className="px-2 py-1 text-zinc-300">Profit = A ({m(ta)})</td><td className="px-2 py-1 text-right font-mono">{m(req(ta, cmSame))}</td><td className="px-2 py-1 text-right font-mono">{m(req(ta, cmDine))}</td></tr>
+                            <tr className="border-t border-zinc-800/60"><td className="px-2 py-1 text-zinc-300">Profit = B ({m(tb)})</td><td className="px-2 py-1 text-right font-mono">{m(req(tb, cmSame))}</td><td className="px-2 py-1 text-right font-mono">{m(req(tb, cmDine))}</td></tr>
+                          </tbody>
+                        </table>
+                      </div>
                     </div>
                   );
                 })}
-                {!salesTargets[oid] && <p className="text-zinc-600 font-mono text-xs">No data loaded yet for this outlet.</p>}
               </div>
             ))}
           </div>
