@@ -224,6 +224,9 @@ export default function DashboardPage() {
   const [outletSubmitting, setOutletSubmitting] = useState(false);
   const [outletEntryDate, setOutletEntryDate] = useState<string>(() => new Date().toISOString().split("T")[0]);
   const [outletWasOff, setOutletWasOff] = useState(false);
+  const [reviews, setReviews] = useState<any[]>([]);
+  const [revForm, setRevForm] = useState<{ platform: string; rating: string; valid: boolean; refund: boolean; note: string }>({ platform: "Swiggy", rating: "5", valid: false, refund: false, note: "" });
+  const [revSaving, setRevSaving] = useState(false);
   const [targetCheck, setTargetCheck] = useState<any[] | null>(null);
   const [targetReaction, setTargetReaction] = useState(false);
   const [outletHistoryDate, setOutletHistoryDate] = useState<string>(new Date().toISOString().split("T")[0]);
@@ -252,6 +255,7 @@ export default function DashboardPage() {
    if (parsed.role === "Owner" || parsed.role === "Manager") fetchAllOutletReports();
   }, [router]);
 
+ useEffect(() => { if (activeOutlet) fetchReviews(activeOutlet, outletEntryDate); else setReviews([]); }, [activeOutlet, outletEntryDate]);
   useEffect(() => {
     if (!user) return;
     const interval = setInterval(() => { fetchTasks(user); fetchReports(user); }, 30000);
@@ -614,6 +618,40 @@ const runTargetCheck = async (u: Staff) => {
     delete updated[outletId];
     return updated;
   });
+};
+const reviewPoints = (rating: number, valid: boolean) => {
+  let p = 0;
+  if (rating === 5) p += 5; else if (rating === 4) p += 3; else if (rating >= 1 && rating <= 2) p -= 5;
+  if (valid) p -= 10;
+  return p;
+};
+const fetchReviews = async (outlet: string, date: string) => {
+  if (!outlet) { setReviews([]); return; }
+  const { data } = await supabase.from("outlet_reviews").select("*").eq("outlet_id", outlet).eq("report_date", date).order("created_at", { ascending: false });
+  setReviews(data || []);
+};
+const saveReview = async () => {
+  if (!user || !activeOutlet) return;
+  const _owner = ALL_STAFF.find(s => (s.outlets as string[] | undefined)?.includes(activeOutlet));
+  setRevSaving(true);
+  const { error } = await supabase.from("outlet_reviews").insert({
+    outlet_id: activeOutlet,
+    staff_id: _owner ? _owner.id : user.id,
+    report_date: outletEntryDate,
+    platform: revForm.platform,
+    rating: parseInt(revForm.rating) || null,
+    valid_complaint: revForm.valid,
+    refund_given: revForm.refund,
+    note: revForm.note || null,
+  });
+  setRevSaving(false);
+  if (error) { alert("Error: " + error.message); return; }
+  setRevForm({ platform: "Swiggy", rating: "5", valid: false, refund: false, note: "" });
+  fetchReviews(activeOutlet, outletEntryDate);
+};
+const deleteReview = async (id: string) => {
+  await supabase.from("outlet_reviews").delete().eq("id", id);
+  fetchReviews(activeOutlet, outletEntryDate);
 };
 const submitOutletReport = async () => {
   if (!user || !activeOutlet) return;
@@ -1595,6 +1633,33 @@ else await fetchOutletReportsByDate(outletEntryDate);
         <button onClick={submitOutletReport} disabled={outletSubmitting} className="bg-yellow-400 text-black font-bold tracking-widest text-xs px-6 py-3 hover:opacity-90 transition-opacity uppercase disabled:opacity-50">
           {outletSubmitting ? "Submitting..." : `Submit ${OUTLET_NAMES[activeOutlet] || activeOutlet.replace(/_/g, " ")} Report →`}
         </button>
+        {(user.outlets || []).includes(activeOutlet) && (
+          <div className="mt-8 border-t border-zinc-800 pt-6">
+            <p className="text-sm font-bold uppercase tracking-widest mb-1">Swiggy / Zomato Reviews</p>
+            <p className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-4">5★ +5 · 4★ +3 · under 2★ −5 · valid complaint −10 (stacks) · for {new Date(outletEntryDate + "T00:00:00").toLocaleDateString("en-IN", { day: "numeric", month: "short" })}</p>
+            <div className="bg-black/30 border border-zinc-800 p-4 mb-3 grid grid-cols-1 md:grid-cols-2 gap-3">
+              <select value={revForm.platform} onChange={e => setRevForm(p => ({ ...p, platform: e.target.value }))} className="bg-black border border-zinc-800 text-white px-3 py-2 text-sm"><option>Swiggy</option><option>Zomato</option></select>
+              <select value={revForm.rating} onChange={e => setRevForm(p => ({ ...p, rating: e.target.value }))} className="bg-black border border-zinc-800 text-white px-3 py-2 text-sm"><option value="5">5 ★</option><option value="4">4 ★</option><option value="3">3 ★</option><option value="2">2 ★</option><option value="1">1 ★</option></select>
+              <input type="text" value={revForm.note} onChange={e => setRevForm(p => ({ ...p, note: e.target.value }))} placeholder="Note (optional)" className="bg-black border border-zinc-800 text-white px-3 py-2 text-sm md:col-span-2" />
+              <label className="flex items-center gap-2 text-xs text-zinc-300"><input type="checkbox" checked={revForm.valid} onChange={e => setRevForm(p => ({ ...p, valid: e.target.checked }))} /> Valid complaint (our mistake) −10</label>
+              <label className="flex items-center gap-2 text-xs text-zinc-300"><input type="checkbox" checked={revForm.refund} onChange={e => setRevForm(p => ({ ...p, refund: e.target.checked }))} /> Refund given</label>
+            </div>
+            <button onClick={saveReview} disabled={revSaving} className="bg-yellow-400 text-black font-bold text-[10px] px-4 py-2 uppercase tracking-widest disabled:opacity-50 mb-4">{revSaving ? "Adding..." : "+ Add Review"}</button>
+            {reviews.length > 0 && (
+              <div className="space-y-2">
+                {reviews.map(rv => { const pts = reviewPoints(Number(rv.rating), rv.valid_complaint); return (
+                  <div key={rv.id} className="flex items-center justify-between bg-black/30 border border-zinc-800 px-3 py-2 text-xs">
+                    <div className="text-zinc-300">{rv.platform} · {rv.rating}★{rv.valid_complaint ? " · valid complaint" : ""}{rv.refund_given ? " · refunded" : ""}{rv.note ? ` · ${rv.note}` : ""}</div>
+                    <div className="flex items-center gap-3">
+                      <span className={pts >= 0 ? "text-green-400 font-bold" : "text-red-400 font-bold"}>{pts >= 0 ? "+" : ""}{pts}</span>
+                      <button onClick={() => deleteReview(rv.id)} className="text-zinc-600 hover:text-red-400">✕</button>
+                    </div>
+                  </div>
+                ); })}
+              </div>
+            )}
+          </div>
+        )}
       </div>
     )}
   </div>
