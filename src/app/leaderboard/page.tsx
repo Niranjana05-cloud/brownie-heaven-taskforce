@@ -39,7 +39,7 @@ type Row = {
   id: string; name: string; role: string;
   myReports: number; myLate: number; dailyPoints: number;
   outlets: number; outletLate: number; targetMet: number; targetMiss: number;
-  tasks: number; ratingPoints: number; backfills: number; adjustments: number; points: number;
+  tasks: number; ratingPoints: number; backfills: number; adjustments: number; points: number; missing: boolean;
 };
 
 export default function LeaderboardPage() {
@@ -101,7 +101,7 @@ export default function LeaderboardPage() {
 
     const map: Record<string, Row> = {};
     ALL_STAFF.filter(s => s.role !== "Owner").forEach(s => {
-      map[s.id] = { id: s.id, name: s.name, role: s.role, myReports: 0, myLate: 0, dailyPoints: 0, outlets: 0, outletLate: 0, targetMet: 0, targetMiss: 0, tasks: 0, ratingPoints: 0, backfills: 0, adjustments: 0, points: 0 };
+      map[s.id] = { id: s.id, name: s.name, role: s.role, myReports: 0, myLate: 0, dailyPoints: 0, outlets: 0, outletLate: 0, targetMet: 0, targetMiss: 0, tasks: 0, ratingPoints: 0, backfills: 0, adjustments: 0, points: 0, missing: false };
     });
 
     const dayMap: Record<string, { sid: string; at: string; late: boolean; backfill: boolean }> = {};
@@ -192,6 +192,16 @@ export default function LeaderboardPage() {
     const arunOwn = arunRow ? arunRow.points : 0;
     const teamTotal = all.reduce((s, r) => (r.id === "arun" ? s : s + r.points), 0) + arunOwn;
     if (arunRow) arunRow.points = teamTotal;
+    const _now2 = new Date();
+    const _todayStr2 = _now2.toISOString().split("T")[0];
+    const _afterNoon = _now2.getHours() >= 12;
+    const _after10 = _now2.getHours() >= 22;
+    const _filedDaily = new Set<string>();
+    (repRes.data || []).forEach((r: any) => { const d = r.report_date || (r.submitted_at ? r.submitted_at.split("T")[0] : ""); if (d === _todayStr2) _filedDaily.add(r.staff_id); });
+    const _outletFiled = new Set<string>();
+    (outRes.data || []).forEach((o: any) => { if (o.report_date === _todayStr2) _outletFiled.add(o.outlet_id); });
+    const _MGR_OUTLETS: Record<string, string[]> = { nilani: ["ra_puram","anna_nagar","pallavaram","vadapalani"], vishnu: ["velachery","perumbakkam","tambaram","porur"], ahila: ["royapettah","adayar","bsr_mall","besant_nagar"] };
+    all.forEach(r => { const md = _after10 && !_filedDaily.has(r.id); const mo = _afterNoon && (_MGR_OUTLETS[r.id] || []).some(o => !_outletFiled.has(o)); r.missing = md || mo; });
     setArun(arunRow || null);
     setRows(all.filter(r => r.id !== "arun").sort((a, b) => b.points - a.points));
     setLoading(false);
@@ -303,7 +313,7 @@ export default function LeaderboardPage() {
                 <tr key={r.id} style={i === 0 ? { background: "rgba(250,204,21,0.08)" } : {}}>
                   <td style={{ ...td, textAlign: "left", color: C.accent }}>{i + 1}</td>
                   <td style={{ ...td, textAlign: "left" }}>
-                    {r.name}
+                    {r.name}{r.missing && <span style={{ marginLeft: "8px", background: "#ef4444", color: "#fff", fontSize: "9px", fontWeight: "bold", padding: "2px 6px", borderRadius: "3px", verticalAlign: "middle" }}>🚩 NOT FILED</span>}
                     <div style={{ color: C.muted, fontSize: "11px" }}>{r.role}</div>
                   </td>
                   <td style={td}>{r.myReports + r.outlets}</td>
