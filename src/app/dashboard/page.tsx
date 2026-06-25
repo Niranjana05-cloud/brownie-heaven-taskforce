@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@supabase/supabase-js";
 import { celebrate } from "../celebrate";
 import PayoutTab from "./PayoutTab";
+import FounderDashboard from "./FounderDashboard";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -925,7 +926,8 @@ else await fetchOutletReportsByDate(outletEntryDate);
 
       <main className="flex-1 px-4 py-4 md:px-8 md:py-8 overflow-auto">
 
-        {activeTab === "tasks" && (
+       {activeTab === "tasks" && user && user.role === "Founder's Office" && <FounderDashboard user={user} />}
+        {activeTab === "tasks" && user?.role !== "Founder's Office" && (
           <div>
             <div className="flex justify-between items-start mb-6 pb-5 border-b border-zinc-800">
               <div>
