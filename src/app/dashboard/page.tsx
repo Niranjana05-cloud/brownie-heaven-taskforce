@@ -223,14 +223,14 @@ export default function DashboardPage() {
   const [outletReports, setOutletReports] = useState<Record<string, OutletReport>>({});
   const [outletReportData, setOutletReportData] = useState<Record<string, string>>({});
   const [outletSubmitting, setOutletSubmitting] = useState(false);
-  const [outletEntryDate, setOutletEntryDate] = useState<string>(() => new Date().toISOString().split("T")[0]);
+  const [outletEntryDate, setOutletEntryDate] = useState<string>(() => new Date(Date.now() - 86400000).toISOString().split("T")[0]);
   const [outletWasOff, setOutletWasOff] = useState(false);
   const [reviews, setReviews] = useState<any[]>([]);
   const [revForm, setRevForm] = useState<{ platform: string; rating: string; valid: boolean; refund: boolean; note: string }>({ platform: "Swiggy", rating: "5", valid: false, refund: false, note: "" });
   const [revSaving, setRevSaving] = useState(false);
   const [targetCheck, setTargetCheck] = useState<any[] | null>(null);
   const [targetReaction, setTargetReaction] = useState(false);
-  const [outletHistoryDate, setOutletHistoryDate] = useState<string>(new Date().toISOString().split("T")[0]);
+  const [outletHistoryDate, setOutletHistoryDate] = useState<string>(new Date(Date.now() - 86400000).toISOString().split("T")[0]);
   const [lastOutletRatings, setLastOutletRatings] = useState<Record<string, OutletReport>>({});
   const [allOutletReports, setAllOutletReports] = useState<OutletReport[]>([]);
   const [historyDate, setHistoryDate] = useState<string>(new Date().toISOString().split("T")[0]);
@@ -251,7 +251,7 @@ export default function DashboardPage() {
     fetchReports(parsed);
    fetchAttendance(parsed, new Date(Date.now() - 86400000).toISOString().split("T")[0]);
    fetchSalesTargets(parsed);
-   fetchOutletReports(parsed);
+  fetchOutletReportsByDate(new Date(Date.now() - 86400000).toISOString().split("T")[0], parsed);
     fetchLastOutletRatings(parsed);
    if (parsed.role === "Owner" || parsed.role === "Manager") fetchAllOutletReports();
   }, [router]);
@@ -353,12 +353,12 @@ export default function DashboardPage() {
     .order("submitted_at", { ascending: false });
   setAllOutletReports(data || []);
 };
-  const fetchOutletReportsByDate = async (date: string) => {
-  if (!user) return;
+  const fetchOutletReportsByDate = async (date: string, u: Staff | null = user) => {
+  if (!u) return;
   const { data } = await supabase
     .from("outlet_reports")
     .select("*")
-    .eq("staff_id", user.id)
+    .eq("staff_id", u.id)
     .eq("report_date", date);
   const map: Record<string, OutletReport> = {};
   (data || []).forEach((r: OutletReport) => { map[r.outlet_id] = r; });
@@ -425,9 +425,10 @@ const fetchOutletReports = async (u: Staff) => {
     const _today = new Date().toISOString().split("T")[0];
     const _date = reportHistoryDate || _today;
     const _isBackfill = _date < _today;
+    const _yest = new Date(Date.now() - 86400000).toISOString().split("T")[0];
     const deadline = new Date();
-    deadline.setHours(22, 0, 0, 0);
-    const isLate = !_isBackfill && new Date() > deadline;
+  deadline.setHours(12, 0, 0, 0);
+  const _afterNoon = new Date() > deadline;
     const { data: _existing } = await supabase.from("reports").select("id").eq("staff_id", user.id).eq("report_date", _date);
     const _isEdit = (_existing?.length || 0) > 0;
     const finalData: Record<string, string> = { ...reportData };
@@ -678,7 +679,8 @@ const submitOutletReport = async () => {
     .order("report_date", { ascending: false }).limit(1);
   const prevRating = prevRows && prevRows[0] ? Number(prevRows[0].bh_google_rating) || 0 : 0;
   const earnedBonus = newRating > 4.5 && newRating > prevRating;
-  const isBackfill = outletEntryDate < new Date().toISOString().split("T")[0];
+  const isBackfill = outletEntryDate < _yest;
+  const isLate = !isBackfill && outletEntryDate === _yest && _afterNoon;
   const payload = {
     shop_sales_count: parseInt(d.shop_sales_count?.replace(/,/g, "")) || 0,
     shop_sales_value: parseFloat(d.shop_sales_value?.replace(/,/g, "")) || 0,
@@ -1621,7 +1623,7 @@ else await fetchOutletReportsByDate(outletEntryDate);
         <div className="mb-4">
           <label className="block text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-1">Report Date</label>
          <input type="date" max={new Date().toISOString().split("T")[0]} value={outletEntryDate} onChange={(e) => { setOutletEntryDate(e.target.value); setOutletHistoryDate(e.target.value); setOutletWasOff(false); fetchOutletReportsByDate(e.target.value); }} className="bg-black border border-zinc-800 text-white px-3 py-2 focus:outline-none focus:border-yellow-400 transition-colors text-sm" />
-          {outletEntryDate < new Date().toISOString().split("T")[0] && (
+          {outletEntryDate < new Date(Date.now() - 86400000).toISOString().split("T")[0] && (
             <div className="mt-3">
               <p className="text-[11px] font-mono text-zinc-400 uppercase tracking-widest mb-1.5">Were you off on this day?</p>
               <div className="flex gap-2">
