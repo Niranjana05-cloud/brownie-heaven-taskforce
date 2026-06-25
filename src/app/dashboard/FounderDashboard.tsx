@@ -126,6 +126,8 @@ export default function FounderDashboard({ user }: { user: Staff }) {
         <input type="date" max={today} value={date} onChange={e => setDate(e.target.value)} className="bg-black border border-zinc-800 text-white px-3 py-2 focus:outline-none focus:border-yellow-400 text-sm font-mono" />
       </div>
 
+      <p className="text-[11px] font-mono text-zinc-500 mb-5 border-l-2 border-yellow-400/40 pl-3">📊 Outlet sales reflect the <span className="text-yellow-400">previous day&apos;s</span> business — figures below are {new Date(d0.getTime() - 86400000).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}&apos;s sales, filed this morning.</p>
+
       {loading ? <p className="text-zinc-600 font-mono text-sm">Loading…</p> : (
         <>
           <div className="flex flex-wrap gap-3 mb-5">
