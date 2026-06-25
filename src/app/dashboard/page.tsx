@@ -426,8 +426,9 @@ const fetchOutletReports = async (u: Staff) => {
     const _date = reportHistoryDate || _today;
     const _isBackfill = _date < _today;
     const _yest = new Date(Date.now() - 86400000).toISOString().split("T")[0];
+    const _yest = new Date(Date.now() - 86400000).toISOString().split("T")[0];
     const deadline = new Date();
-  deadline.setHours(12, 0, 0, 0);
+   deadline.setHours(12, 0, 0, 0);
   const _afterNoon = new Date() > deadline;
     const { data: _existing } = await supabase.from("reports").select("id").eq("staff_id", user.id).eq("report_date", _date);
     const _isEdit = (_existing?.length || 0) > 0;
