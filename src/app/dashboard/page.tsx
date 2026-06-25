@@ -199,6 +199,7 @@ export default function DashboardPage() {
   const [todayAttendance, setTodayAttendance] = useState<any>(null);
   const [attendanceDate, setAttendanceDate] = useState<string>(() => { const d = new Date(); d.setDate(d.getDate() - 1); return d.toISOString().split("T")[0]; });
   const [salesTargets, setSalesTargets] = useState<Record<string, any>>({});
+  const [bhMonthSales, setBhMonthSales] = useState<Record<string, { net: number; online: number }>>({});
   const [stEditing, setStEditing] = useState<string | null>(null);
   const [stEditValues, setStEditValues] = useState<Record<string, string>>({});
   const [stSaving, setStSaving] = useState(false);
@@ -494,6 +495,18 @@ const runTargetCheck = async (u: Staff) => {
       map[row.outlet_id][row.brand] = row.line_items;
     });
     setSalesTargets(map);
+    const _mk = new Date().toISOString().slice(0, 7);
+    let q2 = supabase.from("outlet_reports").select("outlet_id,shop_sales_value,swiggy_sales_value,zomato_sales_value").gte("report_date", _mk + "-01");
+    if (!isViewer) q2 = q2.in("outlet_id", outlets);
+    const { data: rep } = await q2;
+    const bh: Record<string, { net: number; online: number }> = {};
+    (rep || []).forEach((r: any) => {
+      const online = (Number(r.swiggy_sales_value) || 0) + (Number(r.zomato_sales_value) || 0);
+      const net = (Number(r.shop_sales_value) || 0) + online;
+      if (!bh[r.outlet_id]) bh[r.outlet_id] = { net: 0, online: 0 };
+      bh[r.outlet_id].net += net; bh[r.outlet_id].online += online;
+    });
+    setBhMonthSales(bh);
   };
 
  const saveSalesTarget = async (outletId: string, brand: string, li: any) => {
@@ -1105,7 +1118,7 @@ else await fetchOutletReportsByDate(outletEntryDate);
             <div className="flex justify-between items-start mb-6 pb-5 border-b border-zinc-800">
               <div>
                 <h2 className="text-2xl md:text-3xl font-black tracking-tight">Sales Target</h2>
-                <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mt-1">Average updates as you enter {new Date().toLocaleString("en-IN", { month: "long" })}</p>
+            <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mt-1">BH Net &amp; Online auto-fill from daily reports · fixed costs &amp; targets are edit-once</p>
               </div>
             </div>
             {(canAssign ? OUTLETS : (user.outlets || [])).map((oid: string) => (
@@ -1118,8 +1131,9 @@ else await fetchOutletReportsByDate(outletEntryDate);
                   const editing = stEditing === key;
                   const mk = new Date().toISOString().slice(0, 7);
                   const ml = new Date().toLocaleString("en-IN", { month: "short" });
-                  const net = Number(li.sales?.[mk]?.net) || 0;
-                  const online = Number(li.sales?.[mk]?.online) || 0;
+                  const isBH = brand === "BH";
+                  const net = isBH ? (bhMonthSales[oid]?.net || 0) : (Number(li.sales?.[mk]?.net) || 0);
+                  const online = isBH ? (bhMonthSales[oid]?.online || 0) : (Number(li.sales?.[mk]?.online) || 0);
                   const f = li.fixed || {}; const t = li.targets || {};
                   const cogs = 0.294 * net, wastage = 0.05 * net, comm = 0.5 * online;
                   const contrib = net - cogs - wastage - comm;
@@ -1158,8 +1172,8 @@ else await fetchOutletReportsByDate(outletEntryDate);
                       <table className="w-full text-sm">
                         <thead><tr className="text-[10px] font-mono text-zinc-500 uppercase"><th className="text-left px-4 py-2">Line item</th><th className="text-right px-4 py-2">{ml}</th></tr></thead>
                         <tbody>
-                          {row("Net Sales (excl GST)", inp("net", net))}
-                          {row("Online Sales (Swiggy+Zomato, excl GST)", inp("online", online))}
+                          {row(isBH ? "Net Sales (excl GST) · auto" : "Net Sales (excl GST)", isBH ? <span className="text-green-400">{m(net)}</span> : inp("net", net))}
+                          {row(isBH ? "Online Sales (Swiggy+Zomato) · auto" : "Online Sales (Swiggy+Zomato, excl GST)", isBH ? <span className="text-green-400">{m(online)}</span> : inp("online", online))}
                           {row("Less: COGS (food cost) @ 29.4%", m(cogs), { neg: true })}
                           {row("Less: Wastage @ 5%", m(wastage), { neg: true })}
                           {row("Less: Commission @ 50% (online)", m(comm), { neg: true })}
