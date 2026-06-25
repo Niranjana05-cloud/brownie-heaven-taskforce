@@ -198,8 +198,9 @@ export default function DashboardPage() {
   const [attendanceSubmitting, setAttendanceSubmitting] = useState(false);
   const [todayAttendance, setTodayAttendance] = useState<any>(null);
   const [attendanceDate, setAttendanceDate] = useState<string>(() => { const d = new Date(); d.setDate(d.getDate() - 1); return d.toISOString().split("T")[0]; });
- const [salesTargets, setSalesTargets] = useState<Record<string, any>>({});
+  const [salesTargets, setSalesTargets] = useState<Record<string, any>>({});
   const [stEditing, setStEditing] = useState<string | null>(null);
+  const [stDate, setStDate] = useState<string>(() => new Date().toISOString().split("T")[0]);
   const [stEditValues, setStEditValues] = useState<Record<string, string>>({});
   const [stSaving, setStSaving] = useState(false);
   const [todayReport, setTodayReport] = useState<Report | null>(null);
@@ -498,11 +499,10 @@ const runTargetCheck = async (u: Staff) => {
 
  const saveSalesTarget = async (outletId: string, brand: string, li: any) => {
     setStSaving(true);
-    const curMonth = new Date().toISOString().slice(0, 7);
     const num = (k: string, fb: number) => { const v = stEditValues[k]; return v !== undefined && v !== "" ? (parseFloat(String(v).replace(/,/g, "")) || 0) : fb; };
     const f = li?.fixed || {}; const t = li?.targets || {};
     const updated = {
-      sales: { ...(li?.sales || {}), [curMonth]: { net: num("net", Number(li?.sales?.[curMonth]?.net) || 0), online: num("online", Number(li?.sales?.[curMonth]?.online) || 0) } },
+      sales: { ...(li?.sales || {}), [stDate]: { net: num("net", Number(li?.sales?.[stDate]?.net) || 0), online: num("online", Number(li?.sales?.[stDate]?.online) || 0) } },
       fixed: { staff: num("staff", Number(f.staff) || 0), rent: num("rent", Number(f.rent) || 0), eb: num("eb", Number(f.eb) || 0), transport: num("transport", Number(f.transport) || 0), pest: num("pest", Number(f.pest) || 0), water: num("water", Number(f.water) || 0), airtel: num("airtel", Number(f.airtel) || 0) },
       targets: { a: num("a", Number(t.a) || 0), b: num("b", Number(t.b) || 0) },
     };
@@ -1105,7 +1105,11 @@ else await fetchOutletReportsByDate(outletEntryDate);
             <div className="flex justify-between items-start mb-6 pb-5 border-b border-zinc-800">
               <div>
                 <h2 className="text-2xl md:text-3xl font-black tracking-tight">Sales Target</h2>
-            <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mt-1">Enter Net &amp; Online sales · COGS, wastage &amp; commission auto-calculate · fixed costs &amp; targets edit-once</p>
+            <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mt-1">Net &amp; Online filled per day · P&amp;L sums the whole month · fixed costs &amp; targets edit-once</p>
+              </div>
+              <div className="text-right">
+                <label className="block text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-1">Sales day</label>
+                <input type="date" max={new Date().toISOString().split("T")[0]} value={stDate} onChange={(e) => { setStDate(e.target.value); setStEditing(null); setStEditValues({}); }} className="bg-black border border-zinc-800 text-white px-3 py-2 focus:outline-none focus:border-yellow-400 text-sm font-mono" />
               </div>
             </div>
             {(canAssign ? OUTLETS : (user.outlets || [])).map((oid: string) => (
@@ -1116,10 +1120,15 @@ else await fetchOutletReportsByDate(outletEntryDate);
                   if (!li) return null;
                   const key = `${oid}_${brand}`;
                   const editing = stEditing === key;
-                  const mk = new Date().toISOString().slice(0, 7);
-                  const ml = new Date().toLocaleString("en-IN", { month: "short" });
-                  const net = Number(li.sales?.[mk]?.net) || 0;
-                  const online = Number(li.sales?.[mk]?.online) || 0;
+                  const mk = stDate.slice(0, 7);
+                  const ml = new Date(stDate + "T00:00:00").toLocaleString("en-IN", { month: "short" });
+                  const dayLbl = new Date(stDate + "T00:00:00").toLocaleDateString("en-IN", { day: "numeric", month: "short" });
+                  const dayNet = Number(li.sales?.[stDate]?.net) || 0;
+                  const dayOnline = Number(li.sales?.[stDate]?.online) || 0;
+                  const _sales = li.sales || {};
+                  const _mKeys = Object.keys(_sales).filter(d => d.length === 10 && d.startsWith(mk));
+                  const net = _mKeys.reduce((s, d) => s + (Number(_sales[d]?.net) || 0), 0);
+                  const online = _mKeys.reduce((s, d) => s + (Number(_sales[d]?.online) || 0), 0);
                   const f = li.fixed || {}; const t = li.targets || {};
                   const cogs = 0.294 * net, wastage = 0.05 * net, comm = 0.5 * online;
                   const contrib = net - cogs - wastage - comm;
@@ -1152,14 +1161,17 @@ else await fetchOutletReportsByDate(outletEntryDate);
                             <button onClick={() => { setStEditing(null); setStEditValues({}); }} className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest px-2">Cancel</button>
                           </div>
                         ) : (
-                          (canAssign || (user.outlets || []).includes(oid)) ? <button onClick={() => { setStEditing(key); setStEditValues({}); }} className="text-[10px] font-mono text-zinc-400 uppercase tracking-widest border border-zinc-700 px-3 py-1.5 hover:border-yellow-400 hover:text-yellow-400">Edit {ml}</button> : <span className="text-[10px] font-mono text-zinc-600 uppercase tracking-widest">View only</span>
+                          (canAssign || (user.outlets || []).includes(oid)) ? <button onClick={() => { setStEditing(key); setStEditValues({}); }} className="text-[10px] font-mono text-zinc-400 uppercase tracking-widest border border-zinc-700 px-3 py-1.5 hover:border-yellow-400 hover:text-yellow-400">Edit {dayLbl}</button> : <span className="text-[10px] font-mono text-zinc-600 uppercase tracking-widest">View only</span>
                         )}
                       </div>
                       <table className="w-full text-sm">
                         <thead><tr className="text-[10px] font-mono text-zinc-500 uppercase"><th className="text-left px-4 py-2">Line item</th><th className="text-right px-4 py-2">{ml}</th></tr></thead>
                         <tbody>
-                          {row("Net Sales (excl GST)", inp("net", net))}
-                          {row("Online Sales (Swiggy+Zomato, excl GST)", inp("online", online))}
+                         {row(`Net Sales (excl GST) · ${dayLbl}`, inp("net", dayNet))}
+                          {row(`Online Sales (Swiggy+Zomato) · ${dayLbl}`, inp("online", dayOnline))}
+                          <tr key="_pldiv" className="border-t border-zinc-800"><td colSpan={2} className="px-4 pt-3 pb-1 text-[10px] font-mono text-zinc-500 uppercase tracking-widest">Month-to-date P&amp;L · {ml}</td></tr>
+                          {row(`Net Sales — ${ml} total`, m(net))}
+                          {row(`Online Sales — ${ml} total`, m(online))}
                           {row("Less: COGS (food cost) @ 29.4%", m(cogs), { neg: true })}
                           {row("Less: Wastage @ 5%", m(wastage), { neg: true })}
                           {row("Less: Commission @ 50% (online)", m(comm), { neg: true })}
