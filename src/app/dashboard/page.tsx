@@ -425,11 +425,9 @@ const fetchOutletReports = async (u: Staff) => {
     const _today = new Date().toISOString().split("T")[0];
     const _date = reportHistoryDate || _today;
     const _isBackfill = _date < _today;
-    const _yest = new Date(Date.now() - 86400000).toISOString().split("T")[0];
-    const _yest = new Date(Date.now() - 86400000).toISOString().split("T")[0];
     const deadline = new Date();
-   deadline.setHours(12, 0, 0, 0);
-  const _afterNoon = new Date() > deadline;
+    deadline.setHours(22, 0, 0, 0);
+    const isLate = !_isBackfill && new Date() > deadline;
     const { data: _existing } = await supabase.from("reports").select("id").eq("staff_id", user.id).eq("report_date", _date);
     const _isEdit = (_existing?.length || 0) > 0;
     const finalData: Record<string, string> = { ...reportData };
@@ -669,9 +667,10 @@ const submitOutletReport = async () => {
   const _miss = _req.filter((f) => !(outletReportData as any)[f.k] || !String((outletReportData as any)[f.k]).trim());
   if (_miss.length) { alert("Please fill all sales fields before submitting.\n\nMissing: " + _miss.map((f) => f.label).join(", ")); return; }
   setOutletSubmitting(true);
+  const _yest = new Date(Date.now() - 86400000).toISOString().split("T")[0];
   const deadline = new Date();
   deadline.setHours(12, 0, 0, 0);
-  const isLate = new Date() > deadline;
+  const _afterNoon = new Date() > deadline;
   const d = outletReportData;
   const newRating = parseFloat(d.bh_google_rating) || 0;
   const todayStr = new Date().toISOString().split("T")[0];
