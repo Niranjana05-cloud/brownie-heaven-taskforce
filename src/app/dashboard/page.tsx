@@ -200,7 +200,7 @@ export default function DashboardPage() {
   const [attendanceDate, setAttendanceDate] = useState<string>(() => { const d = new Date(); d.setDate(d.getDate() - 1); return d.toISOString().split("T")[0]; });
   const [salesTargets, setSalesTargets] = useState<Record<string, any>>({});
   const [stEditing, setStEditing] = useState<string | null>(null);
-  const [stDate, setStDate] = useState<string>(() => new Date().toISOString().split("T")[0]);
+ const [stDate, setStDate] = useState<string>(() => new Date(Date.now() - 86400000).toISOString().split("T")[0]);
   const [stEditValues, setStEditValues] = useState<Record<string, string>>({});
   const [stSaving, setStSaving] = useState(false);
   const [todayReport, setTodayReport] = useState<Report | null>(null);
@@ -1130,10 +1130,15 @@ else await fetchOutletReportsByDate(outletEntryDate);
                   const net = _mKeys.reduce((s, d) => s + (Number(_sales[d]?.net) || 0), 0);
                   const online = _mKeys.reduce((s, d) => s + (Number(_sales[d]?.online) || 0), 0);
                   const f = li.fixed || {}; const t = li.targets || {};
+                  const isCBH = brand === "CBH";
+                  const fStaff = isCBH ? 0 : (Number(f.staff) || 0);
+                  const fRent = isCBH ? 0 : (Number(f.rent) || 0);
+                  const fEb = isCBH ? 0 : (Number(f.eb) || 0);
+                  const fTransport = isCBH ? 0 : (Number(f.transport) || 0);
                   const cogs = 0.294 * net, wastage = 0.05 * net, comm = 0.5 * online;
                   const contrib = net - cogs - wastage - comm;
-                  const rm = 0.2 * (Number(f.rent) || 0);
-                  const totalFixed = (Number(f.staff)||0)+(Number(f.rent)||0)+(Number(f.eb)||0)+(Number(f.transport)||0)+rm+(Number(f.pest)||0)+(Number(f.water)||0)+(Number(f.airtel)||0);
+                  const rm = 0.2 * fRent;
+                  const totalFixed = fStaff+fRent+fEb+fTransport+rm+(Number(f.pest)||0)+(Number(f.water)||0)+(Number(f.airtel)||0);
                   const netProfit = contrib - totalFixed;
                   const cMargin = net ? contrib / net : 0;
                   const nMargin = net ? netProfit / net : 0;
@@ -1177,10 +1182,10 @@ else await fetchOutletReportsByDate(outletEntryDate);
                           {row("Less: Commission @ 50% (online)", m(comm), { neg: true })}
                           {row("Contribution (before fixed)", m(contrib), { bold: true })}
                           {row("   Contribution margin %", (cMargin * 100).toFixed(1) + "%")}
-                          {row("Less: Staff salaries", inp("staff", Number(f.staff) || 0), { neg: true })}
-                          {row("Less: Rent", inp("rent", Number(f.rent) || 0), { neg: true })}
-                          {row("Less: Electricity / EB", inp("eb", Number(f.eb) || 0), { neg: true })}
-                          {row("Less: Transport", inp("transport", Number(f.transport) || 0), { neg: true })}
+                          {row("Less: Staff salaries", isCBH ? <span className="text-zinc-600">0</span> : inp("staff", Number(f.staff) || 0), { neg: !isCBH })}
+                          {row("Less: Rent", isCBH ? <span className="text-zinc-600">0</span> : inp("rent", Number(f.rent) || 0), { neg: !isCBH })}
+                          {row("Less: Electricity / EB", isCBH ? <span className="text-zinc-600">0</span> : inp("eb", Number(f.eb) || 0), { neg: !isCBH })}
+                          {row("Less: Transport", isCBH ? <span className="text-zinc-600">0</span> : inp("transport", Number(f.transport) || 0), { neg: !isCBH })}
                           {row("Less: Repair & Maintenance (20% of rent)", m(rm), { neg: true })}
                           {row("Less: Pest control", inp("pest", Number(f.pest) || 0), { neg: true })}
                           {row("Less: Water", inp("water", Number(f.water) || 0), { neg: true })}
