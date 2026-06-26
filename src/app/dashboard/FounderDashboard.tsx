@@ -40,6 +40,7 @@ export default function FounderDashboard({ user }: { user: Staff }) {
   const [month, setMonth] = useState<any[]>([]);
   const [daily, setDaily] = useState<any[]>([]);
   const [offRows, setOffRows] = useState<string[]>([]);
+  const [stFixed, setStFixed] = useState<Record<string, any>>({});
   const [revs, setRevs] = useState<any[]>([]);
   const [payouts, setPayouts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -52,15 +53,17 @@ export default function FounderDashboard({ user }: { user: Staff }) {
   useEffect(() => {
     (async () => {
       setLoading(true);
-     const [o, mo, d, r, p, off] = await Promise.all([
+     const [o, mo, d, r, p, off, st] = await Promise.all([
         supabase.from("outlet_reports").select("*").eq("report_date", date),
         supabase.from("outlet_reports").select("outlet_id,report_date,shop_sales_value,swiggy_sales_value,zomato_sales_value,swiggy_sales_count,zomato_sales_count").gte("report_date", monthStart).lte("report_date", date),
         supabase.from("reports").select("staff_id,report_date,is_late,is_backfill,no_points").eq("report_date", date),
         supabase.from("outlet_reviews").select("*").eq("report_date", date),
         supabase.from("outlet_payouts").select("outlet_id,platform,period_start,amount_transferable,net_payout").order("period_start", { ascending: false }).limit(60),
         supabase.from("day_off").select("staff_id").eq("off_date", date),
+        supabase.from("sales_target").select("outlet_id,line_items").eq("brand", "BH"),
       ]);
       setOut(o.data || []); setMonth(mo.data || []); setDaily(d.data || []); setRevs(r.data || []); setPayouts(p.data || []); setOffRows((off.data || []).map((x: any) => x.staff_id));
+      const fm: Record<string, any> = {}; (st.data || []).forEach((row: any) => { fm[row.outlet_id] = row.line_items?.fixed || {}; }); setStFixed(fm);
       setLoading(false);
     })();
   }, [date, monthStart]);
@@ -84,6 +87,24 @@ export default function FounderDashboard({ user }: { user: Staff }) {
   const shortfall = projected - MONTHLY_TARGET;
   const onTrack = projected >= MONTHLY_TARGET;
   const offlineRatio = mShop > 0 ? (mOnline / mShop) : 0;
+
+  const pnl = OUTLETS.map(o => {
+    const rows = month.filter((r: any) => r.outlet_id === o);
+    const oNet = rows.reduce((s: number, r: any) => s + (Number(r.shop_sales_value) || 0) + (Number(r.swiggy_sales_value) || 0) + (Number(r.zomato_sales_value) || 0), 0);
+    const oOnline = rows.reduce((s: number, r: any) => s + (Number(r.swiggy_sales_value) || 0) + (Number(r.zomato_sales_value) || 0), 0);
+    const f = stFixed[o] || {};
+    const fixed = (Number(f.staff) || 0) + (Number(f.rent) || 0) + (Number(f.eb) || 0) + (Number(f.transport) || 0) + 0.2 * (Number(f.rent) || 0) + (Number(f.pest) || 0) + (Number(f.water) || 0) + (Number(f.airtel) || 0);
+    const comm = 0.5 * oOnline;
+    const contribution = oNet - 0.294 * oNet - 0.05 * oNet - comm;
+    const netProfit = contribution - fixed;
+    return { o, name: OUTLET_NAMES[o] || o, net: oNet, online: oOnline, fixed, comm, contribution, netProfit, reported: rows.length };
+  });
+  const totalProfit = pnl.reduce((s, p) => s + p.netProfit, 0);
+  const bleeders = pnl.filter(p => p.netProfit < 0).sort((a, b) => a.netProfit - b.netProfit);
+  const worstPnl = bleeders[0];
+  const noFixedCount = OUTLETS.filter(o => { const f = stFixed[o] || {}; return !((Number(f.staff) || 0) + (Number(f.rent) || 0) + (Number(f.pest) || 0)); }).length;
+  const whyBleed = (p: any) => { if (!p) return ""; if (p.comm > p.contribution + p.fixed) return "aggregator commission (50% on online) is the killer — too online-dependent."; if (p.fixed > p.contribution) return "fixed costs (rent/staff) outweigh what sales bring in — rent is high or sales too low to cover it."; return "sales are simply too low this month to cover its costs."; };
+  const fixBleed = (p: any) => { if (!p) return ""; if (p.comm > p.contribution + p.fixed) return "Shift mix toward dine-in/takeaway (commission-free) and cut discounting on the apps."; if (p.fixed > p.contribution) return "Drive volume hard (footfall + online) to cover fixed costs, or review the cost base for that site."; return "Push both channels — promotions, visibility, counter upsell — to lift the topline."; };
 
   const filedDaily = new Set(daily.filter(x => !x.no_points).map(x => x.staff_id));
   const filedOutlets = new Set(out.map(r => r.outlet_id));
@@ -143,6 +164,15 @@ export default function FounderDashboard({ user }: { user: Staff }) {
     put("Month to date: " + rsL(mtd) + " of " + rsL(MONTHLY_TARGET) + " (" + targetPct.toFixed(1) + "%)  |  Projected " + rsL(projected), 10);
     const offNames = offRows.map((id: string) => (DUTY_STAFF.find(s => s.id === id)?.name) || id);
     put("Off today: " + (offNames.length ? offNames.join(", ") : "none"), 10, false, offNames.length ? [170, 110, 0] : [30, 30, 30]);
+    y += 8;
+    put("PROFIT / LOSS -- MONTH TO DATE", 12, true, [0, 0, 0]);
+    put((totalProfit >= 0 ? "Making " : "Losing ") + rs(Math.abs(totalProfit)) + " net this month (all outlets).", 11, true, totalProfit >= 0 ? [40, 120, 40] : [180, 60, 60]);
+    if (worstPnl) {
+      put("Bleeding most: " + worstPnl.name + " (" + rs(worstPnl.netProfit) + ") -- " + whyBleed(worstPnl), 10, false, [180, 60, 60]);
+      put("Rectification: " + fixBleed(worstPnl), 10, false, [150, 110, 0]);
+      if (bleeders.length > 1) put("Also in red: " + bleeders.slice(1, 4).map(b => b.name + " (" + rs(b.netProfit) + ")").join(", "), 9, false, [150, 60, 60]);
+    } else { put("No outlet is in the red this month.", 10, false, [40, 120, 40]); }
+    if (noFixedCount > 0) put("Note: fixed costs not entered for " + noFixedCount + " outlet(s) -- profit is overstated until added in Sales Target.", 8, false, [170, 110, 0]);
     y += 8;
     put("SALES VS TARGET", 12, true, [0, 0, 0]);
     y += 4;
@@ -247,6 +277,19 @@ export default function FounderDashboard({ user }: { user: Staff }) {
             <Hero label="Month to date" value={lakh(mtd)} sub={`${dayOfMonth} days`} />
             <Hero label="Projected month-end" value={lakh(projected)} sub={onTrack ? "on track" : "below target"} accent={onTrack ? "text-green-400" : "text-red-400"} />
           </div>
+
+          <Card title="Profit / Loss — month to date (all outlets)">
+            <div className="flex items-baseline gap-3 mb-2">
+              <span className={`text-3xl font-black ${totalProfit >= 0 ? "text-green-400" : "text-red-400"}`}>{totalProfit >= 0 ? "Making " : "Losing "}{inr(Math.abs(totalProfit))}</span>
+              <span className="text-[11px] font-mono text-zinc-500">net this month</span>
+            </div>
+            {worstPnl ? (
+              <p className="text-xs text-zinc-300 mb-1"><span className="text-red-400 font-bold">Bleeding most: {worstPnl.name}</span> ({inr(worstPnl.netProfit)}) — {whyBleed(worstPnl)}</p>
+            ) : <p className="text-xs text-green-400 mb-1">No outlet is in the red this month.</p>}
+            {worstPnl && <p className="text-xs text-zinc-400 mb-2"><span className="text-yellow-400">Fix:</span> {fixBleed(worstPnl)}</p>}
+            {bleeders.length > 1 && <p className="text-[11px] font-mono text-zinc-500">Also in red: {bleeders.slice(1, 4).map(b => `${b.name} (${inr(b.netProfit)})`).join(", ")}</p>}
+            {noFixedCount > 0 && <p className="text-[10px] text-orange-400 mt-2">⚠ Fixed costs not entered for {noFixedCount} outlet(s) in Sales Target — their profit is overstated until you add rent/staff/etc.</p>}
+          </Card>
 
           <Card title={`Monthly target · ${d0.toLocaleDateString("en-IN", { month: "long" })}`}>
             <div className="flex justify-between text-xs mb-2"><span className="text-zinc-400">Achieved {lakh(mtd)}</span><span className="text-zinc-400">Target {lakh(MONTHLY_TARGET)}</span></div>
