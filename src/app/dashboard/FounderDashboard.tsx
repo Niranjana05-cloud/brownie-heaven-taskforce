@@ -102,6 +102,68 @@ export default function FounderDashboard({ user }: { user: Staff }) {
   const latestPay: Record<string, any> = {};
   payouts.forEach(p => { const k = p.outlet_id + "_" + p.platform; if (!latestPay[k]) latestPay[k] = p; });
 
+  const loadJsPDF = (): Promise<any> => new Promise((resolve, reject) => {
+    const w = window as any;
+    if (w.jspdf && w.jspdf.jsPDF) return resolve(w.jspdf.jsPDF);
+    const s = document.createElement("script");
+    s.src = "https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js";
+    s.onload = () => resolve((window as any).jspdf.jsPDF);
+    s.onerror = () => reject(new Error("pdf lib failed"));
+    document.body.appendChild(s);
+  });
+  const downloadPDF = async () => {
+    let jsPDF: any;
+    try { jsPDF = await loadJsPDF(); } catch { alert("Could not load the PDF tool — check your connection and retry."); return; }
+    const doc = new jsPDF({ unit: "pt", format: "a4" });
+    const W = doc.internal.pageSize.getWidth();
+    const M = 40; let y = 50;
+    const rs = (nn: number) => "Rs " + Math.round(nn).toLocaleString("en-IN");
+    const rsL = (nn: number) => "Rs " + (nn / 100000).toFixed(2) + " L";
+    const put = (txt: string, size = 10, bold = false, c: number[] = [30, 30, 30]) => {
+      doc.setFontSize(size); doc.setFont("helvetica", bold ? "bold" : "normal"); doc.setTextColor(c[0], c[1], c[2]);
+      const ls = doc.splitTextToSize(txt, W - 2 * M);
+      ls.forEach((l: string) => { if (y > 790) { doc.addPage(); y = 50; } doc.text(l, M, y); y += size + 5; });
+    };
+    const dlabel = new Date(date + "T00:00:00").toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+    put("BROWNIE HEAVEN", 18, true, [0, 0, 0]);
+    put("Daily Sales Report", 13, true, [110, 110, 110]);
+    put("For: " + dlabel, 10);
+    put("Generated: " + new Date().toLocaleString("en-IN"), 9, false, [150, 150, 150]);
+    y += 8;
+    put("SUMMARY", 12, true, [0, 0, 0]);
+    put("Total sales: " + rs(tTotal) + "  (Shop " + rs(tShop) + " / Swiggy " + rs(tSw) + " / Zomato " + rs(tZo) + ")");
+    put("Outlets reported: " + out.length + " / 12");
+    const dayTgt = OUTLETS.reduce((s, o) => { const r = out.find((x: any) => x.outlet_id === o); return s + (r && Number(r.target) ? Number(r.target) : (OUTLET_TARGETS[o] || 0)); }, 0);
+    const totGap = tTotal - dayTgt;
+    put("Day target (all outlets): " + rs(dayTgt) + " -- " + (totGap >= 0 ? "met (+" + rs(totGap) + ")" : rs(Math.abs(totGap)) + " short"), 10, false, totGap >= 0 ? [40, 120, 40] : [180, 60, 60]);
+    put("Month to date: " + rsL(mtd) + " of " + rsL(MONTHLY_TARGET) + " (" + targetPct.toFixed(1) + "%)  |  Projected " + rsL(projected), 10);
+    const offNames = offRows.map((id: string) => (DUTY_STAFF.find(s => s.id === id)?.name) || id);
+    put("Off today: " + (offNames.length ? offNames.join(", ") : "none"), 10, false, offNames.length ? [170, 110, 0] : [30, 30, 30]);
+    y += 8;
+    put("PER OUTLET", 12, true, [0, 0, 0]);
+    const weak: { name: string; gap: number; comment: string }[] = [];
+    OUTLETS.forEach((o) => {
+      const r = out.find((x: any) => x.outlet_id === o);
+      const name = OUTLET_NAMES[o] || o;
+      if (!r) { put(name + ": not reported -- follow up.", 10, true, [180, 60, 60]); weak.push({ name, gap: -1e9, comment: "not reported -- follow up" }); return; }
+      const shop = Number(r.shop_sales_value) || 0, sw = Number(r.swiggy_sales_value) || 0, zo = Number(r.zomato_sales_value) || 0;
+      const total = shop + sw + zo; const tgt = Number(r.target) || OUTLET_TARGETS[o] || 0;
+      const g = total - tgt;
+      let cmt: string;
+      if (tgt <= 0) cmt = rs(total) + " (no target set).";
+      else if (g >= 0) cmt = "Hit target -- " + rs(total) + " vs " + rs(tgt) + " (+" + rs(g) + "). Strong day, keep the momentum.";
+      else { const lever = (sw + zo) < shop ? "push Swiggy/Zomato -- combos & visibility" : "drive walk-ins & counter upsell"; cmt = rs(Math.abs(g)) + " short of " + rs(tgt) + " (" + Math.round(Math.abs(g) / tgt * 100) + "% under). Needs to " + lever + "."; weak.push({ name, gap: g, comment: cmt }); }
+      put(name + ": " + rs(total) + " / " + rs(tgt) + " target  [" + (g >= 0 ? "HIT" : "SHORT") + "]", 10, true);
+      put("    " + cmt, 9, false, g >= 0 ? [40, 120, 40] : [180, 60, 60]);
+    });
+    y += 8;
+    const worst = weak.filter(w => w.gap < 0).sort((a, b) => a.gap - b.gap).slice(0, 3);
+    if (worst.length) {
+      put("NEEDS ATTENTION (focus here)", 12, true, [180, 60, 60]);
+      worst.forEach((w, i) => put((i + 1) + ". " + w.name + " -- " + w.comment, 9));
+    }
+    doc.save("BrownieHeaven_Report_" + date + ".pdf");
+  };
   const Hero = ({ label, value, sub, accent }: any) => (
     <div className="flex-1 min-w-[150px] bg-gradient-to-b from-zinc-900 to-[#0e0e10] border border-zinc-800 p-5">
       <p className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-2">{label}</p>
@@ -125,7 +187,10 @@ export default function FounderDashboard({ user }: { user: Staff }) {
           <h2 className="text-2xl md:text-3xl font-black tracking-tight">Founder&apos;s Office</h2>
           <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mt-1">{dayLabel}</p>
         </div>
-        <input type="date" max={today} value={date} onChange={e => setDate(e.target.value)} className="bg-black border border-zinc-800 text-white px-3 py-2 focus:outline-none focus:border-yellow-400 text-sm font-mono" />
+       <div className="flex items-center gap-2">
+          <button onClick={downloadPDF} className="bg-yellow-400 text-black font-bold text-[10px] px-4 py-2.5 uppercase tracking-widest hover:opacity-90">📄 PDF for Nishant</button>
+          <input type="date" max={today} value={date} onChange={e => setDate(e.target.value)} className="bg-black border border-zinc-800 text-white px-3 py-2 focus:outline-none focus:border-yellow-400 text-sm font-mono" />
+        </div>
       </div>
 
       <p className="text-[11px] font-mono text-zinc-500 mb-5 border-l-2 border-yellow-400/40 pl-3">📊 Outlet sales reflect the <span className="text-yellow-400">previous day&apos;s</span> business — figures below are {new Date(d0.getTime() - 86400000).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}&apos;s sales, filed this morning.</p>
