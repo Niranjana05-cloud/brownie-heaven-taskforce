@@ -137,106 +137,148 @@ export default function FounderDashboard({ user }: { user: Staff }) {
     try { jsPDF = await loadJsPDF(); } catch { alert("Could not load the PDF tool — check your connection and retry."); return; }
     const doc = new jsPDF({ unit: "pt", format: "a4" });
     const W = doc.internal.pageSize.getWidth();
-    const M = 40; let y = 50;
+    const H = doc.internal.pageSize.getHeight();
+    const M = 40;
     const rs = (nn: number) => "Rs " + Math.round(nn).toLocaleString("en-IN");
     const rsL = (nn: number) => "Rs " + (nn / 100000).toFixed(2) + " L";
-    const put = (txt: string, size = 10, bold = false, c: number[] = [30, 30, 30]) => {
+    const txt = (s: string, x: number, yy: number, size: number, bold = false, c: number[] = [30, 30, 30], align: any = "left") => {
       doc.setFontSize(size); doc.setFont("helvetica", bold ? "bold" : "normal"); doc.setTextColor(c[0], c[1], c[2]);
-      const ls = doc.splitTextToSize(txt, W - 2 * M);
-      ls.forEach((l: string) => { if (y > 790) { doc.addPage(); y = 50; } doc.text(l, M, y); y += size + 5; });
+      doc.text(s, x, yy, { align });
     };
-   const _gen = new Date(date + "T00:00:00");
+    const _gen = new Date(date + "T00:00:00");
     const _data = new Date(_gen.getTime() - 86400000);
     const _dataLbl = _data.toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
-    const _genLbl = _gen.toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
-    doc.setFillColor(250, 204, 21); doc.rect(0, 0, W, 8, "F");
-    put("BROWNIE HEAVEN", 18, true, [0, 0, 0]);
-    put("Daily Sales Report", 13, true, [110, 110, 110]);
-    put("Sales data for: " + _dataLbl + "  (previous day)", 11, true, [0, 0, 0]);
-    put("Filed / generated on: " + _genLbl, 9, false, [150, 150, 150]);
-    y += 8;
-    put("SUMMARY", 12, true, [0, 0, 0]);
-    put("Total sales: " + rs(tTotal) + "  (Shop " + rs(tShop) + " / Swiggy " + rs(tSw) + " / Zomato " + rs(tZo) + ")");
-    put("Outlets reported: " + out.length + " / 12");
-    const dayTgt = OUTLETS.reduce((s, o) => { const r = out.find((x: any) => x.outlet_id === o); return s + (r && Number(r.target) ? Number(r.target) : (OUTLET_TARGETS[o] || 0)); }, 0);
-    const totGap = tTotal - dayTgt;
-    put("Day target (all outlets): " + rs(dayTgt) + " -- " + (totGap >= 0 ? "met (+" + rs(totGap) + ")" : rs(Math.abs(totGap)) + " short"), 10, false, totGap >= 0 ? [40, 120, 40] : [180, 60, 60]);
-    put("Month to date: " + rsL(mtd) + " of " + rsL(MONTHLY_TARGET) + " (" + targetPct.toFixed(1) + "%)  |  Projected " + rsL(projected), 10);
-    const offNames = offRows.map((id: string) => (DUTY_STAFF.find(s => s.id === id)?.name) || id);
-    put("Off today: " + (offNames.length ? offNames.join(", ") : "none"), 10, false, offNames.length ? [170, 110, 0] : [30, 30, 30]);
-    y += 8;
-    put("PROFIT / LOSS -- MONTH TO DATE", 12, true, [0, 0, 0]);
-    put((totalProfit >= 0 ? "Making " : "Losing ") + rs(Math.abs(totalProfit)) + " net this month (all outlets).", 11, true, totalProfit >= 0 ? [40, 120, 40] : [180, 60, 60]);
+    const _genLbl = _gen.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
+
+    doc.setFillColor(250, 204, 21); doc.rect(0, 0, W, 74, "F");
+    txt("BROWNIE HEAVEN", M, 38, 22, true, [20, 20, 20]);
+    txt("Daily Scoreboard — the one-glance morning brief", M, 58, 10, false, [90, 70, 0]);
+    txt("Compiled " + _genLbl, W - M, 40, 9, false, [90, 70, 0], "right");
+    txt("Sales for " + _dataLbl, M, 98, 11, true, [40, 40, 40]);
+
+    const profit = totalProfit >= 0;
+    const by = 112, bh = 92;
+    if (profit) doc.setFillColor(34, 160, 70); else doc.setFillColor(200, 55, 55);
+    doc.roundedRect(M, by, W - 2 * M, bh, 6, 6, "F");
+    txt(profit ? "WE'RE MAKING MONEY" : "WE'RE LOSING MONEY", M + 22, by + 34, 17, true, [255, 255, 255]);
+    txt(rs(Math.abs(totalProfit)) + (profit ? " up" : " down") + " this month", M + 22, by + 66, 24, true, [255, 255, 255]);
+    const icx = W - M - 50, icy = by + bh / 2, icr = 26;
+    doc.setFillColor(255, 255, 255); doc.circle(icx, icy, icr, "F"); doc.setLineWidth(3.5);
+    if (profit) { doc.setDrawColor(34, 160, 70); doc.line(icx - 12, icy + 1, icx - 3, icy + 11); doc.line(icx - 3, icy + 11, icx + 14, icy - 11); }
+    else { doc.setDrawColor(200, 55, 55); doc.line(icx - 10, icy - 10, icx + 10, icy + 10); doc.line(icx - 10, icy + 10, icx + 10, icy - 10); }
+
+    const gx = M + 110, gy = 290, gr = 60, seg = 48;
+    for (let i = 0; i < seg; i++) {
+      const f0 = i / seg, f1 = (i + 1) / seg, a0 = Math.PI - f0 * Math.PI, a1 = Math.PI - f1 * Math.PI, pctAt = f0 * 100;
+      if (pctAt < 50) doc.setDrawColor(220, 70, 70); else if (pctAt < 80) doc.setDrawColor(240, 150, 40); else doc.setDrawColor(40, 170, 80);
+      doc.setLineWidth(11); doc.line(gx + gr * Math.cos(a0), gy - gr * Math.sin(a0), gx + gr * Math.cos(a1), gy - gr * Math.sin(a1));
+    }
+    const pcl = Math.max(0, Math.min(targetPct, 100)), na = Math.PI - pcl / 100 * Math.PI;
+    doc.setDrawColor(30, 30, 30); doc.setLineWidth(2.5); doc.line(gx, gy, gx + (gr - 14) * Math.cos(na), gy - (gr - 14) * Math.sin(na));
+    doc.setFillColor(30, 30, 30); doc.circle(gx, gy, 4, "F");
+    txt(targetPct.toFixed(0) + "%", gx, gy - 16, 20, true, [30, 30, 30], "center");
+    txt("of monthly target", gx, gy + 16, 8, false, [120, 120, 120], "center");
+    txt(rsL(mtd) + " / " + rsL(MONTHLY_TARGET), gx, gy + 30, 8, false, [120, 120, 120], "center");
+
+    const stats: [string, string][] = [["Sales (this day)", rs(tTotal)], ["Month to date", rsL(mtd)], ["Projected month-end", rsL(projected)]];
+    let scy = 232;
+    stats.forEach(([lab, val]) => {
+      doc.setFillColor(245, 245, 245); doc.roundedRect(300, scy, W - M - 300, 40, 4, 4, "F");
+      txt(lab, 312, scy + 15, 8, false, [120, 120, 120]); txt(val, 312, scy + 33, 14, true, [20, 20, 20]); scy += 48;
+    });
+
+    const cy0 = 400;
+    doc.setFillColor(253, 242, 242); doc.setDrawColor(220, 90, 90); doc.setLineWidth(1); doc.roundedRect(M, cy0, W - 2 * M, 116, 5, 5, "FD");
+    txt("BIGGEST DRAIN THIS MONTH", M + 16, cy0 + 24, 11, true, [180, 50, 50]);
     if (worstPnl) {
-      put("Bleeding most: " + worstPnl.name + " (" + rs(worstPnl.netProfit) + ") -- " + whyBleed(worstPnl), 10, false, [180, 60, 60]);
-      put("Rectification: " + fixBleed(worstPnl), 10, false, [150, 110, 0]);
-      if (bleeders.length > 1) put("Also in red: " + bleeders.slice(1, 4).map(b => b.name + " (" + rs(b.netProfit) + ")").join(", "), 9, false, [150, 60, 60]);
-    } else { put("No outlet is in the red this month.", 10, false, [40, 120, 40]); }
-    if (noFixedCount > 0) put("Note: fixed costs not entered for " + noFixedCount + " outlet(s) -- profit is overstated until added in Sales Target.", 8, false, [170, 110, 0]);
-    y += 8;
-    put("SALES VS TARGET", 12, true, [0, 0, 0]);
-    y += 4;
+      txt(worstPnl.name + "  (" + rs(worstPnl.netProfit) + ")", M + 16, cy0 + 46, 14, true, [30, 30, 30]);
+      doc.setFontSize(9); doc.setFont("helvetica", "normal"); doc.setTextColor(70, 70, 70);
+      const wl = doc.splitTextToSize("Why: " + whyBleed(worstPnl), W - 2 * M - 32); let ly = cy0 + 66; wl.forEach((l: string) => { doc.text(l, M + 16, ly); ly += 13; });
+      doc.setTextColor(150, 100, 0); const fl = doc.splitTextToSize("Fix: " + fixBleed(worstPnl), W - 2 * M - 32); fl.forEach((l: string) => { doc.text(l, M + 16, ly); ly += 13; });
+    } else { txt("No outlet is in the red this month. Good going!", M + 16, cy0 + 48, 12, true, [40, 130, 50]); }
+
+    let gC = 0, oC = 0, grC = 0;
+    OUTLETS.forEach(o => { const r = out.find((x: any) => x.outlet_id === o); if (!r) { grC++; return; } const tot = (Number(r.shop_sales_value) || 0) + (Number(r.swiggy_sales_value) || 0) + (Number(r.zomato_sales_value) || 0); const tgt = Number(r.target) || OUTLET_TARGETS[o] || 0; if (tgt > 0 && tot >= tgt) gC++; else oC++; });
+    const ty0 = cy0 + 150;
+    txt("OUTLET HEALTH (this day)", M, ty0, 11, true, [40, 40, 40]);
+    const dotY = ty0 + 24;
+    doc.setFillColor(40, 170, 80); doc.circle(M + 8, dotY - 4, 7, "F"); txt(gC + " hit target", M + 22, dotY, 10, false, [50, 50, 50]);
+    doc.setFillColor(240, 150, 40); doc.circle(M + 145, dotY - 4, 7, "F"); txt(oC + " below target", M + 159, dotY, 10, false, [50, 50, 50]);
+    doc.setFillColor(160, 160, 160); doc.circle(M + 320, dotY - 4, 7, "F"); txt(grC + " not reported", M + 334, dotY, 10, false, [50, 50, 50]);
+    const offNames = offRows.map((id: string) => (DUTY_STAFF.find(s => s.id === id)?.name) || id);
+    txt("Off today: " + (offNames.length ? offNames.join(", ") : "none"), M, ty0 + 50, 10, false, offNames.length ? [170, 110, 0] : [80, 80, 80]);
+    if (noFixedCount > 0) txt("Note: fixed costs missing for " + noFixedCount + " outlet(s) in Sales Target — profit is overstated until added.", M, ty0 + 70, 8, false, [170, 110, 0]);
+    txt("Page 1 of 2 — detail & per-outlet breakdown overleaf", M, H - 30, 8, false, [160, 160, 160]);
+
+    doc.addPage();
+    let y = 50;
+    const put = (s: string, size = 10, bold = false, c: number[] = [30, 30, 30]) => {
+      doc.setFontSize(size); doc.setFont("helvetica", bold ? "bold" : "normal"); doc.setTextColor(c[0], c[1], c[2]);
+      const ls = doc.splitTextToSize(s, W - 2 * M); ls.forEach((l: string) => { if (y > H - 50) { doc.addPage(); y = 50; } doc.text(l, M, y); y += size + 5; });
+    };
+    doc.setFillColor(250, 204, 21); doc.rect(0, 0, W, 8, "F");
+    put("PROFIT / LOSS BY OUTLET — MONTH TO DATE", 13, true, [0, 0, 0]); y += 4;
+    doc.setFontSize(8); doc.setFont("helvetica", "bold"); doc.setTextColor(120, 120, 120);
+    doc.text("OUTLET", M, y); doc.text("SALES (MTD)", M + 200, y); doc.text("NET P/L", M + 320, y); doc.text("STATUS", M + 430, y);
+    y += 6; doc.setDrawColor(220, 220, 220); doc.line(M, y, W - M, y); y += 14;
+    pnl.forEach(p => {
+      if (y > H - 50) { doc.addPage(); y = 50; }
+      const good = p.netProfit >= 0;
+      doc.setFillColor(good ? 40 : 200, good ? 170 : 55, good ? 80 : 55); doc.circle(M + 432, y - 3, 4, "F");
+      doc.setFont("helvetica", "normal"); doc.setFontSize(9); doc.setTextColor(40, 40, 40);
+      doc.text((p.name).slice(0, 22), M, y); doc.text(rs(p.net), M + 200, y);
+      doc.setTextColor(good ? 40 : 190, good ? 130 : 50, good ? 60 : 50); doc.setFont("helvetica", "bold"); doc.text((good ? "+" : "") + rs(p.netProfit), M + 320, y);
+      doc.setFont("helvetica", "normal"); doc.setTextColor(90, 90, 90); doc.text(good ? "OK" : "LOSS", M + 444, y);
+      y += 17;
+    });
+    y += 6; doc.setDrawColor(220, 220, 220); doc.line(M, y, W - M, y); y += 16;
+    put("TOTAL: " + (totalProfit >= 0 ? "Making " : "Losing ") + rs(Math.abs(totalProfit)) + " net this month.", 11, true, totalProfit >= 0 ? [40, 120, 40] : [180, 60, 60]); y += 10;
+
+    put("SALES VS TARGET (this day)", 12, true, [0, 0, 0]); y += 4;
     const chMax = Math.max(...OUTLETS.map(o => { const rr = out.find((x: any) => x.outlet_id === o); const tt = rr ? (Number(rr.shop_sales_value) || 0) + (Number(rr.swiggy_sales_value) || 0) + (Number(rr.zomato_sales_value) || 0) : 0; return Math.max(tt, Number(rr?.target) || OUTLET_TARGETS[o] || 0); }), 1);
     const barX = M + 95, barW = W - M - barX - 50, barH = 11;
     OUTLETS.forEach((o) => {
-      if (y > 770) { doc.addPage(); y = 50; }
+      if (y > H - 50) { doc.addPage(); y = 50; }
       const r = out.find((x: any) => x.outlet_id === o);
       const tot = r ? (Number(r.shop_sales_value) || 0) + (Number(r.swiggy_sales_value) || 0) + (Number(r.zomato_sales_value) || 0) : 0;
       const tgt = r ? (Number(r.target) || OUTLET_TARGETS[o] || 0) : (OUTLET_TARGETS[o] || 0);
       const hit = tgt > 0 && tot >= tgt;
-      doc.setFontSize(8); doc.setFont("helvetica", "normal"); doc.setTextColor(40, 40, 40);
-      doc.text((OUTLET_NAMES[o] || o).slice(0, 16), M, y + 9);
+      doc.setFontSize(8); doc.setFont("helvetica", "normal"); doc.setTextColor(40, 40, 40); doc.text((OUTLET_NAMES[o] || o).slice(0, 16), M, y + 9);
       doc.setFillColor(235, 235, 235); doc.rect(barX, y, barW, barH, "F");
       const w = Math.min((tot / chMax) * barW, barW);
-      if (!r) { doc.setFillColor(160, 160, 160); } else if (hit) { doc.setFillColor(34, 160, 70); } else { doc.setFillColor(240, 140, 30); }
+      if (!r) doc.setFillColor(160, 160, 160); else if (hit) doc.setFillColor(34, 160, 70); else doc.setFillColor(240, 140, 30);
       doc.rect(barX, y, w, barH, "F");
       if (tgt > 0) { const tx = barX + Math.min((tgt / chMax) * barW, barW); doc.setDrawColor(220, 180, 0); doc.setLineWidth(1.4); doc.line(tx, y - 1, tx, y + barH + 1); }
-      doc.setFontSize(7); doc.setTextColor(90, 90, 90);
-      doc.text(r ? rs(tot) : "n/r", barX + barW + 4, y + 9);
+      doc.setFontSize(7); doc.setTextColor(90, 90, 90); doc.text(r ? rs(tot) : "n/r", barX + barW + 4, y + 9);
       y += barH + 6;
     });
-    y += 4;
-    put("Green = hit target  |  Orange = below  |  Grey = not reported  |  Yellow line = target", 8, false, [120, 120, 120]);
-    y += 8;
-    put("PER OUTLET — DETAIL", 12, true, [0, 0, 0]);
+    y += 4; put("Green = hit  |  Orange = below  |  Grey = not reported  |  Yellow line = target", 8, false, [120, 120, 120]); y += 10;
+
+    put("PER OUTLET — WHAT TO DO", 12, true, [0, 0, 0]);
     const weak: { name: string; gap: number; comment: string }[] = [];
     OUTLETS.forEach((o) => {
       const r = out.find((x: any) => x.outlet_id === o);
       const name = OUTLET_NAMES[o] || o;
-      if (!r) { put(name + ": NOT REPORTED -- no data filed yet. Follow up with the manager before anything else.", 10, true, [180, 60, 60]); weak.push({ name, gap: -1e9, comment: "not reported -- follow up with the manager" }); return; }
+      if (!r) { put(name + ": NOT REPORTED — follow up with the manager before anything else.", 10, true, [180, 60, 60]); weak.push({ name, gap: -1e9, comment: "not reported — follow up" }); return; }
       const shop = Number(r.shop_sales_value) || 0, sw = Number(r.swiggy_sales_value) || 0, zo = Number(r.zomato_sales_value) || 0;
-      const online = sw + zo;
-      const total = shop + online; const tgt = Number(r.target) || OUTLET_TARGETS[o] || 0;
-      const g = total - tgt;
+      const online = sw + zo, total = shop + online, tgt = Number(r.target) || OUTLET_TARGETS[o] || 0, g = total - tgt;
       let cmt: string;
-      if (tgt <= 0) cmt = rs(total) + " for the day (no target set for this outlet).";
-      else if (g >= 0) {
-        cmt = "Hit target -- " + rs(total) + " vs " + rs(tgt) + " (+" + rs(g) + "). Strong day, lock in whatever worked and keep it going.";
-      } else {
-        const pctUnder = Math.round(Math.abs(g) / tgt * 100);
-        const split = "Walk-in " + rs(shop) + " vs online " + rs(online) + ".";
-        let phrase: string;
-        if (pctUnder < 10) {
-          phrase = "So close -- just " + rs(Math.abs(g)) + " (" + pctUnder + "%) off. One focused push today closes this, no panic.";
-        } else if (pctUnder > 40) {
-          phrase = "Big gap -- " + rs(Math.abs(g)) + " (" + pctUnder + "%) under. This needs a proper review with the outlet, not just a nudge. " + (online < shop ? "Online is barely moving -- start there." : "Footfall is the problem -- start there.");
-        } else if (online < shop) {
-          phrase = rs(Math.abs(g)) + " short (" + pctUnder + "% under). Online is the soft side -- push Swiggy/Zomato with combos, better photos and visibility. " + split;
-        } else {
-          phrase = rs(Math.abs(g)) + " short (" + pctUnder + "% under). Walk-ins are the soft side -- drive footfall and upsell at the counter (add-ons, combos, bigger packs). " + split;
-        }
-        cmt = phrase;
-        weak.push({ name, gap: g, comment: phrase });
+      if (tgt <= 0) cmt = rs(total) + " for the day (no target set).";
+      else if (g >= 0) cmt = "Hit target — " + rs(total) + " vs " + rs(tgt) + " (+" + rs(g) + "). Strong day, keep it going.";
+      else {
+        const pctUnder = Math.round(Math.abs(g) / tgt * 100), split = "Walk-in " + rs(shop) + " vs online " + rs(online) + ".";
+        if (pctUnder < 10) cmt = "So close — just " + rs(Math.abs(g)) + " (" + pctUnder + "%) off. One push closes it.";
+        else if (pctUnder > 40) cmt = "Big gap — " + rs(Math.abs(g)) + " (" + pctUnder + "%) under. Needs a proper review. " + (online < shop ? "Online barely moving — start there." : "Footfall is the problem — start there.");
+        else if (online < shop) cmt = rs(Math.abs(g)) + " short (" + pctUnder + "% under). Online is soft — push Swiggy/Zomato combos & visibility. " + split;
+        else cmt = rs(Math.abs(g)) + " short (" + pctUnder + "% under). Walk-ins soft — drive footfall & counter upsell. " + split;
+        weak.push({ name, gap: g, comment: cmt });
       }
       put(name + ": " + rs(total) + " / " + rs(tgt) + " target  [" + (g >= 0 ? "HIT" : "SHORT") + "]", 10, true);
       put("    " + cmt, 9, false, g >= 0 ? [40, 120, 40] : [180, 60, 60]);
     });
     y += 8;
     const worst = weak.filter(w => w.gap < 0).sort((a, b) => a.gap - b.gap).slice(0, 3);
-    if (worst.length) {
-      put("NEEDS ATTENTION (focus here)", 12, true, [180, 60, 60]);
-      worst.forEach((w, i) => put((i + 1) + ". " + w.name + " -- " + w.comment, 9));
-    }
+    if (worst.length) { put("TOP 3 TO FIX FIRST", 12, true, [180, 60, 60]); worst.forEach((w, i) => put((i + 1) + ". " + w.name + " — " + w.comment, 9)); }
     doc.save("BrownieHeaven_Report_" + date + ".pdf");
   };
   const Hero = ({ label, value, sub, accent }: any) => (
