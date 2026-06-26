@@ -194,6 +194,7 @@ export default function DashboardPage() {
   const [reportData, setReportData] = useState<Record<string, string>>({});
   const [reportSubmitting, setReportSubmitting] = useState(false);
   const [reportOffDay, setReportOffDay] = useState(false);
+  const [offToday, setOffToday] = useState<string[]>([]);
   const [attendanceData, setAttendanceData] = useState({ present: "", absent: "", late: "", absent_names: "", late_names: "" });
   const [attendanceSubmitting, setAttendanceSubmitting] = useState(false);
   const [todayAttendance, setTodayAttendance] = useState<any>(null);
@@ -248,6 +249,7 @@ export default function DashboardPage() {
       if (typeof parsed === "string") { localStorage.removeItem("currentUser"); router.push("/"); return; }
     } catch { localStorage.removeItem("currentUser"); router.push("/"); return; }
     setUser(parsed);
+    fetchDayOff(parsed.id);
     fetchTasks(parsed);
     fetchReports(parsed);
    fetchAttendance(parsed, new Date(Date.now() - 86400000).toISOString().split("T")[0]);
@@ -414,6 +416,23 @@ const fetchOutletReports = async (u: Staff) => {
     setTodayReport(mine || null);
   };
 
+ const fetchDayOff = async (uid: string) => {
+    const today = new Date().toISOString().split("T")[0];
+    const { data } = await supabase.from("day_off").select("staff_id").eq("off_date", today);
+    const ids = (data || []).map((r: any) => r.staff_id);
+    setOffToday(ids);
+    setReportOffDay(ids.includes(uid));
+  };
+  const toggleOffDay = async () => {
+    if (!user) return;
+    const today = new Date().toISOString().split("T")[0];
+    if (reportOffDay) {
+      await supabase.from("day_off").delete().eq("staff_id", user.id).eq("off_date", today);
+    } else {
+      await supabase.from("day_off").insert({ staff_id: user.id, off_date: today });
+    }
+    fetchDayOff(user.id);
+  };
  const submitReport = async () => {
     if (!user) return;
     const _fields = REPORT_FIELDS[user.id] || [];
@@ -945,7 +964,7 @@ else await fetchOutletReportsByDate(outletEntryDate);
                   <p className="text-sm font-semibold">Off day today</p>
                   <p className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mt-0.5">Reports you submit won't earn or lose points</p>
                 </div>
-                <button onClick={() => setReportOffDay(!reportOffDay)} className={`relative w-12 h-6 rounded-full transition-colors ${reportOffDay ? "bg-yellow-400" : "bg-zinc-700"}`}>
+               <button onClick={toggleOffDay} className={`relative w-12 h-6 rounded-full transition-colors ${reportOffDay ? "bg-yellow-400" : "bg-zinc-700"}`}>
                   <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-black rounded-full transition-transform ${reportOffDay ? "translate-x-6" : ""}`}></span>
                 </button>
               </div>
