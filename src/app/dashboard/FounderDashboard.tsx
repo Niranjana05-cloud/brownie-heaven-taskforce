@@ -171,14 +171,31 @@ export default function FounderDashboard({ user }: { user: Staff }) {
     OUTLETS.forEach((o) => {
       const r = out.find((x: any) => x.outlet_id === o);
       const name = OUTLET_NAMES[o] || o;
-      if (!r) { put(name + ": not reported -- follow up.", 10, true, [180, 60, 60]); weak.push({ name, gap: -1e9, comment: "not reported -- follow up" }); return; }
+      if (!r) { put(name + ": NOT REPORTED -- no data filed yet. Follow up with the manager before anything else.", 10, true, [180, 60, 60]); weak.push({ name, gap: -1e9, comment: "not reported -- follow up with the manager" }); return; }
       const shop = Number(r.shop_sales_value) || 0, sw = Number(r.swiggy_sales_value) || 0, zo = Number(r.zomato_sales_value) || 0;
-      const total = shop + sw + zo; const tgt = Number(r.target) || OUTLET_TARGETS[o] || 0;
+      const online = sw + zo;
+      const total = shop + online; const tgt = Number(r.target) || OUTLET_TARGETS[o] || 0;
       const g = total - tgt;
       let cmt: string;
-      if (tgt <= 0) cmt = rs(total) + " (no target set).";
-      else if (g >= 0) cmt = "Hit target -- " + rs(total) + " vs " + rs(tgt) + " (+" + rs(g) + "). Strong day, keep the momentum.";
-      else { const lever = (sw + zo) < shop ? "push Swiggy/Zomato -- combos & visibility" : "drive walk-ins & counter upsell"; cmt = rs(Math.abs(g)) + " short of " + rs(tgt) + " (" + Math.round(Math.abs(g) / tgt * 100) + "% under). Needs to " + lever + "."; weak.push({ name, gap: g, comment: cmt }); }
+      if (tgt <= 0) cmt = rs(total) + " for the day (no target set for this outlet).";
+      else if (g >= 0) {
+        cmt = "Hit target -- " + rs(total) + " vs " + rs(tgt) + " (+" + rs(g) + "). Strong day, lock in whatever worked and keep it going.";
+      } else {
+        const pctUnder = Math.round(Math.abs(g) / tgt * 100);
+        const split = "Walk-in " + rs(shop) + " vs online " + rs(online) + ".";
+        let phrase: string;
+        if (pctUnder < 10) {
+          phrase = "So close -- just " + rs(Math.abs(g)) + " (" + pctUnder + "%) off. One focused push today closes this, no panic.";
+        } else if (pctUnder > 40) {
+          phrase = "Big gap -- " + rs(Math.abs(g)) + " (" + pctUnder + "%) under. This needs a proper review with the outlet, not just a nudge. " + (online < shop ? "Online is barely moving -- start there." : "Footfall is the problem -- start there.");
+        } else if (online < shop) {
+          phrase = rs(Math.abs(g)) + " short (" + pctUnder + "% under). Online is the soft side -- push Swiggy/Zomato with combos, better photos and visibility. " + split;
+        } else {
+          phrase = rs(Math.abs(g)) + " short (" + pctUnder + "% under). Walk-ins are the soft side -- drive footfall and upsell at the counter (add-ons, combos, bigger packs). " + split;
+        }
+        cmt = phrase;
+        weak.push({ name, gap: g, comment: phrase });
+      }
       put(name + ": " + rs(total) + " / " + rs(tgt) + " target  [" + (g >= 0 ? "HIT" : "SHORT") + "]", 10, true);
       put("    " + cmt, 9, false, g >= 0 ? [40, 120, 40] : [180, 60, 60]);
     });
