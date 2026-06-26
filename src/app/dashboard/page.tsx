@@ -651,6 +651,33 @@ const parseFileRows = async (file: File): Promise<any[][]> => {
   wb.SheetNames.forEach((sn) => { const rr = XLSX.utils.sheet_to_json(wb.Sheets[sn], { header: 1, blankrows: false }) as any[][]; rows = rows.concat(rr); });
   return rows;
 };
+const parseFileSheets = async (file: File): Promise<Record<string, any[][]>> => {
+  const buf = await file.arrayBuffer();
+  const wb = XLSX.read(buf, { type: "array" });
+  const out: Record<string, any[][]> = {};
+  wb.SheetNames.forEach((sn) => { out[sn] = XLSX.utils.sheet_to_json(wb.Sheets[sn], { header: 1, blankrows: false }) as any[][]; });
+  return out;
+};
+const extractMisTotals = (rows: any[][]): { net: number | null; swiggy: number | null; zomato: number | null } => {
+  let hr = -1;
+  for (let i = 0; i < rows.length; i++) { const r = rows[i] || []; if (r.some((c: any) => typeof c === "string" && /net sales \(after discount/i.test(c))) { hr = i; break; } }
+  if (hr < 0) return { net: null, swiggy: null, zomato: null };
+  const hdr: string[] = (rows[hr] || []).map((c: any) => (typeof c === "string" ? c : ""));
+  const find = (re: RegExp, from = 0) => { for (let c = from; c < hdr.length; c++) { if (re.test(hdr[c])) return c; } return -1; };
+  const shopCol = find(/net sales \(after discount/i);
+  const swGross = find(/gross sales swiggy/i);
+  const zoGross = find(/gross sales zomato/i);
+  const swNet = swGross >= 0 ? find(/net sales after discount/i, swGross + 1) : -1;
+  const zoNet = zoGross >= 0 ? find(/net sales after discount/i, zoGross + 1) : -1;
+  let tr = -1;
+  for (let i = hr + 1; i < rows.length; i++) { const r = rows[i] || []; if (typeof r[0] === "string" && /^\s*total\s*$/i.test(r[0])) { tr = i; break; } }
+  if (tr < 0) return { net: null, swiggy: null, zomato: null };
+  const trow = rows[tr] || [];
+  const numAt = (c: number): number | null => { if (c < 0) return null; const v = trow[c]; if (typeof v === "number" && !isNaN(v)) return v; const n = parseFloat(String(v).replace(/[,₹\s]/g, "")); return isNaN(n) ? null : n; };
+  const shop = numAt(shopCol), sw = numAt(swNet), zo = numAt(zoNet);
+  const net = (shop || 0) + (sw || 0) + (zo || 0);
+  return { net: net || null, swiggy: sw, zomato: zo };
+};
 const findVal = (rows: any[][], regex: RegExp): number | null => {
   for (const row of rows) {
     if (!row) continue;
@@ -674,7 +701,14 @@ const stExtractOutlet = async (oid: string, brand: string) => {
   setStUpBusy(key); setStUpMsg(m => ({ ...m, [key]: "Reading..." }));
   try {
     const e: any = {};
-    if (f.mis) { const rows = await parseFileRows(f.mis); e.net = findVal(rows, /net sales/i); e.swiggy = findVal(rows, /swiggy/i); e.zomato = findVal(rows, /zomato/i); }
+   if (f.mis) {
+      const sheets = await parseFileSheets(f.mis);
+      const monthName = new Date(stDate + "T00:00:00").toLocaleString("en-US", { month: "long" });
+      const snames = Object.keys(sheets);
+      const sname = snames.find(s => s.toLowerCase() === monthName.toLowerCase()) || snames.find(s => s.toLowerCase().includes(monthName.toLowerCase()));
+      const mis = extractMisTotals(sname ? sheets[sname] : []);
+      e.net = mis.net; e.swiggy = mis.swiggy; e.zomato = mis.zomato;
+    }
     if (f.pnl) {
       const rows = await parseFileRows(f.pnl);
       e.pest = findVal(rows, /pest/i); e.water = findVal(rows, /water/i); e.airtel = findVal(rows, /airtel|wifi|internet|broadband/i);
