@@ -965,6 +965,8 @@ else await fetchOutletReportsByDate(outletEntryDate);
               </div>
             )}
             
+                {user.role !== "Owner" && (
+              <div className="flex items-center justify-between bg-[#131316] border border-zinc-800 px-5 py-4 mb-6">
                 <div>
                   <p className="text-sm font-semibold">Off day today</p>
                   <p className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mt-0.5">Reports you submit won't earn or lose points</p>
