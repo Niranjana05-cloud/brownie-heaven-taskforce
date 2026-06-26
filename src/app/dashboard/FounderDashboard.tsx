@@ -215,8 +215,7 @@ export default function FounderDashboard({ user }: { user: Staff }) {
             </div>
             <p className="text-[11px] text-zinc-500 mt-3 pt-3 border-t border-zinc-800">Channel mix (MTD): Offline {lakh(mShop)} · Online {lakh(mOnline)} — for every ₹1 walk-in, <span className="text-yellow-400 font-bold">₹{offlineRatio.toFixed(1)}</span> online.</p>
           </Card>
-
-          <Card title="Today — sales by channel" right={<span className="text-[10px] font-mono text-zinc-600">{dayOfMonth}/{daysInMonth}</span>}>
+<Card title={`Sales by channel · ${new Date(date + "T00:00:00").toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}`} right={<span className="text-[10px] font-mono text-zinc-600">{dayOfMonth}/{daysInMonth}</span>}>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <div><p className="text-[10px] text-zinc-500 uppercase">Shop</p><p className="text-lg font-bold">{inr(tShop)}</p></div>
               <div><p className="text-[10px] text-zinc-500 uppercase">Swiggy</p><p className="text-lg font-bold text-orange-400">{inr(tSw)}</p></div>
@@ -225,7 +224,29 @@ export default function FounderDashboard({ user }: { user: Staff }) {
             </div>
           </Card>
 
-          <Card title="Per-outlet · target hit/miss (today)">
+          <Card title={`Sales vs target by outlet · ${new Date(date + "T00:00:00").toLocaleDateString("en-IN", { day: "numeric", month: "short" })}`}>
+            <div className="space-y-2 mb-2">
+              {OUTLETS.map(o => {
+                const r = out.find((x: any) => x.outlet_id === o);
+                const tot = r ? (Number(r.shop_sales_value) || 0) + (Number(r.swiggy_sales_value) || 0) + (Number(r.zomato_sales_value) || 0) : 0;
+                const tgt = r ? (Number(r.target) || OUTLET_TARGETS[o]) : OUTLET_TARGETS[o];
+                const maxV = Math.max(...OUTLETS.map(oo => { const rr = out.find((x: any) => x.outlet_id === oo); const tt = rr ? (Number(rr.shop_sales_value) || 0) + (Number(rr.swiggy_sales_value) || 0) + (Number(rr.zomato_sales_value) || 0) : 0; return Math.max(tt, Number(rr?.target) || OUTLET_TARGETS[oo] || 0); }), 1);
+                const hit = tgt > 0 && tot >= tgt;
+                const salesPct = Math.min((tot / maxV) * 100, 100);
+                const tgtPct = Math.min((tgt / maxV) * 100, 100);
+                return (
+                  <div key={o}>
+                    <div className="flex justify-between text-[11px] mb-0.5"><span className="text-zinc-300">{OUTLET_NAMES[o]}</span><span className="font-mono text-zinc-500">{inr(tot)}{tgt > 0 ? ` / ${inr(tgt)}` : ""}</span></div>
+                    <div className="relative h-4 bg-black border border-zinc-800">
+                      <div className={`absolute top-0 left-0 h-full ${!r ? "bg-zinc-700" : hit ? "bg-green-500" : "bg-orange-500"}`} style={{ width: `${salesPct}%` }} />
+                      {tgt > 0 && <div className="absolute top-0 h-full w-0.5 bg-yellow-300" style={{ left: `${tgtPct}%` }} title="target" />}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            <p className="text-[10px] font-mono text-zinc-600 mb-4">▮ green = hit · ▮ orange = below · ▮ grey = not reported · | yellow line = target</p>
+          <div className="hidden">
             <div className="space-y-1">
               {OUTLETS.map(o => {
                 const r = out.find(x => x.outlet_id === o);
@@ -235,6 +256,7 @@ export default function FounderDashboard({ user }: { user: Staff }) {
                 return <div key={o} className="flex justify-between items-center text-xs py-1.5 border-t border-zinc-800/60"><span className="text-zinc-300">{OUTLET_NAMES[o]}</span><span className="font-mono">{inr(tot)} {t > 0 && <span className={hit ? "text-green-400 ml-1" : "text-red-400 ml-1"}>{hit ? "✓" : "✗"}</span>}</span></div>;
               })}
             </div>
+          </div>
           </Card>
 
           <Card title="Reporting status (today)">
