@@ -1633,6 +1633,30 @@ else await fetchOutletReportsByDate(outletEntryDate);
       </div>
     )}
 
+   {activeOutlet && (canAssign || (user.outlets || []).includes(activeOutlet)) && (
+          <div className="border border-zinc-800 bg-black/20 p-5 mb-4">
+            <p className="text-sm font-bold uppercase tracking-widest mb-1">📥 Upload P&amp;L / MIS — auto-fill Sales Target</p>
+            <p className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-4">MIS → Net Sales + Swiggy + Zomato · P&amp;L → fixed costs · applies to {OUTLET_NAMES[activeOutlet] || activeOutlet} (BH)</p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
+              <div><label className="text-[10px] font-mono text-zinc-500 uppercase block mb-1">MIS report (.xlsx)</label><input ref={misFileRef} type="file" accept=".xlsx,.xls" className="text-xs text-zinc-400 w-full" /></div>
+              <div><label className="text-[10px] font-mono text-zinc-500 uppercase block mb-1">P&amp;L sheet (.xlsx)</label><input ref={pnlFileRef} type="file" accept=".xlsx,.xls" className="text-xs text-zinc-400 w-full" /></div>
+            </div>
+            <button onClick={handleExtract} disabled={uploadBusy} className="bg-zinc-700 text-white font-bold text-[10px] px-4 py-2 uppercase tracking-widest disabled:opacity-50 mb-3">{uploadBusy ? "Reading..." : "Extract"}</button>
+            {uploadMsg && <p className="text-xs text-yellow-400 mb-2">{uploadMsg}</p>}
+            {pnlExtract && (
+              <div className="bg-black/30 border border-zinc-800 p-4 mb-3">
+                <p className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-2">Found — check before applying (red = not found)</p>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-2 text-xs">
+                  {([["Net Sales", pnlExtract.net], ["Swiggy", pnlExtract.swiggy], ["Zomato", pnlExtract.zomato], ["Rent", pnlExtract.rent], ["Staff", pnlExtract.staff], ["Electricity", pnlExtract.eb], ["Transport", pnlExtract.transport], ["Pest", pnlExtract.pest], ["Water", pnlExtract.water], ["Airtel", pnlExtract.airtel]] as [string, any][]).map(([k, v]) => (
+                    <div key={k} className="flex justify-between bg-black/40 px-2 py-1"><span className="text-zinc-400">{k}</span><span className={v == null ? "text-red-400" : "text-green-400 font-mono"}>{v == null ? "not found" : Math.round(v).toLocaleString("en-IN")}</span></div>
+                  ))}
+                </div>
+                <p className="text-[10px] text-zinc-500 mt-2">Net &amp; Online save to {new Date(outletEntryDate + "T00:00:00").toLocaleDateString("en-IN", { day: "numeric", month: "short" })} · fixed costs persist.</p>
+                <button onClick={applyExtract} disabled={uploadBusy} className="bg-yellow-400 text-black font-bold text-[10px] px-4 py-2 uppercase tracking-widest disabled:opacity-50 mt-3">Apply to Sales Target</button>
+              </div>
+            )}
+          </div>
+        )}
    {activeOutlet && outletReports[activeOutlet] && (
   <div className="bg-green-400/5 border border-green-400/30 p-6 mb-4">
     <div className="flex items-center justify-between mb-4">
@@ -1764,30 +1788,6 @@ else await fetchOutletReportsByDate(outletEntryDate);
         <button onClick={submitOutletReport} disabled={outletSubmitting} className="bg-yellow-400 text-black font-bold tracking-widest text-xs px-6 py-3 hover:opacity-90 transition-opacity uppercase disabled:opacity-50">
           {outletSubmitting ? "Submitting..." : `Submit ${OUTLET_NAMES[activeOutlet] || activeOutlet.replace(/_/g, " ")} Report →`}
         </button>
-      {(canAssign || (user.outlets || []).includes(activeOutlet)) && (
-          <div className="mt-8 border-t border-zinc-800 pt-6">
-            <p className="text-sm font-bold uppercase tracking-widest mb-1">📥 Upload P&amp;L / MIS — auto-fill Sales Target</p>
-            <p className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-4">MIS → Net Sales + Swiggy + Zomato · P&amp;L → fixed costs · applies to {OUTLET_NAMES[activeOutlet] || activeOutlet} (BH)</p>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
-              <div><label className="text-[10px] font-mono text-zinc-500 uppercase block mb-1">MIS report (.xlsx)</label><input ref={misFileRef} type="file" accept=".xlsx,.xls" className="text-xs text-zinc-400 w-full" /></div>
-              <div><label className="text-[10px] font-mono text-zinc-500 uppercase block mb-1">P&amp;L sheet (.xlsx)</label><input ref={pnlFileRef} type="file" accept=".xlsx,.xls" className="text-xs text-zinc-400 w-full" /></div>
-            </div>
-            <button onClick={handleExtract} disabled={uploadBusy} className="bg-zinc-700 text-white font-bold text-[10px] px-4 py-2 uppercase tracking-widest disabled:opacity-50 mb-3">{uploadBusy ? "Reading..." : "Extract"}</button>
-            {uploadMsg && <p className="text-xs text-yellow-400 mb-2">{uploadMsg}</p>}
-            {pnlExtract && (
-              <div className="bg-black/30 border border-zinc-800 p-4 mb-3">
-                <p className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-2">Found — check before applying (red = not found)</p>
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-2 text-xs">
-                  {([["Net Sales", pnlExtract.net], ["Swiggy", pnlExtract.swiggy], ["Zomato", pnlExtract.zomato], ["Rent", pnlExtract.rent], ["Staff", pnlExtract.staff], ["Electricity", pnlExtract.eb], ["Transport", pnlExtract.transport], ["Pest", pnlExtract.pest], ["Water", pnlExtract.water], ["Airtel", pnlExtract.airtel]] as [string, any][]).map(([k, v]) => (
-                    <div key={k} className="flex justify-between bg-black/40 px-2 py-1"><span className="text-zinc-400">{k}</span><span className={v == null ? "text-red-400" : "text-green-400 font-mono"}>{v == null ? "not found" : Math.round(v).toLocaleString("en-IN")}</span></div>
-                  ))}
-                </div>
-                <p className="text-[10px] text-zinc-500 mt-2">Net &amp; Online save to {new Date(outletEntryDate + "T00:00:00").toLocaleDateString("en-IN", { day: "numeric", month: "short" })} · fixed costs persist.</p>
-                <button onClick={applyExtract} disabled={uploadBusy} className="bg-yellow-400 text-black font-bold text-[10px] px-4 py-2 uppercase tracking-widest disabled:opacity-50 mt-3">Apply to Sales Target</button>
-              </div>
-            )}
-          </div>
-        )}
         {(user.outlets || []).includes(activeOutlet) && (
           <div className="mt-8 border-t border-zinc-800 pt-6">
             <p className="text-sm font-bold uppercase tracking-widest mb-1">Swiggy / Zomato Reviews</p>
