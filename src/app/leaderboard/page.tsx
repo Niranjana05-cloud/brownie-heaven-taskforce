@@ -39,7 +39,7 @@ type Row = {
   id: string; name: string; role: string;
   myReports: number; myLate: number; dailyPoints: number;
   outlets: number; outletLate: number; targetMet: number; targetMiss: number;
-  tasks: number; ratingPoints: number; backfills: number; adjustments: number; points: number; missing: boolean;
+  tasks: number; ratingPoints: number; backfills: number; adjustments: number; points: number; missing: boolean; off: boolean;
 };
 
 export default function LeaderboardPage() {
@@ -89,7 +89,7 @@ export default function LeaderboardPage() {
     const endISO = new Date(y, m + 1, 1).toISOString();
     const endDate = m === 11 ? `${y + 1}-01-01` : `${y}-${pad(m + 2)}-01`;
 
-    const [repRes, taskRes, outRes, adjRes] = await Promise.all([
+    const [repRes, taskRes, outRes, adjRes, offRes] = await Promise.all([
       supabase.from("reports").select("staff_id,is_late,no_points,submitted_at,report_date,is_backfill")
         .gte("submitted_at", startISO).lt("submitted_at", endISO),
       supabase.from("tasks").select("assigned_to,completed_at,created_at")
@@ -97,18 +97,21 @@ export default function LeaderboardPage() {
       supabase.from("outlet_reports").select("staff_id,outlet_id,is_late,bh_google_rating,report_date,shop_sales_value,swiggy_sales_value,zomato_sales_value,target,no_points,is_backfill")
         .gte("report_date", startDate).lt("report_date", endDate),
       supabase.from("point_adjustments").select("staff_id,points"),
+      supabase.from("day_off").select("staff_id,off_date").gte("off_date", startDate).lt("off_date", endDate),
     ]);
 
     const map: Record<string, Row> = {};
     ALL_STAFF.filter(s => s.role !== "Owner").forEach(s => {
-      map[s.id] = { id: s.id, name: s.name, role: s.role, myReports: 0, myLate: 0, dailyPoints: 0, outlets: 0, outletLate: 0, targetMet: 0, targetMiss: 0, tasks: 0, ratingPoints: 0, backfills: 0, adjustments: 0, points: 0, missing: false };
+      map[s.id] = { id: s.id, name: s.name, role: s.role, myReports: 0, myLate: 0, dailyPoints: 0, outlets: 0, outletLate: 0, targetMet: 0, targetMiss: 0, tasks: 0, ratingPoints: 0, backfills: 0, adjustments: 0, points: 0, missing: false, off: false };
     });
 
+    const _offMonth = new Set((offRes.data || []).map((o: any) => o.staff_id + "_" + o.off_date));
     const dayMap: Record<string, { sid: string; at: string; late: boolean; backfill: boolean }> = {};
     (repRes.data || []).forEach((r: any) => {
       if (!map[r.staff_id]) return;
       if (r.no_points) return;
       const day = r.report_date || r.submitted_at.split("T")[0];
+      if (_offMonth.has(r.staff_id + "_" + day)) return;
       const key = r.staff_id + "|" + day;
       if (!dayMap[key] || r.submitted_at < dayMap[key].at) {
         dayMap[key] = { sid: r.staff_id, at: r.submitted_at, late: !!r.is_late, backfill: !!r.is_backfill };
@@ -129,6 +132,7 @@ export default function LeaderboardPage() {
 
    (outRes.data || []).forEach((o: any) => {
       if (o.no_points) return;
+      if (_offMonth.has(o.staff_id + "_" + o.report_date)) return;
       const total = (Number(o.shop_sales_value) || 0) + (Number(o.swiggy_sales_value) || 0) + (Number(o.zomato_sales_value) || 0);
       const tgt = Number(o.target) || 0;
       const credit = (row: Row | undefined, rollup: boolean) => {
@@ -153,6 +157,7 @@ export default function LeaderboardPage() {
     const byOutlet: Record<string, any[]> = {};
     (outRes.data || []).forEach((o: any) => {
       if (o.no_points || o.is_backfill) return;
+      if (_offMonth.has(o.staff_id + "_" + o.report_date)) return;
       if (o.bh_google_rating === null || o.bh_google_rating === undefined) return;
       (byOutlet[o.outlet_id] = byOutlet[o.outlet_id] || []).push(o);
     });
@@ -201,7 +206,7 @@ export default function LeaderboardPage() {
     const _outletFiled = new Set<string>();
     (outRes.data || []).forEach((o: any) => { if (o.report_date === _todayStr2) _outletFiled.add(o.outlet_id); });
     const _MGR_OUTLETS: Record<string, string[]> = { nilani: ["ra_puram","anna_nagar","pallavaram","vadapalani"], vishnu: ["velachery","perumbakkam","tambaram","porur"], ahila: ["royapettah","adayar","bsr_mall","besant_nagar"] };
-    all.forEach(r => { const md = _after10 && !_filedDaily.has(r.id); const mo = _afterNoon && (_MGR_OUTLETS[r.id] || []).some(o => !_outletFiled.has(o)); r.missing = md || mo; });
+    all.forEach(r => { r.off = _offMonth.has(r.id + "_" + _todayStr2); const md = _after10 && !_filedDaily.has(r.id); const mo = _afterNoon && (_MGR_OUTLETS[r.id] || []).some(o => !_outletFiled.has(o)); r.missing = !r.off && (md || mo); });
     setArun(arunRow || null);
     setRows(all.filter(r => r.id !== "arun").sort((a, b) => b.points - a.points));
     setLoading(false);
@@ -313,7 +318,7 @@ export default function LeaderboardPage() {
                 <tr key={r.id} style={i === 0 ? { background: "rgba(250,204,21,0.08)" } : {}}>
                   <td style={{ ...td, textAlign: "left", color: C.accent }}>{i + 1}</td>
                   <td style={{ ...td, textAlign: "left" }}>
-                    {r.name}{r.missing && <span style={{ marginLeft: "8px", background: "#ef4444", color: "#fff", fontSize: "9px", fontWeight: "bold", padding: "2px 6px", borderRadius: "3px", verticalAlign: "middle" }}>🚩 NOT FILED</span>}
+                    {r.name}{r.off && <span style={{ marginLeft: "8px", background: "#3f3f46", color: "#fbbf24", fontSize: "9px", fontWeight: "bold", padding: "2px 6px", borderRadius: "3px", verticalAlign: "middle" }}>OFF TODAY</span>}{r.missing && <span style={{ marginLeft: "8px", background: "#ef4444", color: "#fff", fontSize: "9px", fontWeight: "bold", padding: "2px 6px", borderRadius: "3px", verticalAlign: "middle" }}>🚩 NOT FILED</span>}
                     <div style={{ color: C.muted, fontSize: "11px" }}>{r.role}</div>
                   </td>
                   <td style={td}>{r.myReports + r.outlets}</td>
