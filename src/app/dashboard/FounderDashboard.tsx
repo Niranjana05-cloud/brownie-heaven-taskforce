@@ -124,10 +124,12 @@ export default function FounderDashboard({ user }: { user: Staff }) {
       const ls = doc.splitTextToSize(txt, W - 2 * M);
       ls.forEach((l: string) => { if (y > 790) { doc.addPage(); y = 50; } doc.text(l, M, y); y += size + 5; });
     };
-    const dlabel = new Date(date + "T00:00:00").toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+   const dlabel = new Date(date + "T00:00:00").toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+    const isYday = date === new Date(Date.now() - 86400000).toISOString().split("T")[0];
+    doc.setFillColor(250, 204, 21); doc.rect(0, 0, W, 8, "F");
     put("BROWNIE HEAVEN", 18, true, [0, 0, 0]);
-    put("Daily Sales Report", 13, true, [110, 110, 110]);
-    put("For: " + dlabel, 10);
+    put((isYday ? "Yesterday's Sales Report" : "Daily Sales Report"), 13, true, [110, 110, 110]);
+    put("For: " + dlabel + (isYday ? "  (yesterday)" : ""), 10);
     put("Generated: " + new Date().toLocaleString("en-IN"), 9, false, [150, 150, 150]);
     y += 8;
     put("SUMMARY", 12, true, [0, 0, 0]);
@@ -140,7 +142,31 @@ export default function FounderDashboard({ user }: { user: Staff }) {
     const offNames = offRows.map((id: string) => (DUTY_STAFF.find(s => s.id === id)?.name) || id);
     put("Off today: " + (offNames.length ? offNames.join(", ") : "none"), 10, false, offNames.length ? [170, 110, 0] : [30, 30, 30]);
     y += 8;
-    put("PER OUTLET", 12, true, [0, 0, 0]);
+    put("SALES VS TARGET", 12, true, [0, 0, 0]);
+    y += 4;
+    const chMax = Math.max(...OUTLETS.map(o => { const rr = out.find((x: any) => x.outlet_id === o); const tt = rr ? (Number(rr.shop_sales_value) || 0) + (Number(rr.swiggy_sales_value) || 0) + (Number(rr.zomato_sales_value) || 0) : 0; return Math.max(tt, Number(rr?.target) || OUTLET_TARGETS[o] || 0); }), 1);
+    const barX = M + 95, barW = W - M - barX - 50, barH = 11;
+    OUTLETS.forEach((o) => {
+      if (y > 770) { doc.addPage(); y = 50; }
+      const r = out.find((x: any) => x.outlet_id === o);
+      const tot = r ? (Number(r.shop_sales_value) || 0) + (Number(r.swiggy_sales_value) || 0) + (Number(r.zomato_sales_value) || 0) : 0;
+      const tgt = r ? (Number(r.target) || OUTLET_TARGETS[o] || 0) : (OUTLET_TARGETS[o] || 0);
+      const hit = tgt > 0 && tot >= tgt;
+      doc.setFontSize(8); doc.setFont("helvetica", "normal"); doc.setTextColor(40, 40, 40);
+      doc.text((OUTLET_NAMES[o] || o).slice(0, 16), M, y + 9);
+      doc.setFillColor(235, 235, 235); doc.rect(barX, y, barW, barH, "F");
+      const w = Math.min((tot / chMax) * barW, barW);
+      if (!r) { doc.setFillColor(160, 160, 160); } else if (hit) { doc.setFillColor(34, 160, 70); } else { doc.setFillColor(240, 140, 30); }
+      doc.rect(barX, y, w, barH, "F");
+      if (tgt > 0) { const tx = barX + Math.min((tgt / chMax) * barW, barW); doc.setDrawColor(220, 180, 0); doc.setLineWidth(1.4); doc.line(tx, y - 1, tx, y + barH + 1); }
+      doc.setFontSize(7); doc.setTextColor(90, 90, 90);
+      doc.text(r ? rs(tot) : "n/r", barX + barW + 4, y + 9);
+      y += barH + 6;
+    });
+    y += 4;
+    put("Green = hit target  |  Orange = below  |  Grey = not reported  |  Yellow line = target", 8, false, [120, 120, 120]);
+    y += 8;
+    put("PER OUTLET — DETAIL", 12, true, [0, 0, 0]);
     const weak: { name: string; gap: number; comment: string }[] = [];
     OUTLETS.forEach((o) => {
       const r = out.find((x: any) => x.outlet_id === o);
