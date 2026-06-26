@@ -667,38 +667,46 @@ const findVal = (rows: any[][], regex: RegExp): number | null => {
   }
   return null;
 };
-const stExtractOutlet = async (oid: string) => {
-  const f = stFiles[oid] || {};
-  if (!f.mis && !f.pnl) { setStUpMsg(m => ({ ...m, [oid]: "Pick at least one file." })); return; }
-  setStUpBusy(oid); setStUpMsg(m => ({ ...m, [oid]: "Reading..." }));
+const stExtractOutlet = async (oid: string, brand: string) => {
+  const key = oid + "_" + brand;
+  const f = stFiles[key] || {};
+  if (!f.mis && !f.pnl) { setStUpMsg(m => ({ ...m, [key]: "Pick at least one file." })); return; }
+  setStUpBusy(key); setStUpMsg(m => ({ ...m, [key]: "Reading..." }));
   try {
     const e: any = {};
     if (f.mis) { const rows = await parseFileRows(f.mis); e.net = findVal(rows, /net sales/i); e.swiggy = findVal(rows, /swiggy/i); e.zomato = findVal(rows, /zomato/i); }
-    if (f.pnl) { const rows = await parseFileRows(f.pnl); e.rent = findVal(rows, /rent/i); e.staff = findVal(rows, /salar|staff|wage/i); e.eb = findVal(rows, /electric|power|\beb\b/i); e.transport = findVal(rows, /transport|convey/i); e.pest = findVal(rows, /pest/i); e.water = findVal(rows, /water/i); e.airtel = findVal(rows, /airtel|wifi|internet|broadband/i); }
-    setStUpload(u => ({ ...u, [oid]: e })); setStUpMsg(m => ({ ...m, [oid]: "" }));
-  } catch (err: any) { setStUpMsg(m => ({ ...m, [oid]: "Could not read: " + (err?.message || "bad file") })); }
+    if (f.pnl) {
+      const rows = await parseFileRows(f.pnl);
+      e.pest = findVal(rows, /pest/i); e.water = findVal(rows, /water/i); e.airtel = findVal(rows, /airtel|wifi|internet|broadband/i);
+      if (brand === "BH") { e.rent = findVal(rows, /rent/i); e.staff = findVal(rows, /salar|staff|wage/i); e.eb = findVal(rows, /electric|power|\beb\b/i); e.transport = findVal(rows, /transport|convey/i); }
+    }
+    setStUpload(u => ({ ...u, [key]: e })); setStUpMsg(m => ({ ...m, [key]: "" }));
+  } catch (err: any) { setStUpMsg(m => ({ ...m, [key]: "Could not read: " + (err?.message || "bad file") })); }
   setStUpBusy("");
 };
-const stApplyOutlet = async (oid: string) => {
-  const e = stUpload[oid]; if (!e) return;
-  setStUpBusy(oid);
-  const { data: cur } = await supabase.from("sales_target").select("line_items").eq("outlet_id", oid).eq("brand", "BH").single();
+const stApplyOutlet = async (oid: string, brand: string) => {
+  const key = oid + "_" + brand;
+  const e = stUpload[key]; if (!e) return;
+  setStUpBusy(key);
+  const { data: cur } = await supabase.from("sales_target").select("line_items").eq("outlet_id", oid).eq("brand", brand).single();
   const li: any = cur?.line_items || { sales: {}, fixed: {}, targets: {}, monthly: {} };
   const num = (a: any, b: any) => (a != null ? a : (b ?? 0));
   const mk = stDate.slice(0, 7);
+  const isCBH = brand === "CBH";
   const updated = {
     sales: li.sales || {},
     monthly: { ...(li.monthly || {}), [mk]: { net: e.net || 0, online: (e.swiggy || 0) + (e.zomato || 0) } },
-    fixed: { staff: num(e.staff, li.fixed?.staff), rent: num(e.rent, li.fixed?.rent), eb: num(e.eb, li.fixed?.eb), transport: num(e.transport, li.fixed?.transport), pest: num(e.pest, li.fixed?.pest), water: num(e.water, li.fixed?.water), airtel: num(e.airtel, li.fixed?.airtel) },
+    fixed: { staff: isCBH ? 0 : num(e.staff, li.fixed?.staff), rent: isCBH ? 0 : num(e.rent, li.fixed?.rent), eb: isCBH ? 0 : num(e.eb, li.fixed?.eb), transport: isCBH ? 0 : num(e.transport, li.fixed?.transport), pest: num(e.pest, li.fixed?.pest), water: num(e.water, li.fixed?.water), airtel: num(e.airtel, li.fixed?.airtel) },
     targets: li.targets || { a: 0, b: 0 },
   };
-  const { error } = await supabase.from("sales_target").upsert({ outlet_id: oid, brand: "BH", line_items: updated, updated_at: new Date().toISOString() }, { onConflict: "outlet_id,brand" });
+  const { error } = await supabase.from("sales_target").upsert({ outlet_id: oid, brand, line_items: updated, updated_at: new Date().toISOString() }, { onConflict: "outlet_id,brand" });
   setStUpBusy("");
-  if (error) { setStUpMsg(m => ({ ...m, [oid]: "Error: " + error.message })); return; }
-  setStUpMsg(m => ({ ...m, [oid]: "✓ Saved to Sales Target." }));
-  setStUpload(u => ({ ...u, [oid]: null }));
+  if (error) { setStUpMsg(m => ({ ...m, [key]: "Error: " + error.message })); return; }
+  setStUpMsg(m => ({ ...m, [key]: "✓ Saved to Sales Target (" + brand + ")." }));
+  setStUpload(u => ({ ...u, [key]: null }));
   if (user) fetchSalesTargets(user);
 };
+
 const reviewPoints = (rating: number, valid: boolean) => {
   let p = 0;
   if (rating === 5) p += 5; else if (rating === 4) p += 3; else if (rating >= 1 && rating <= 2) p -= 5;
@@ -1321,29 +1329,29 @@ else await fetchOutletReportsByDate(outletEntryDate);
                     </div>
                   );
                 })}
-                {(canAssign || (user.outlets || []).includes(oid)) && (() => { const u = stUpload[oid]; const busy = stUpBusy === oid; const msg = stUpMsg[oid]; return (
-                  <div className="border border-zinc-800 bg-black/20 p-4 mt-3">
-                    <p className="text-[11px] font-bold uppercase tracking-widest mb-1">📥 Upload P&amp;L / MIS — {OUTLET_NAMES[oid] || oid}</p>
-                    <p className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-3">MIS → Net + Swiggy + Zomato · P&amp;L → fixed costs · saved for the month</p>
+             {(canAssign || (user.outlets || []).includes(oid)) && ["BH", "CBH"].map((brand) => { const key = oid + "_" + brand; const u = stUpload[key]; const busy = stUpBusy === key; const msg = stUpMsg[key]; const isCBH = brand === "CBH"; return (
+                  <div key={key} className="border border-zinc-800 bg-black/20 p-4 mt-3">
+                    <p className="text-[11px] font-bold uppercase tracking-widest mb-1"><span className="text-yellow-400">{brand}</span> · 📥 Upload P&amp;L / MIS — {OUTLET_NAMES[oid] || oid}</p>
+                    <p className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-3">MIS → Net + Swiggy + Zomato · P&amp;L → {isCBH ? "Pest, Water, Airtel only" : "fixed costs"} · saved for the month</p>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
-                      <div><label className="text-[10px] font-mono text-zinc-500 uppercase block mb-1">MIS (.xlsx)</label><input type="file" accept=".xlsx,.xls" onChange={e => { const file = e.target.files?.[0]; setStFiles(s => ({ ...s, [oid]: { ...s[oid], mis: file } })); }} className="text-xs text-zinc-400 w-full" /></div>
-                      <div><label className="text-[10px] font-mono text-zinc-500 uppercase block mb-1">P&amp;L (.xlsx)</label><input type="file" accept=".xlsx,.xls" onChange={e => { const file = e.target.files?.[0]; setStFiles(s => ({ ...s, [oid]: { ...s[oid], pnl: file } })); }} className="text-xs text-zinc-400 w-full" /></div>
+                      <div><label className="text-[10px] font-mono text-zinc-500 uppercase block mb-1">{brand} MIS (.xlsx)</label><input type="file" accept=".xlsx,.xls" onChange={e => { const file = e.target.files?.[0]; setStFiles(s => ({ ...s, [key]: { ...s[key], mis: file } })); }} className="text-xs text-zinc-400 w-full" /></div>
+                      <div><label className="text-[10px] font-mono text-zinc-500 uppercase block mb-1">{brand} P&amp;L (.xlsx)</label><input type="file" accept=".xlsx,.xls" onChange={e => { const file = e.target.files?.[0]; setStFiles(s => ({ ...s, [key]: { ...s[key], pnl: file } })); }} className="text-xs text-zinc-400 w-full" /></div>
                     </div>
-                    <button onClick={() => stExtractOutlet(oid)} disabled={busy} className="bg-zinc-700 text-white font-bold text-[10px] px-4 py-2 uppercase tracking-widest disabled:opacity-50 mb-2">{busy ? "Reading..." : "Extract"}</button>
+                    <button onClick={() => stExtractOutlet(oid, brand)} disabled={busy} className="bg-zinc-700 text-white font-bold text-[10px] px-4 py-2 uppercase tracking-widest disabled:opacity-50 mb-2">{busy ? "Reading..." : "Extract"}</button>
                     {msg && <p className="text-xs text-yellow-400 mb-2">{msg}</p>}
                     {u && (
                       <div className="bg-black/30 border border-zinc-800 p-3 mb-2">
                         <p className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-2">Found — check, then apply (red = not found)</p>
                         <div className="grid grid-cols-2 md:grid-cols-3 gap-2 text-xs">
-                          {([["Net Sales", u.net], ["Swiggy", u.swiggy], ["Zomato", u.zomato], ["Rent", u.rent], ["Staff", u.staff], ["Electricity", u.eb], ["Transport", u.transport], ["Pest", u.pest], ["Water", u.water], ["Airtel", u.airtel]] as [string, any][]).map(([k, v]) => (
+                          {((isCBH ? [["Net Sales", u.net], ["Swiggy", u.swiggy], ["Zomato", u.zomato], ["Pest", u.pest], ["Water", u.water], ["Airtel", u.airtel]] : [["Net Sales", u.net], ["Swiggy", u.swiggy], ["Zomato", u.zomato], ["Rent", u.rent], ["Staff", u.staff], ["Electricity", u.eb], ["Transport", u.transport], ["Pest", u.pest], ["Water", u.water], ["Airtel", u.airtel]]) as [string, any][]).map(([k, v]) => (
                             <div key={k} className="flex justify-between bg-black/40 px-2 py-1"><span className="text-zinc-400">{k}</span><span className={v == null ? "text-red-400" : "text-green-400 font-mono"}>{v == null ? "not found" : Math.round(v).toLocaleString("en-IN")}</span></div>
                           ))}
                         </div>
-                        <button onClick={() => stApplyOutlet(oid)} disabled={busy} className="bg-yellow-400 text-black font-bold text-[10px] px-4 py-2 uppercase tracking-widest disabled:opacity-50 mt-3">Apply to Sales Target</button>
+                        <button onClick={() => stApplyOutlet(oid, brand)} disabled={busy} className="bg-yellow-400 text-black font-bold text-[10px] px-4 py-2 uppercase tracking-widest disabled:opacity-50 mt-3">Apply to {brand}</button>
                       </div>
                     )}
                   </div>
-                ); })()}
+                ); })}
               </div>
             ))}
           </div>
