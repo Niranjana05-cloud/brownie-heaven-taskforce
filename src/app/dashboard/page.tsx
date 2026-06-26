@@ -958,8 +958,13 @@ else await fetchOutletReportsByDate(outletEntryDate);
                 <button onClick={() => setShowModal(true)} className="bg-yellow-400 text-black font-bold tracking-widest text-xs px-4 py-3 hover:opacity-90 transition-opacity uppercase">+ Assign Task</button>
               )}
            </div>
-            {user.role !== "Owner" && (
-              <div className="flex items-center justify-between bg-[#131316] border border-zinc-800 px-5 py-4 mb-6">
+            {canAssign && offToday.length > 0 && (
+              <div className="bg-[#131316] border border-zinc-800 px-5 py-3 mb-6">
+                <span className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest">🌙 Off today: </span>
+                <span className="text-sm text-yellow-400">{offToday.map(id => ALL_STAFF.find(s => s.id === id)?.name || id).join(", ")}</span>
+              </div>
+            )}
+            
                 <div>
                   <p className="text-sm font-semibold">Off day today</p>
                   <p className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mt-0.5">Reports you submit won't earn or lose points</p>
