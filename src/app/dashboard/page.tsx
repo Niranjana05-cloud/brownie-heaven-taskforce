@@ -674,9 +674,8 @@ const extractMisTotals = (rows: any[][]): { net: number | null; swiggy: number |
   if (tr < 0) return { net: null, swiggy: null, zomato: null };
   const trow = rows[tr] || [];
   const numAt = (c: number): number | null => { if (c < 0) return null; const v = trow[c]; if (typeof v === "number" && !isNaN(v)) return v; const n = parseFloat(String(v).replace(/[,₹\s]/g, "")); return isNaN(n) ? null : n; };
-  const shop = numAt(shopCol), sw = numAt(swNet), zo = numAt(zoNet);
-  const net = (shop || 0) + (sw || 0) + (zo || 0);
-  return { net: net || null, swiggy: sw, zomato: zo };
+  const net = numAt(shopCol), sw = numAt(swNet), zo = numAt(zoNet);
+  return { net, swiggy: sw, zomato: zo };
 };
 const findVal = (rows: any[][], regex: RegExp): number | null => {
   for (const row of rows) {
