@@ -39,6 +39,7 @@ export default function FounderDashboard({ user }: { user: Staff }) {
   const [out, setOut] = useState<any[]>([]);
   const [month, setMonth] = useState<any[]>([]);
   const [daily, setDaily] = useState<any[]>([]);
+  const [offRows, setOffRows] = useState<string[]>([]);
   const [revs, setRevs] = useState<any[]>([]);
   const [payouts, setPayouts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -51,14 +52,15 @@ export default function FounderDashboard({ user }: { user: Staff }) {
   useEffect(() => {
     (async () => {
       setLoading(true);
-      const [o, mo, d, r, p] = await Promise.all([
+     const [o, mo, d, r, p, off] = await Promise.all([
         supabase.from("outlet_reports").select("*").eq("report_date", date),
         supabase.from("outlet_reports").select("outlet_id,report_date,shop_sales_value,swiggy_sales_value,zomato_sales_value,swiggy_sales_count,zomato_sales_count").gte("report_date", monthStart).lte("report_date", date),
         supabase.from("reports").select("staff_id,report_date,is_late,is_backfill,no_points").eq("report_date", date),
         supabase.from("outlet_reviews").select("*").eq("report_date", date),
         supabase.from("outlet_payouts").select("outlet_id,platform,period_start,amount_transferable,net_payout").order("period_start", { ascending: false }).limit(60),
+        supabase.from("day_off").select("staff_id").eq("off_date", date),
       ]);
-      setOut(o.data || []); setMonth(mo.data || []); setDaily(d.data || []); setRevs(r.data || []); setPayouts(p.data || []);
+      setOut(o.data || []); setMonth(mo.data || []); setDaily(d.data || []); setRevs(r.data || []); setPayouts(p.data || []); setOffRows((off.data || []).map((x: any) => x.staff_id));
       setLoading(false);
     })();
   }, [date, monthStart]);
@@ -172,7 +174,7 @@ export default function FounderDashboard({ user }: { user: Staff }) {
 
           <Card title="Reporting status (today)">
             <p className="text-[10px] text-zinc-500 uppercase mb-1">Daily reports</p>
-            <p className="text-xs mb-3">{DUTY_STAFF.map(s => <span key={s.id} className={filedDaily.has(s.id) ? "text-green-400 mr-3 inline-block" : "text-red-400 mr-3 inline-block"}>{filedDaily.has(s.id) ? "✓" : "✗"} {s.name}</span>)}</p>
+            <p className="text-xs mb-3">{DUTY_STAFF.map(s => { const isOff = offRows.includes(s.id); return <span key={s.id} className={isOff ? "text-zinc-500 mr-3 inline-block" : filedDaily.has(s.id) ? "text-green-400 mr-3 inline-block" : "text-red-400 mr-3 inline-block"}>{isOff ? "🌙" : filedDaily.has(s.id) ? "✓" : "✗"} {s.name}{isOff ? " (off)" : ""}</span>; })}</p>
             <p className="text-[10px] text-zinc-500 uppercase mb-1">Outlet reports</p>
             <p className="text-xs">{OUTLETS.map(o => <span key={o} className={filedOutlets.has(o) ? "text-green-400 mr-3 inline-block" : "text-red-400 mr-3 inline-block"}>{filedOutlets.has(o) ? "✓" : "✗"} {OUTLET_NAMES[o]}</span>)}</p>
           </Card>
