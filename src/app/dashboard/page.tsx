@@ -363,11 +363,10 @@ export default function DashboardPage() {
 };
   const fetchOutletReportsByDate = async (date: string, u: Staff | null = user) => {
   if (!u) return;
-  const { data } = await supabase
-    .from("outlet_reports")
-    .select("*")
-    .eq("staff_id", u.id)
-    .eq("report_date", date);
+  const _isMgr = u.role === "Owner" || u.role === "Manager";
+  let _q = supabase.from("outlet_reports").select("*").eq("report_date", date);
+  if (!_isMgr) _q = _q.eq("staff_id", u.id);
+  const { data } = await _q;
   const map: Record<string, OutletReport> = {};
   (data || []).forEach((r: OutletReport) => { map[r.outlet_id] = r; });
   setOutletReports(map);
@@ -388,11 +387,10 @@ export default function DashboardPage() {
 };
 const fetchOutletReports = async (u: Staff) => {
   const today = new Date().toISOString().split("T")[0];
-  const { data } = await supabase
-    .from("outlet_reports")
-    .select("*")
-    .eq("staff_id", u.id)
-    .eq("report_date", today);
+  const _isMgr = u.role === "Owner" || u.role === "Manager";
+  let _q = supabase.from("outlet_reports").select("*").eq("report_date", today);
+  if (!_isMgr) _q = _q.eq("staff_id", u.id);
+  const { data } = await _q;
   const map: Record<string, OutletReport> = {};
   (data || []).forEach((r: OutletReport) => { map[r.outlet_id] = r; });
   setOutletReports(map);
