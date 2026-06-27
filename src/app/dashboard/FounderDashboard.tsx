@@ -112,8 +112,9 @@ export default function FounderDashboard({ user }: { user: Staff }) {
     const f = stFixed[o] || {};
     const _abs = (v: any) => Math.abs(Number(v) || 0);
     const fixed = _abs(f.staff) + _abs(f.rent) + _abs(f.eb) + _abs(f.transport) + 0.2 * _abs(f.rent) + _abs(f.pest) + _abs(f.water) + _abs(f.airtel);
+    const oTotal = oNet + oOnline;
     const comm = 0.5 * oOnline;
-    const contribution = oNet - 0.294 * oNet - 0.05 * oNet - comm;
+    const contribution = oTotal - 0.294 * oTotal - 0.05 * oTotal - comm;
     const netProfit = contribution - fixed;
     return { o, name: OUTLET_NAMES[o] || o, net: oNet, online: oOnline, fixed, comm, contribution, netProfit, reported: rows.length };
   });
