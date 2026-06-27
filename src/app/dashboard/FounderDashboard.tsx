@@ -345,6 +345,7 @@ export default function FounderDashboard({ user }: { user: Staff }) {
               <span className={`text-3xl font-black ${totalProfit >= 0 ? "text-green-400" : "text-red-400"}`}>{totalProfit >= 0 ? "Making " : "Losing "}{inr(Math.abs(totalProfit))}</span>
               <span className="text-[11px] font-mono text-zinc-500">net this month</span>
             </div>
+           <p className="text-[11px] text-zinc-500 mb-2">Based on {_complete.length} of {OUTLETS.length} outlets with full cost data{_incompleteCount > 0 ? ` · ${_incompleteCount} excluded (no P&L uploaded)` : ""}.</p>
             {worstPnl ? (
               <p className="text-xs text-zinc-300 mb-1"><span className="text-red-400 font-bold">Bleeding most: {worstPnl.name}</span> ({inr(worstPnl.netProfit)}) — {whyBleed(worstPnl)}</p>
             ) : <p className="text-xs text-green-400 mb-1">No outlet is in the red this month.</p>}
