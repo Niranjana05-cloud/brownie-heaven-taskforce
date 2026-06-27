@@ -116,8 +116,11 @@ export default function FounderDashboard({ user }: { user: Staff }) {
     const netProfit = contribution - fixed;
     return { o, name: OUTLET_NAMES[o] || o, net: oNet, online: oOnline, fixed, comm, contribution, netProfit, reported: rows.length };
   });
-  const totalProfit = pnl.reduce((s, p) => s + p.netProfit, 0);
-  const bleeders = pnl.filter(p => p.netProfit < 0).sort((a, b) => a.netProfit - b.netProfit);
+  const _hasCosts = (o: string) => { const f = stFixed[o] || {}; return ((Number(f.rent) || 0) + (Number(f.staff) || 0)) > 0; };
+  const _complete = pnl.filter(p => _hasCosts(p.o) && p.net > 0);
+  const _incompleteCount = pnl.filter(p => p.net > 0 && !_hasCosts(p.o)).length;
+  const totalProfit = _complete.reduce((s, p) => s + p.netProfit, 0);
+  const bleeders = _complete.filter(p => p.netProfit < 0).sort((a, b) => a.netProfit - b.netProfit);
   const worstPnl = bleeders[0];
   const noFixedCount = OUTLETS.filter(o => { const f = stFixed[o] || {}; return !((Number(f.staff) || 0) + (Number(f.rent) || 0) + (Number(f.pest) || 0)); }).length;
   const whyBleed = (p: any) => { if (!p) return ""; if (p.comm > p.contribution + p.fixed) return "aggregator commission (50% on online) is the killer — too online-dependent."; if (p.fixed > p.contribution) return "fixed costs (rent/staff) outweigh what sales bring in — rent is high or sales too low to cover it."; return "sales are simply too low this month to cover its costs."; };
