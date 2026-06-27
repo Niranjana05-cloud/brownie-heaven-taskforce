@@ -1291,13 +1291,14 @@ else await fetchOutletReportsByDate(outletEntryDate);
                   const fRent = isCBH ? 0 : _ab(f.rent);
                   const fEb = isCBH ? 0 : _ab(f.eb);
                   const fTransport = isCBH ? 0 : _ab(f.transport);
-                  const cogs = 0.294 * net, wastage = 0.05 * net, comm = 0.5 * online;
-                  const contrib = net - cogs - wastage - comm;
+                 const totalSales = net + online;
+                  const cogs = 0.294 * totalSales, wastage = 0.05 * totalSales, comm = 0.5 * online;
+                  const contrib = totalSales - cogs - wastage - comm;
                   const rm = 0.2 * fRent;
                   const totalFixed = fStaff+fRent+fEb+fTransport+rm+_ab(f.pest)+_ab(f.water)+_ab(f.airtel);
                   const netProfit = contrib - totalFixed;
-                  const cMargin = net ? contrib / net : 0;
-                  const nMargin = net ? netProfit / net : 0;
+                  const cMargin = totalSales ? contrib / totalSales : 0;
+                  const nMargin = totalSales ? netProfit / totalSales : 0;
                   const cmSame = cMargin > 0 ? cMargin : 0.156;
                   const cmDine = 0.656;
                   const ta = Number(t.a) || 0, tb = Number(t.b) || 0;
@@ -1334,8 +1335,9 @@ else await fetchOutletReportsByDate(outletEntryDate);
                           <tr key="_pldiv" className="border-t border-zinc-800"><td colSpan={2} className="px-4 pt-3 pb-1 text-[10px] font-mono text-zinc-500 uppercase tracking-widest">Month-to-date P&amp;L · {ml}</td></tr>
                           {row(`Net Sales — ${ml} total ${editing ? "✏️ (whole-month override)" : ""}`, editing ? inp("mnet", Number(_moNet) || 0) : m(net))}
                           {row(`Online Sales — ${ml} total ${editing ? "✏️ (whole-month override)" : ""}`, editing ? inp("monline", Number(_moOnline) || 0) : m(online))}
-                          {row("Less: COGS (food cost) @ 29.4%", m(cogs), { neg: true })}
-                          {row("Less: Wastage @ 5%", m(wastage), { neg: true })}
+                          {row("Total Sales (shop + online)", m(totalSales), { bold: true })}
+                          {row("Less: COGS (food cost) @ 29.4% of total", m(cogs), { neg: true })}
+                          {row("Less: Wastage @ 5% of total", m(wastage), { neg: true })}
                           {row("Less: Commission @ 50% (online)", m(comm), { neg: true })}
                           {row("Contribution (before fixed)", m(contrib), { bold: true })}
                           {row("   Contribution margin %", (cMargin * 100).toFixed(1) + "%")}
