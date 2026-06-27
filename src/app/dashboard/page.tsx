@@ -64,8 +64,8 @@ const OUTLET_TARGETS: Record<string, string> = {
   porur: "50000",
   perumbakkam: "13000",
   tambaram: "20000",
-  velachery: "",
-  pallavaram: "",
+  velachery: "23333",
+  pallavaram: "18000",
   vadapalani: "23333",
   besant_nagar: "11667",
 };
