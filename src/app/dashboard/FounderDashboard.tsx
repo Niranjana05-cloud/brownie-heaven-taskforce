@@ -41,6 +41,7 @@ export default function FounderDashboard({ user }: { user: Staff }) {
   const [daily, setDaily] = useState<any[]>([]);
   const [offRows, setOffRows] = useState<string[]>([]);
   const [stFixed, setStFixed] = useState<Record<string, any>>({});
+  const [stMonthSales, setStMonthSales] = useState<Record<string, { net: number; online: number }>>({});
   const [revs, setRevs] = useState<any[]>([]);
   const [payouts, setPayouts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -63,7 +64,20 @@ export default function FounderDashboard({ user }: { user: Staff }) {
         supabase.from("sales_target").select("outlet_id,line_items").eq("brand", "BH"),
       ]);
       setOut(o.data || []); setMonth(mo.data || []); setDaily(d.data || []); setRevs(r.data || []); setPayouts(p.data || []); setOffRows((off.data || []).map((x: any) => x.staff_id));
-      const fm: Record<string, any> = {}; (st.data || []).forEach((row: any) => { fm[row.outlet_id] = row.line_items?.fixed || {}; }); setStFixed(fm);
+     const fm: Record<string, any> = {}; const sm: Record<string, { net: number; online: number }> = {};
+      const _mk = monthStart.slice(0, 7);
+      (st.data || []).forEach((row: any) => {
+        const li = row.line_items || {};
+        fm[row.outlet_id] = li.fixed || {};
+        const sales = li.sales || {};
+        const dKeys = Object.keys(sales).filter((k) => k.length === 10 && k.startsWith(_mk));
+        const dNet = dKeys.reduce((s, k) => s + (Number(sales[k]?.net) || 0), 0);
+        const dOnline = dKeys.reduce((s, k) => s + (Number(sales[k]?.online) || 0), 0);
+        const moNet = Number(li.monthly?.[_mk]?.net) || 0;
+        const moOnline = Number(li.monthly?.[_mk]?.online) || 0;
+        sm[row.outlet_id] = { net: moNet + dNet, online: moOnline + dOnline };
+      });
+      setStFixed(fm); setStMonthSales(sm);
       setLoading(false);
     })();
   }, [date, monthStart]);
@@ -77,7 +91,9 @@ export default function FounderDashboard({ user }: { user: Staff }) {
   const swC = sum(out, "swiggy_sales_count"), zoC = sum(out, "zomato_sales_count");
 
   // month to date
-  const mShop = sum(month, "shop_sales_value"), mOnline = sum(month, "swiggy_sales_value") + sum(month, "zomato_sales_value");
+  const _stVals = Object.values(stMonthSales);
+  const mShop = _stVals.reduce((s, v) => s + (v.net || 0), 0);
+  const mOnline = _stVals.reduce((s, v) => s + (v.online || 0), 0);
   const mtd = mShop + mOnline;
   const runRate = dayOfMonth > 0 ? mtd / dayOfMonth : 0;
   const projected = runRate * daysInMonth;
@@ -90,8 +106,9 @@ export default function FounderDashboard({ user }: { user: Staff }) {
 
   const pnl = OUTLETS.map(o => {
     const rows = month.filter((r: any) => r.outlet_id === o);
-    const oNet = rows.reduce((s: number, r: any) => s + (Number(r.shop_sales_value) || 0) + (Number(r.swiggy_sales_value) || 0) + (Number(r.zomato_sales_value) || 0), 0);
-    const oOnline = rows.reduce((s: number, r: any) => s + (Number(r.swiggy_sales_value) || 0) + (Number(r.zomato_sales_value) || 0), 0);
+    const _ms = stMonthSales[o] || { net: 0, online: 0 };
+    const oNet = _ms.net;
+    const oOnline = _ms.online;
     const f = stFixed[o] || {};
     const fixed = (Number(f.staff) || 0) + (Number(f.rent) || 0) + (Number(f.eb) || 0) + (Number(f.transport) || 0) + 0.2 * (Number(f.rent) || 0) + (Number(f.pest) || 0) + (Number(f.water) || 0) + (Number(f.airtel) || 0);
     const comm = 0.5 * oOnline;
