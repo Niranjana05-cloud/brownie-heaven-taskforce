@@ -522,9 +522,11 @@ const runTargetCheck = async (u: Staff) => {
  const saveSalesTarget = async (outletId: string, brand: string, li: any) => {
     setStSaving(true);
     const num = (k: string, fb: number) => { const v = stEditValues[k]; return v !== undefined && v !== "" ? (parseFloat(String(v).replace(/,/g, "")) || 0) : fb; };
-    const f = li?.fixed || {}; const t = li?.targets || {};
+   const f = li?.fixed || {}; const t = li?.targets || {};
+    const mk = stDate.slice(0, 7);
     const updated = {
       sales: { ...(li?.sales || {}), [stDate]: { net: num("net", Number(li?.sales?.[stDate]?.net) || 0), online: num("online", Number(li?.sales?.[stDate]?.online) || 0) } },
+      monthly: { ...(li?.monthly || {}), [mk]: { net: num("mnet", Number(li?.monthly?.[mk]?.net) || 0), online: num("monline", Number(li?.monthly?.[mk]?.online) || 0) } },
       fixed: { staff: num("staff", Number(f.staff) || 0), rent: num("rent", Number(f.rent) || 0), eb: num("eb", Number(f.eb) || 0), transport: num("transport", Number(f.transport) || 0), pest: num("pest", Number(f.pest) || 0), water: num("water", Number(f.water) || 0), airtel: num("airtel", Number(f.airtel) || 0) },
       targets: { a: num("a", Number(t.a) || 0), b: num("b", Number(t.b) || 0) },
     };
@@ -1326,8 +1328,8 @@ else await fetchOutletReportsByDate(outletEntryDate);
                          {row(`Net Sales (excl GST) · ${dayLbl}`, inp("net", dayNet))}
                           {row(`Online Sales (Swiggy+Zomato) · ${dayLbl}`, inp("online", dayOnline))}
                           <tr key="_pldiv" className="border-t border-zinc-800"><td colSpan={2} className="px-4 pt-3 pb-1 text-[10px] font-mono text-zinc-500 uppercase tracking-widest">Month-to-date P&amp;L · {ml}</td></tr>
-                          {row(`Net Sales — ${ml} total`, m(net))}
-                          {row(`Online Sales — ${ml} total`, m(online))}
+                          {row(`Net Sales — ${ml} total`, inp("mnet", net))}
+                          {row(`Online Sales — ${ml} total`, inp("monline", online))}
                           {row("Less: COGS (food cost) @ 29.4%", m(cogs), { neg: true })}
                           {row("Less: Wastage @ 5%", m(wastage), { neg: true })}
                           {row("Less: Commission @ 50% (online)", m(comm), { neg: true })}
