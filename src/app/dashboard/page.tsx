@@ -1300,8 +1300,8 @@ else await fetchOutletReportsByDate(outletEntryDate);
                   const ta = Number(t.a) || 0, tb = Number(t.b) || 0;
                   const req = (p: number, cm: number) => cm > 0 ? (totalFixed + p) / cm : 0;
                   const m = (n: number) => Math.round(n).toLocaleString("en-IN");
-                  const inp = (k: string, fb: number) => editing
-                    ? <input type="number" defaultValue={fb || ""} onChange={(e) => setStEditValues(prev => ({ ...prev, [k]: e.target.value }))} className="w-24 bg-black border border-zinc-700 text-white px-2 py-1 text-right focus:outline-none focus:border-yellow-400" placeholder="0" />
+                 const inp = (k: string, fb: number) => editing
+                    ? <input key={`${key}_${k}`} type="number" value={stEditValues[k] !== undefined ? stEditValues[k] : (fb ? String(fb) : "")} onChange={(e) => setStEditValues(prev => ({ ...prev, [k]: e.target.value }))} className="w-24 bg-black border border-zinc-700 text-white px-2 py-1 text-right focus:outline-none focus:border-yellow-400" placeholder="0" />
                     : <span>{m(fb)}</span>;
                   const row = (label: string, val: any, opts?: { neg?: boolean; bold?: boolean }) => (
                     <tr key={label} className="border-t border-zinc-800/60">
@@ -1315,7 +1315,8 @@ else await fetchOutletReportsByDate(outletEntryDate);
                         <span className="font-mono text-xs uppercase tracking-widest text-yellow-400">{brand}</span>
                         {editing ? (
                           <div className="flex gap-2">
-                            <button onClick={() => saveSalesTarget(oid, brand, li)} disabled={stSaving} className="bg-yellow-400 text-black font-bold text-[10px] px-3 py-1.5 uppercase tracking-widest disabled:opacity-50">{stSaving ? "Saving..." : "Save"}</button>
+                           <button onClick={() => saveSalesTarget(oid, brand, li)} disabled={stSaving} className="bg-yellow-400 text-black font-bold text-[10px] px-3 py-1.5 uppercase tracking-widest disabled:opacity-50">{stSaving ? "Saving..." : "Save"}</button>
+                            <button onClick={() => setStEditValues(prev => ({ ...prev, net: "0", online: "0" }))} className="text-[10px] font-mono text-red-400 uppercase tracking-widest border border-red-900 px-2 py-1.5 hover:bg-red-950">Clear day</button>
                             <button onClick={() => { setStEditing(null); setStEditValues({}); }} className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest px-2">Cancel</button>
                           </div>
                         ) : (
