@@ -249,7 +249,7 @@ export default function FounderDashboard({ user }: { user: Staff }) {
       const good = p.netProfit >= 0;
       doc.setFillColor(good ? 40 : 200, good ? 170 : 55, good ? 80 : 55); doc.circle(M + 432, y - 3, 4, "F");
       doc.setFont("helvetica", "normal"); doc.setFontSize(9); doc.setTextColor(40, 40, 40);
-      doc.text((p.name).slice(0, 22), M, y); doc.text(rs(p.net), M + 200, y);
+      doc.text((p.name).slice(0, 22), M, y); doc.text(rs(p.net + p.online), M + 200, y);
       doc.setTextColor(good ? 40 : 190, good ? 130 : 50, good ? 60 : 50); doc.setFont("helvetica", "bold"); doc.text((good ? "+" : "") + rs(p.netProfit), M + 320, y);
       doc.setFont("helvetica", "normal"); doc.setTextColor(90, 90, 90); doc.text(good ? "OK" : "LOSS", M + 444, y);
       y += 17;
