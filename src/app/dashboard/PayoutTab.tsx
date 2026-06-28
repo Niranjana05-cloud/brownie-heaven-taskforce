@@ -132,6 +132,11 @@ export default function PayoutTab({ user }: { user: Staff }) {
   const [detected, setDetected] = useState("");
   const [parseErr, setParseErr] = useState("");
   const formRef = useRef<HTMLDivElement>(null);
+  const [view, setView] = useState<"entry" | "history">("entry");
+  const [histRows, setHistRows] = useState<Payout[]>([]);
+  const [histReports, setHistReports] = useState<Rep[]>([]);
+  const [histLoading, setHistLoading] = useState(false);
+  const [histPf, setHistPf] = useState<"all" | "swiggy" | "zomato">("all");
 
   const canEdit = canViewAll || myOutlets.includes(outlet);
 
@@ -159,6 +164,35 @@ export default function PayoutTab({ user }: { user: Staff }) {
     const valueDiff = Math.round(repValue) - Math.round(actualValue);
     return { repOrders, repValue, actualOrders, actualValue, ordersDiff, valueDiff, days: inRange.length };
   };
+
+  const recon = (p: Payout, reps: Rep[]) => {
+    const pf = p.platform === "zomato" ? "zomato" : "swiggy";
+    const inRange = reps.filter((r) => r.outlet_id === p.outlet_id && r.report_date >= p.period_start && r.report_date <= p.period_end);
+    const repOrders = inRange.reduce((s, r) => s + (Number(pf === "swiggy" ? r.swiggy_sales_count : r.zomato_sales_count) || 0), 0);
+    const repValue = inRange.reduce((s, r) => s + (Number(pf === "swiggy" ? r.swiggy_sales_value : r.zomato_sales_value) || 0), 0);
+    const actualOrders = Number(p.total_orders) || 0;
+    const actualValue = pf === "swiggy" ? (Number(p.customer_payable) || 0) : (Number(p.net_payout) || 0);
+    return { repOrders, repValue, actualOrders, actualValue, ordersDiff: repOrders - actualOrders, valueDiff: Math.round(repValue) - Math.round(actualValue), days: inRange.length };
+  };
+
+  useEffect(() => {
+    if (view !== "history") return;
+    let cancelled = false;
+    (async () => {
+      if (visibleOutlets.length === 0) return;
+      setHistLoading(true);
+      const [{ data: pData }, { data: rData }] = await Promise.all([
+        supabase.from("outlet_payouts").select("*").in("outlet_id", visibleOutlets).order("period_start", { ascending: false }),
+        supabase.from("outlet_reports").select("outlet_id,report_date,swiggy_sales_count,swiggy_sales_value,zomato_sales_count,zomato_sales_value").in("outlet_id", visibleOutlets),
+      ]);
+      if (cancelled) return;
+      setHistRows((pData as Payout[]) || []);
+      setHistReports((rData as Rep[]) || []);
+      setHistLoading(false);
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [view]);
 
   const resetForm = () => { setEditingId(null); setForm({}); setPasteText(""); setDetected(""); setParseErr(""); };
   const openEdit = (p: Payout) => {
@@ -272,6 +306,18 @@ export default function PayoutTab({ user }: { user: Staff }) {
         </div>
       </div>
 
+      {/* Entry | History toggle */}
+      <div className="flex gap-2 mb-5">
+        {(["entry", "history"] as const).map((v) => (
+          <button key={v} onClick={() => setView(v)}
+            className={`px-4 py-2 text-xs font-mono uppercase tracking-widest border transition-colors ${view === v ? "border-yellow-400 text-yellow-400" : "border-zinc-800 text-zinc-500 hover:text-white"}`}>
+            {v === "entry" ? "Entry" : "History"}
+          </button>
+        ))}
+      </div>
+
+      {view === "entry" && (
+      <>
       {/* Platform toggle */}
       <div className="flex gap-2 mb-4">
         {(["swiggy", "zomato"] as const).map((pf) => (
@@ -417,6 +463,61 @@ export default function PayoutTab({ user }: { user: Staff }) {
           );
         })}
       </div>
+      </>
+      )}
+
+      {view === "history" && (
+        <div className="max-w-5xl">
+          <div className="flex gap-2 mb-4">
+            {(["all", "swiggy", "zomato"] as const).map((pf) => (
+              <button key={pf} onClick={() => setHistPf(pf)}
+                className={`px-3 py-1.5 text-[11px] font-mono uppercase tracking-widest border transition-colors ${histPf === pf ? "border-yellow-400 text-yellow-400" : "border-zinc-800 text-zinc-500 hover:text-white"}`}>
+                {pf}
+              </button>
+            ))}
+          </div>
+
+          {histLoading && <p className="text-zinc-600 font-mono text-xs">Loading…</p>}
+          {!histLoading && histRows.length === 0 && <p className="text-zinc-600 font-mono text-xs">No payouts saved yet.</p>}
+
+          {!histLoading && histRows.length > 0 && (
+            <>
+              <div className="overflow-x-auto border border-zinc-800">
+                <table className="w-full text-xs font-mono whitespace-nowrap">
+                  <thead>
+                    <tr className="text-zinc-500 uppercase tracking-widest text-[10px] border-b border-zinc-800">
+                      <th className="text-left px-3 py-2.5">Outlet</th>
+                      <th className="text-left px-3 py-2.5">Platform</th>
+                      <th className="text-left px-3 py-2.5">Week</th>
+                      <th className="text-right px-3 py-2.5">Orders R / A</th>
+                      <th className="text-right px-3 py-2.5">Value R / A</th>
+                      <th className="text-right px-3 py-2.5">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {histRows.filter((p) => histPf === "all" || p.platform === histPf).map((p) => {
+                      const rc = recon(p, histReports);
+                      const ok = rc.ordersDiff === 0 && rc.valueDiff === 0;
+                      const pfColor = p.platform === "swiggy" ? "text-orange-400" : "text-red-400";
+                      return (
+                        <tr key={p.id} className="border-b border-zinc-900 hover:bg-zinc-900/40">
+                          <td className="px-3 py-2.5 text-white">{OUTLET_NAMES[p.outlet_id] || p.outlet_id}</td>
+                          <td className={`px-3 py-2.5 uppercase ${pfColor}`}>{p.platform}</td>
+                          <td className="px-3 py-2.5 text-zinc-300">{prettyD(p.period_start)} – {prettyD(p.period_end)}</td>
+                          <td className="px-3 py-2.5 text-right text-zinc-300">{rc.repOrders} / <span className={rc.ordersDiff === 0 ? "text-zinc-300" : "text-red-400"}>{rc.actualOrders}</span></td>
+                          <td className="px-3 py-2.5 text-right text-zinc-300">{fmt(rc.repValue)} / <span className={rc.valueDiff === 0 ? "text-zinc-300" : "text-red-400"}>{fmt(rc.actualValue)}</span></td>
+                          <td className="px-3 py-2.5 text-right">{ok ? <span className="text-green-400">✓</span> : <span className="text-red-400">⚠</span>}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              <p className="text-[10px] font-mono text-zinc-600 mt-2">R = reported (daily reports) · A = actual (payout) · ⚠ = mismatch. Newest week first.</p>
+            </>
+          )}
+        </div>
+      )}
     </div>
   );
 }
