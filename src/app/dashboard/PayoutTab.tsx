@@ -42,6 +42,9 @@ const prettyD = (d: string) => new Date(d + "T00:00:00").toLocaleDateString("en-
 const num = (s: string | undefined) => { const v = parseFloat(String(s ?? "").replace(/,/g, "")); return isNaN(v) ? null : v; };
 const int = (s: string | undefined) => { const v = parseInt(String(s ?? "").replace(/,/g, "")); return isNaN(v) ? null : v; };
 
+const ORDERS_TOLERANCE_PCT = 10; // flag a week only when reported vs actual ORDERS differ by more than this %
+const ordersGapPct = (rep: number, act: number) => (act > 0 ? Math.round((Math.abs(rep - act) / act) * 100) : (rep > 0 ? 100 : 0));
+
 const MON: Record<string, string> = { jan:"01",feb:"02",mar:"03",apr:"04",may:"05",jun:"06",jul:"07",aug:"08",sep:"09",oct:"10",nov:"11",dec:"12" };
 const toISO = (s: string | null | undefined) => {
   if (!s) return null;
@@ -402,9 +405,10 @@ export default function PayoutTab({ user }: { user: Staff }) {
       <div className="space-y-4 max-w-3xl">
         {payouts.map((p) => {
           const rc = reconcile(p);
-          const ordersOk = rc.ordersDiff === 0;
-          const valueOk = rc.valueDiff === 0;
-          const allOk = ordersOk && valueOk;
+          const pct = ordersGapPct(rc.repOrders, rc.actualOrders);
+          const ordersOk = pct <= ORDERS_TOLERANCE_PCT;
+          const valueOk = true;
+          const allOk = ordersOk;
           return (
             <div key={p.id} className="bg-[#131316] border border-zinc-800 p-5">
               <div className="flex justify-between items-start mb-4">
@@ -415,7 +419,7 @@ export default function PayoutTab({ user }: { user: Staff }) {
                 <div className="flex items-center gap-2">
                   {canEdit && <button onClick={() => openEdit(p)} className="text-[10px] font-mono uppercase tracking-widest px-2 py-1 border border-zinc-700 text-zinc-400 hover:text-white transition-colors">Edit</button>}
                   <span className={`text-[10px] font-mono uppercase tracking-widest px-2 py-1 border ${allOk ? "border-green-500/40 text-green-400" : "border-red-500/40 text-red-400"}`}>
-                    {allOk ? "✓ matched" : "⚠ mismatch"}
+                    {allOk ? "✓ orders match" : `⚠ orders ${pct}% off`}
                   </span>
                 </div>
               </div>
@@ -451,12 +455,15 @@ export default function PayoutTab({ user }: { user: Staff }) {
                   <div className="text-right">{rc.repOrders}</div>
                   <div className={`text-right ${ordersOk ? "" : "text-red-400"}`}>{rc.actualOrders}{ordersOk ? "" : ` (${rc.ordersDiff > 0 ? "+" : ""}${rc.ordersDiff})`}</div>
 
-                  <div className="text-zinc-400">{platform === "swiggy" ? "Value (gross)" : "Value"}</div>
+                  <div className="text-zinc-400">{platform === "swiggy" ? "Value (gross)" : "Value (gross vs net)"}</div>
                   <div className="text-right">{fmt(rc.repValue)}</div>
                   <div className={`text-right ${valueOk ? "" : "text-red-400"}`}>{fmt(rc.actualValue)}{valueOk ? "" : ` (${rc.valueDiff > 0 ? "+" : "\u2212"}${fmt(Math.abs(rc.valueDiff))})`}</div>
                 </div>
                 {platform === "swiggy" && (
-                  <p className="text-[10px] font-mono text-zinc-600 mt-2">Net transferable {fmt(p.amount_transferable)} (after fees/taxes — shown for reference, flag is on gross).</p>
+                  <p className="text-[10px] font-mono text-zinc-600 mt-2">Net transferable {fmt(p.amount_transferable)} (after fees/taxes). Status is based on the orders gap, not value.</p>
+                )}
+                {platform === "zomato" && (
+                  <p className="text-[10px] font-mono text-zinc-600 mt-2">Zomato payout is net of commission &amp; taxes, so it is lower than reported gross sales &mdash; that value gap is expected. Status is based on the orders gap.</p>
                 )}
               </div>
             </div>
@@ -490,30 +497,31 @@ export default function PayoutTab({ user }: { user: Staff }) {
                       <th className="text-left px-3 py-2.5">Platform</th>
                       <th className="text-left px-3 py-2.5">Week</th>
                       <th className="text-right px-3 py-2.5">Orders R / A</th>
-                      <th className="text-right px-3 py-2.5">Value R / A</th>
-                      <th className="text-right px-3 py-2.5">Status</th>
+                      <th className="text-right px-3 py-2.5">Value R / A (gross)</th>
+                      <th className="text-right px-3 py-2.5">Orders gap</th>
                     </tr>
                   </thead>
                   <tbody>
                     {histRows.filter((p) => histPf === "all" || p.platform === histPf).map((p) => {
                       const rc = recon(p, histReports);
-                      const ok = rc.ordersDiff === 0 && rc.valueDiff === 0;
+                      const pct = ordersGapPct(rc.repOrders, rc.actualOrders);
+                      const ok = pct <= ORDERS_TOLERANCE_PCT;
                       const pfColor = p.platform === "swiggy" ? "text-orange-400" : "text-red-400";
                       return (
                         <tr key={p.id} className="border-b border-zinc-900 hover:bg-zinc-900/40">
                           <td className="px-3 py-2.5 text-white">{OUTLET_NAMES[p.outlet_id] || p.outlet_id}</td>
                           <td className={`px-3 py-2.5 uppercase ${pfColor}`}>{p.platform}</td>
                           <td className="px-3 py-2.5 text-zinc-300">{prettyD(p.period_start)} – {prettyD(p.period_end)}</td>
-                          <td className="px-3 py-2.5 text-right text-zinc-300">{rc.repOrders} / <span className={rc.ordersDiff === 0 ? "text-zinc-300" : "text-red-400"}>{rc.actualOrders}</span></td>
-                          <td className="px-3 py-2.5 text-right text-zinc-300">{fmt(rc.repValue)} / <span className={rc.valueDiff === 0 ? "text-zinc-300" : "text-red-400"}>{fmt(rc.actualValue)}</span></td>
-                          <td className="px-3 py-2.5 text-right">{ok ? <span className="text-green-400">✓</span> : <span className="text-red-400">⚠</span>}</td>
+                          <td className="px-3 py-2.5 text-right text-zinc-300">{rc.repOrders} / <span className={ok ? "text-zinc-300" : "text-red-400"}>{rc.actualOrders}</span></td>
+                          <td className="px-3 py-2.5 text-right text-zinc-400">{fmt(rc.repValue)} / {fmt(rc.actualValue)}{p.platform === "zomato" ? " net" : ""}</td>
+                          <td className="px-3 py-2.5 text-right whitespace-nowrap"><span className={ok ? "text-green-400" : "text-red-400"}>{ok ? "✓" : "⚠"} {pct}%</span></td>
                         </tr>
                       );
                     })}
                   </tbody>
                 </table>
               </div>
-              <p className="text-[10px] font-mono text-zinc-600 mt-2">R = reported (daily reports) · A = actual (payout) · ⚠ = mismatch. Newest week first.</p>
+              <p className="text-[10px] font-mono text-zinc-600 mt-2 leading-relaxed max-w-3xl">R = reported in daily reports · A = actual from the platform. &ldquo;Orders gap&rdquo; = how far reported orders are from actual; flagged &#9888; only above {ORDERS_TOLERANCE_PCT}%. Value is gross reported vs payout &mdash; Zomato&rsquo;s payout is net of commission &amp; taxes, so its value gap is expected, not an error. Newest week first.</p>
             </>
           )}
         </div>
