@@ -6,6 +6,7 @@ import { createClient } from "@supabase/supabase-js";
 import { celebrate } from "../celebrate";
 import PayoutTab from "./PayoutTab";
 import FounderDashboard from "./FounderDashboard";
+import ReconciliationTab from "./ReconciliationTab";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -190,7 +191,7 @@ export default function DashboardPage() {
   const [reports, setReports] = useState<Report[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
- const [activeTab, setActiveTab] = useState<"tasks" | "my_report" | "all_reports" | "analytics" | "outlet_reports" | "owner_outlets" | "history" | "attendance" | "sales_target" | "payout">("tasks");
+ const [activeTab, setActiveTab] = useState<"tasks" | "my_report" | "all_reports" | "analytics" | "outlet_reports" | "owner_outlets" | "history" | "attendance" | "sales_target" | "payout" | "reconciliation">("tasks");
   const [outletFilter, setOutletFilter] = useState("all");
   const [reportData, setReportData] = useState<Record<string, string>>({});
   const [reportSubmitting, setReportSubmitting] = useState(false);
@@ -1015,6 +1016,11 @@ else await fetchOutletReportsByDate(outletEntryDate);
               <span>💰</span> Payout
             </div>
           )}
+          {user.role === "Owner" && (
+            <div onClick={() => { setActiveTab("reconciliation"); setSidebarOpen(false); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "reconciliation" ? "text-white bg-zinc-900 border-l-2 border-yellow-400" : "text-zinc-500 hover:text-white"}`}>
+              <span>⚖️</span> Reconciliation
+            </div>
+          )}
           {canAssign && (
             <>
              <div onClick={() => { setActiveTab("all_reports"); setSidebarOpen(false); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "all_reports" ? "text-white bg-zinc-900 border-l-2 border-yellow-400" : "text-zinc-500 hover:text-white"}`}>
@@ -1396,6 +1402,7 @@ else await fetchOutletReportsByDate(outletEntryDate);
           </div>
         )}
       {activeTab === "payout" && user && <PayoutTab user={user} />}
+      {activeTab === "reconciliation" && user && <ReconciliationTab />}
        {activeTab === "attendance" && (
           <div>
             <div className="flex justify-between items-start mb-6 pb-5 border-b border-zinc-800">
