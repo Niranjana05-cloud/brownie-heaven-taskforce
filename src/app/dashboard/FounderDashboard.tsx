@@ -314,7 +314,52 @@ const downloadPDF = async () => {
             </div>`;
           }).join("")}
         </div>
+      ${(() => {
+          const ra = atlasReconRows.filter((r: any) => r.atlasGross !== null);
+          if (ra.length === 0) return "";
+          const tAG = ra.reduce((s: number, r: any) => s + (r.atlasGross || 0), 0);
+          const tRG = ra.reduce((s: number, r: any) => s + (r.reportedGross || 0), 0);
+          const tAN = ra.reduce((s: number, r: any) => s + (r.atlasNet || 0), 0);
+          const tAL = ra.reduce((s: number, r: any) => s + (r.atlasLost || 0), 0);
+          const rows = ra.map((r: any) => {
+            const gap = (r.atlasGross || 0) - (r.reportedGross || 0);
+            const flag = Math.abs(gap) > 500;
+            return `<tr>
+              <td style="padding:7px 10px;border-bottom:1px solid ${C.line};font-weight:600;color:${C.ink};font-size:11px">${flag ? "🔴" : "🟢"} ${OUTLET_NAMES[r.outlet_id] || r.outlet_id}</td>
+              <td style="padding:7px 10px;border-bottom:1px solid ${C.line};text-align:right;font-size:11px;color:${C.brown}">${rsF(r.atlasGross || 0)}</td>
+              <td style="padding:7px 10px;border-bottom:1px solid ${C.line};text-align:right;font-size:11px;color:${C.soft}">${rsF(r.reportedGross || 0)}</td>
+              <td style="padding:7px 10px;border-bottom:1px solid ${C.line};text-align:right;font-size:11px;font-weight:700;color:${flag ? C.red : C.green}">${gap >= 0 ? "+" : ""}${rsF(gap)}</td>
+              <td style="padding:7px 10px;border-bottom:1px solid ${C.line};text-align:right;font-size:11px;color:#1565C0">${rsF(r.atlasNet || 0)}</td>
+              <td style="padding:7px 10px;border-bottom:1px solid ${C.line};text-align:right;font-size:11px;color:${C.red}">${(r.atlasLost || 0) > 0 ? rsF(r.atlasLost) : "—"}</td>
+            </tr>`;
+          }).join("");
+          return `
+        <div style="font-size:16px;font-weight:800;color:${C.ink};margin:22px 0 12px;page-break-before:always">🔍 Atlas reconciliation — honesty check</div>
+        <table style="width:100%;border-collapse:collapse;background:${C.card};border:1px solid ${C.line};border-radius:14px;overflow:hidden">
+          <thead><tr style="background:${C.ink}">
+            <th style="padding:9px 10px;text-align:left;color:#FFF6E5;font-size:10px;letter-spacing:.5px">OUTLET</th>
+            <th style="padding:9px 10px;text-align:right;color:#FFF6E5;font-size:10px;letter-spacing:.5px">ATLAS GROSS</th>
+            <th style="padding:9px 10px;text-align:right;color:#FFF6E5;font-size:10px;letter-spacing:.5px">STAFF GROSS</th>
+            <th style="padding:9px 10px;text-align:right;color:#FFF6E5;font-size:10px;letter-spacing:.5px">GAP</th>
+            <th style="padding:9px 10px;text-align:right;color:#FFF6E5;font-size:10px;letter-spacing:.5px">ATLAS NET</th>
+            <th style="padding:9px 10px;text-align:right;color:#FFF6E5;font-size:10px;letter-spacing:.5px">LOST REV.</th>
+          </tr></thead>
+          <tbody>${rows}
+            <tr style="background:#FFF4DD">
+              <td style="padding:9px 10px;font-weight:800;color:${C.ink};font-size:11px">TOTAL</td>
+              <td style="padding:9px 10px;text-align:right;font-weight:800;color:${C.ink};font-size:11px">${rsF(tAG)}</td>
+              <td style="padding:9px 10px;text-align:right;font-weight:700;color:${C.soft};font-size:11px">${rsF(tRG)}</td>
+              <td style="padding:9px 10px;text-align:right;font-weight:800;color:${Math.abs(tAG - tRG) > 500 ? C.red : C.green};font-size:11px">${(tAG - tRG) >= 0 ? "+" : ""}${rsF(tAG - tRG)}</td>
+              <td style="padding:9px 10px;text-align:right;font-weight:800;color:#1565C0;font-size:11px">${rsF(tAN)}</td>
+              <td style="padding:9px 10px;text-align:right;font-weight:800;color:${C.red};font-size:11px">${rsF(tAL)}</td>
+            </tr>
+          </tbody>
+        </table>
+        <div style="font-size:10px;color:${C.soft};margin-top:8px">🔴 = gap over ₹500 between Atlas and staff-reported gross · Atlas Net = founder-verified revenue · Lost Rev. = platform cancellations.</div>`;
+        })()}
         <div style="text-align:center;font-size:10px;color:${C.soft};margin-top:18px">🍫 Brownie Heaven · Generated ${dateStr} · 🟢 profit · 🔴 loss · ⚪️ no data yet · monthly target = daily × ${daysInMonth} · per-day = ${sdStr} actual</div>
+      </div>
+    </div>`;
       </div>
     </div>`;
     const holder = document.createElement("div");
