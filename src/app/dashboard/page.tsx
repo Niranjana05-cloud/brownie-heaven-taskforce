@@ -1625,6 +1625,58 @@ else await fetchOutletReportsByDate(outletEntryDate);
     className="bg-black border border-zinc-800 text-white px-4 py-2.5 focus:outline-none focus:border-yellow-400 transition-colors font-mono text-sm"
   />
 </div>
+    {(() => {
+      const COLORS = ["#FACC15","#F97316","#EF4444","#EC4899","#A855F7","#6366F1","#3B82F6","#06B6D4","#10B981","#84CC16","#F59E0B","#14B8A6"];
+      const rows = OUTLETS.map((o, i) => {
+        const r = allOutletReports.find(x => x.outlet_id === o);
+        const tot = r ? (Number(r.shop_sales_value)||0)+(Number(r.swiggy_sales_value)||0)+(Number(r.zomato_sales_value)||0) : 0;
+        return { o, name: OUTLET_NAMES[o] || o, tot, filed: !!r, late: r?.is_late, color: COLORS[i % COLORS.length] };
+      }).sort((a,b) => b.tot - a.tot);
+      const grand = rows.reduce((s,r) => s + r.tot, 0) || 1;
+      const filedCount = rows.filter(r => r.filed).length;
+      const lateCount = rows.filter(r => r.filed && r.late).length;
+      const top = rows[0];
+      // donut segments
+      let acc = 0; const R = 70, CX = 90, CY = 90, SW = 28;
+      const segs = rows.filter(r => r.tot > 0).map(r => {
+        const frac = r.tot / grand; const len = frac * 2 * Math.PI * R;
+        const gap = 2 * Math.PI * R - len;
+        const off = -acc * 2 * Math.PI * R; acc += frac;
+        return { r, dash: `${len} ${gap}`, off };
+      });
+      return (
+        <div className="bg-[#131316] border border-zinc-800 p-5 mb-6">
+          <div className="flex flex-col md:flex-row gap-6 items-center">
+            <div className="relative shrink-0">
+              <svg width="180" height="180" viewBox="0 0 180 180">
+                <circle cx={CX} cy={CY} r={R} fill="none" stroke="#27272a" strokeWidth={SW} />
+                {segs.map((s, i) => (
+                  <circle key={i} cx={CX} cy={CY} r={R} fill="none" stroke={s.r.color} strokeWidth={SW}
+                    strokeDasharray={s.dash} strokeDashoffset={s.off} transform={`rotate(-90 ${CX} ${CY})`} />
+                ))}
+                <text x={CX} y={CY-6} textAnchor="middle" className="fill-white" style={{fontSize:"18px",fontWeight:800}}>₹{(grand/100000).toFixed(1)}L</text>
+                <text x={CX} y={CY+12} textAnchor="middle" className="fill-zinc-500" style={{fontSize:"9px",letterSpacing:"1px"}}>TOTAL SALES</text>
+              </svg>
+            </div>
+            <div className="flex-1 w-full">
+              <div className="grid grid-cols-3 gap-3 mb-4">
+                <div className="bg-black/30 p-3 border border-zinc-800"><p className="text-[9px] font-mono text-zinc-500 uppercase tracking-widest">Filed</p><p className="text-lg font-black text-green-400">{filedCount}/12</p></div>
+                <div className="bg-black/30 p-3 border border-zinc-800"><p className="text-[9px] font-mono text-zinc-500 uppercase tracking-widest">Late</p><p className={`text-lg font-black ${lateCount>0?"text-red-400":"text-zinc-400"}`}>{lateCount}</p></div>
+                <div className="bg-black/30 p-3 border border-zinc-800"><p className="text-[9px] font-mono text-zinc-500 uppercase tracking-widest">Top outlet</p><p className="text-sm font-black text-yellow-400 truncate">{top?.name}</p></div>
+              </div>
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-x-4 gap-y-1.5">
+                {rows.map(r => (
+                  <div key={r.o} className="flex items-center justify-between text-[11px]">
+                    <span className="flex items-center gap-1.5 min-w-0"><span className="w-2.5 h-2.5 rounded-sm shrink-0" style={{background:r.filed?r.color:"#3f3f46"}}></span><span className="text-zinc-300 truncate">{r.name}</span></span>
+                    <span className="font-mono text-zinc-500 shrink-0">{r.filed?`${((r.tot/grand)*100).toFixed(0)}%`:"—"}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    })()}
     <div className="grid grid-cols-1 gap-4">
       {OUTLETS.map(o => {
         const report = allOutletReports.find(r => r.outlet_id === o);
