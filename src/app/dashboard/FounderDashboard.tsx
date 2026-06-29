@@ -298,7 +298,23 @@ const downloadPDF = async () => {
             </div>`;
           }).join("")}
         </div>
-        <div style="text-align:center;font-size:10px;color:${C.soft};margin-top:18px">🍫 Brownie Heaven · Generated ${dateStr} · 🟢 profit · 🔴 loss · ⚪️ no data yet · target = daily target × ${daysInMonth} days</div>
+      <div style="font-size:16px;font-weight:800;color:${C.ink};margin:22px 0 12px">📆 Per-day — ${sdStr} actual vs daily target</div>
+        <div style="background:${C.card};border:1px solid ${C.line};border-radius:14px;padding:14px 18px">
+          ${OUTLETS.map((o: string) => {
+            const r = out.find((x: any) => x.outlet_id === o);
+            const day = r ? (Number(r.shop_sales_value) || 0) + (Number(r.swiggy_sales_value) || 0) + (Number(r.zomato_sales_value) || 0) : 0;
+            const dt = (r && Number(r.target)) ? Number(r.target) : (OUTLET_TARGETS[o] || 0);
+            const filed = !!r;
+            const pct = dt > 0 ? Math.min(120, (day / dt) * 100) : 0;
+            const hit = dt > 0 && day >= dt;
+            const barCol = !filed ? C.line : (hit ? C.green : (pct >= 60 ? C.gold : C.red));
+            return `<div style="margin-bottom:11px">
+              <div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:3px"><span style="color:${C.ink};font-weight:600">${!filed ? "⚪️" : (hit ? "✅" : "🔴")} ${OUTLET_NAMES[o] || o}</span><span style="color:${C.soft}">${filed ? rsF(day) : "not filed"}${dt > 0 ? ` / ${rsF(dt)}${filed ? ` · ${((day / dt) * 100).toFixed(0)}%` : ""}` : ""}</span></div>
+              <div style="height:9px;background:${C.line};border-radius:5px;overflow:hidden"><div style="height:100%;width:${Math.min(100, pct)}%;background:${barCol}"></div></div>
+            </div>`;
+          }).join("")}
+        </div>
+        <div style="text-align:center;font-size:10px;color:${C.soft};margin-top:18px">🍫 Brownie Heaven · Generated ${dateStr} · 🟢 profit · 🔴 loss · ⚪️ no data yet · monthly target = daily × ${daysInMonth} · per-day = ${sdStr} actual</div>
       </div>
     </div>`;
     const holder = document.createElement("div");
