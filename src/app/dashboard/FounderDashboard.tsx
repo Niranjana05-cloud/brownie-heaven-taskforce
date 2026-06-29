@@ -167,215 +167,137 @@ export default function FounderDashboard({ user }: { user: Staff }) {
     return { outlet_id: o, atlasGross: ag, atlasNet: an, atlasLost: al, reportedGross: rg, diff };
   });
 
-  const loadJsPDF = (): Promise<any> => new Promise((resolve, reject) => {
+ const loadHtml2Pdf = (): Promise<any> => new Promise((resolve, reject) => {
     const w = window as any;
-    if (w.jspdf && w.jspdf.jsPDF) return resolve(w.jspdf.jsPDF);
+    if (w.html2pdf) return resolve(w.html2pdf);
     const s = document.createElement("script");
-    s.src = "https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js";
-    s.onload = () => resolve((window as any).jspdf.jsPDF);
+    s.src = "https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js";
+    s.onload = () => resolve((window as any).html2pdf);
     s.onerror = () => reject(new Error("pdf lib failed"));
     document.body.appendChild(s);
   });
-  const downloadPDF = async () => {
-    let jsPDF: any;
-    try { jsPDF = await loadJsPDF(); } catch { alert("Could not load the PDF tool — check your connection and retry."); return; }
-    const doc = new jsPDF({ unit: "pt", format: "a4" });
-    const W = doc.internal.pageSize.getWidth();
-    const H = doc.internal.pageSize.getHeight();
-    const M = 40;
-    const rs = (nn: number) => "Rs " + Math.round(nn).toLocaleString("en-IN");
-    const rsL = (nn: number) => "Rs " + (nn / 100000).toFixed(2) + " L";
-    const txt = (s: string, x: number, yy: number, size: number, bold = false, c: number[] = [30, 30, 30], align: any = "left") => {
-      doc.setFontSize(size); doc.setFont("helvetica", bold ? "bold" : "normal"); doc.setTextColor(c[0], c[1], c[2]);
-      doc.text(s, x, yy, { align });
-    };
-    const _gen = new Date(date + "T00:00:00");
-    const _data = new Date(_gen.getTime() - 86400000);
-    const _dataLbl = _data.toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
-    const _genLbl = _gen.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
+  const rsF = (n: number) => "₹" + Math.round(n).toLocaleString("en-IN");
+  const lk = (n: number) => "₹" + (n / 100000).toFixed(2) + "L";
+const downloadPDF = async () => {
+    let html2pdf: any;
+    try { html2pdf = await loadHtml2Pdf(); } catch { alert("Could not load the PDF tool — check your connection and retry."); return; }
+    const making = totalProfit >= 0;
+    const sorted = [...pnl].sort((a, b) => b.netProfit - a.netProfit);
+    const maxTot = Math.max(...sorted.map(p => p.net + p.online), 1);
+    const dateStr = new Date(date + "T00:00:00").toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" });
+    const sd = new Date(date + "T00:00:00"); sd.setDate(sd.getDate() - 1);
+    const sdStr = sd.toLocaleDateString("en-IN", { day: "numeric", month: "short" });
 
-    doc.setFillColor(250, 204, 21); doc.rect(0, 0, W, 74, "F");
-    txt("BROWNIE HEAVEN", M, 38, 22, true, [20, 20, 20]);
-    txt("Daily Scoreboard — the one-glance morning brief", M, 58, 10, false, [90, 70, 0]);
-    txt("Compiled " + _genLbl, W - M, 40, 9, false, [90, 70, 0], "right");
-    txt("Sales for " + _dataLbl, M, 98, 11, true, [40, 40, 40]);
+    const C = { bg: "#FAF3E7", card: "#FFFDF8", ink: "#3E2415", brown: "#5C3A22", soft: "#8A6A4A", gold: "#C8901E", gold2: "#E0A52E", line: "#EADBC2", green: "#2E7D32", red: "#C62828" };
 
-    const profit = totalProfit >= 0;
-    const by = 112, bh = 92;
-    if (profit) doc.setFillColor(34, 160, 70); else doc.setFillColor(200, 55, 55);
-    doc.roundedRect(M, by, W - 2 * M, bh, 6, 6, "F");
-    txt(profit ? "WE'RE MAKING MONEY" : "WE'RE LOSING MONEY", M + 22, by + 34, 17, true, [255, 255, 255]);
-    txt(rs(Math.abs(totalProfit)) + (profit ? " up" : " down") + " this month", M + 22, by + 66, 24, true, [255, 255, 255]);
-    const icx = W - M - 50, icy = by + bh / 2, icr = 26;
-    doc.setFillColor(255, 255, 255); doc.circle(icx, icy, icr, "F"); doc.setLineWidth(3.5);
-    if (profit) { doc.setDrawColor(34, 160, 70); doc.line(icx - 12, icy + 1, icx - 3, icy + 11); doc.line(icx - 3, icy + 11, icx + 14, icy - 11); }
-    else { doc.setDrawColor(200, 55, 55); doc.line(icx - 10, icy - 10, icx + 10, icy + 10); doc.line(icx - 10, icy + 10, icx + 10, icy - 10); }
+    const rowHtml = sorted.map(p => {
+      const tot = p.net + p.online;
+      const has = (p.net > 0 || p.online > 0);
+      const dot = !has ? "⚪️" : (p.netProfit >= 0 ? "🟢" : "🔴");
+      const bar = Math.min(100, (tot / maxTot) * 100);
+      const col = p.netProfit >= 0 ? C.green : C.red;
+      return `<tr>
+        <td style="padding:8px 12px;border-bottom:1px solid ${C.line};font-weight:600;color:${C.ink};font-size:12px">${dot}&nbsp;${p.name}</td>
+        <td style="padding:8px 12px;border-bottom:1px solid ${C.line}">
+          <div style="font-size:11px;color:${C.soft};margin-bottom:3px">${rsF(tot)}</div>
+          <div style="height:7px;background:${C.line};border-radius:4px;overflow:hidden"><div style="height:100%;width:${bar}%;background:linear-gradient(90deg,${C.gold2},${C.gold})"></div></div>
+        </td>
+        <td style="padding:8px 12px;border-bottom:1px solid ${C.line};text-align:right;font-weight:800;color:${col};font-size:12px;white-space:nowrap">${p.netProfit >= 0 ? "+" : ""}${rsF(p.netProfit)}</td>
+      </tr>`;
+    }).join("");
 
-    const gx = M + 110, gy = 290, gr = 60, seg = 48;
-    for (let i = 0; i < seg; i++) {
-      const f0 = i / seg, f1 = (i + 1) / seg, a0 = Math.PI - f0 * Math.PI, a1 = Math.PI - f1 * Math.PI, pctAt = f0 * 100;
-      if (pctAt < 50) doc.setDrawColor(220, 70, 70); else if (pctAt < 80) doc.setDrawColor(240, 150, 40); else doc.setDrawColor(40, 170, 80);
-      doc.setLineWidth(11); doc.line(gx + gr * Math.cos(a0), gy - gr * Math.sin(a0), gx + gr * Math.cos(a1), gy - gr * Math.sin(a1));
+    const kpi = (emoji: string, label: string, value: string, sub: string) => `
+      <div style="flex:1;background:${C.card};border:1px solid ${C.line};border-radius:14px;padding:16px 18px">
+        <div style="font-size:11px;letter-spacing:1px;text-transform:uppercase;color:${C.soft};margin-bottom:6px">${emoji}&nbsp;${label}</div>
+        <div style="font-size:24px;font-weight:800;color:${C.ink};line-height:1">${value}</div>
+        <div style="font-size:11px;color:${C.soft};margin-top:5px">${sub}</div>
+      </div>`;
+
+    const drain = worstPnl ? `
+      <div style="background:#FBEAE7;border:1px solid #E8C0B8;border-radius:14px;padding:16px 18px;margin-top:14px">
+        <div style="font-size:13px;font-weight:800;color:${C.red};margin-bottom:6px">🩸 Biggest drain — ${worstPnl.name} (${rsF(worstPnl.netProfit)})</div>
+        <div style="font-size:12px;color:${C.brown};margin-bottom:4px"><b>Why:</b> ${whyBleed(worstPnl)}</div>
+        <div style="font-size:12px;color:${C.gold}"><b>✅ Fix:</b> ${fixBleed(worstPnl)}</div>
+      </div>` : "";
+
+    const offPct = mtd > 0 ? (mShop / mtd) * 100 : 0;
+    const onPct = 100 - offPct;
+    const tgtPct = Math.min(100, targetPct);
+
+    const html = `
+    <div style="width:794px;background:${C.bg};font-family:'Segoe UI',Helvetica,Arial,sans-serif;color:${C.ink};box-sizing:border-box">
+      <div style="background:linear-gradient(135deg,${C.ink},${C.brown});padding:22px 32px;display:flex;justify-content:space-between;align-items:center">
+        <div>
+          <div style="font-size:22px;font-weight:800;color:#FFF6E5">🍫 Brownie Heaven</div>
+          <div style="font-size:12px;color:${C.gold2};letter-spacing:2px;text-transform:uppercase">Money Report — are we making or losing?</div>
+        </div>
+        <div style="text-align:right;color:#E8D5BC;font-size:11px">📅 ${dateStr}<br><span style="color:#B89A78">Sales data: ${sdStr} (prev. day)</span></div>
+      </div>
+
+      <div style="padding:24px 32px">
+        <div style="background:${making ? "#E9F5EA" : "#FBEAE7"};border:2px solid ${making ? C.green : C.red};border-radius:18px;padding:22px 26px;text-align:center;margin-bottom:18px">
+          <div style="font-size:13px;letter-spacing:1px;text-transform:uppercase;color:${C.soft}">Profit / Loss · Month to date</div>
+          <div style="font-size:40px;font-weight:900;color:${making ? C.green : C.red};margin:6px 0">${making ? "🎉 Making" : "⚠️ Losing"} ${rsF(Math.abs(totalProfit))}</div>
+          <div style="font-size:12px;color:${C.soft}">net this month · based on ${_complete.length} of 12 outlets with full cost data${_incompleteCount > 0 ? ` · ${_incompleteCount} pending` : ""}</div>
+        </div>
+
+        <div style="display:flex;gap:14px;margin-bottom:18px">
+          ${kpi("📅", "Today's sales", rsF(tTotal), `${dayOfMonth}/${daysInMonth} reported`)}
+          ${kpi("💰", "Month to date", lk(mtd), `${dayOfMonth} days`)}
+          ${kpi("📈", "Projected end", lk(projected), onTrack ? "on target" : "below target")}
+        </div>
+
+        <div style="background:${C.card};border:1px solid ${C.line};border-radius:14px;padding:16px 18px;margin-bottom:14px">
+          <div style="display:flex;justify-content:space-between;font-size:12px;color:${C.brown};margin-bottom:8px"><span>🎯 Achieved ${lk(mtd)}</span><span>Target ${lk(MONTHLY_TARGET)}</span></div>
+          <div style="height:14px;background:${C.line};border-radius:8px;overflow:hidden"><div style="height:100%;width:${tgtPct}%;background:linear-gradient(90deg,${C.gold2},${C.gold})"></div></div>
+          <div style="font-size:11px;color:${C.soft};margin-top:7px">${targetPct.toFixed(1)}% of target · ${lk(Math.max(MONTHLY_TARGET - mtd, 0))} to go · ⚡ ${rsF(runRate)}/day current pace</div>
+        </div>
+
+        ${drain}
+
+        <div style="background:${C.card};border:1px solid ${C.line};border-radius:14px;padding:16px 18px;margin-top:14px">
+          <div style="font-size:12px;font-weight:700;color:${C.ink};margin-bottom:8px">📱 Channel mix · 🛍️ Offline ${offPct.toFixed(0)}% &nbsp;vs&nbsp; 📱 Online ${onPct.toFixed(0)}%</div>
+          <div style="height:14px;border-radius:8px;overflow:hidden;display:flex">
+            <div style="width:${offPct}%;background:${C.gold}"></div><div style="width:${onPct}%;background:${C.ink}"></div>
+          </div>
+          <div style="font-size:11px;color:${C.soft};margin-top:7px">For every ₹1 walk-in, ₹${offlineRatio > 0 ? (1 / offlineRatio).toFixed(1) : "—"} comes from online (50% app commission territory).</div>
+        </div>
+      </div>
+
+      <div style="padding:8px 32px 28px;page-break-before:always">
+        <div style="font-size:16px;font-weight:800;color:${C.ink};margin:8px 0 12px">📊 Profit / Loss by outlet</div>
+        <table style="width:100%;border-collapse:collapse;background:${C.card};border:1px solid ${C.line};border-radius:14px;overflow:hidden">
+          <thead><tr style="background:${C.ink}">
+            <th style="padding:9px 12px;text-align:left;color:#FFF6E5;font-size:11px;letter-spacing:1px">OUTLET</th>
+            <th style="padding:9px 12px;text-align:left;color:#FFF6E5;font-size:11px;letter-spacing:1px">SALES (MTD)</th>
+            <th style="padding:9px 12px;text-align:right;color:#FFF6E5;font-size:11px;letter-spacing:1px">NET P/L</th>
+          </tr></thead>
+          <tbody>${rowHtml}</tbody>
+        </table>
+        <div style="text-align:center;background:${making ? "#E9F5EA" : "#FBEAE7"};border:1px solid ${making ? C.green : C.red};border-radius:12px;padding:14px;margin-top:14px;font-size:16px;font-weight:800;color:${making ? C.green : C.red}">
+          ${making ? "🎉" : "⚠️"} TOTAL: ${making ? "Making" : "Losing"} ${rsF(Math.abs(totalProfit))} net this month
+        </div>
+        <div style="text-align:center;font-size:10px;color:${C.soft};margin-top:18px">🍫 Brownie Heaven · Generated ${dateStr} · 🟢 profit · 🔴 loss · ⚪️ no data yet</div>
+      </div>
+    </div>`;
+
+    const holder = document.createElement("div");
+    holder.style.position = "fixed"; holder.style.left = "-9999px"; holder.style.top = "0";
+    holder.innerHTML = html;
+    document.body.appendChild(holder);
+    try {
+      await html2pdf().set({
+        margin: 0,
+        filename: "BrownieHeaven_Report_" + date + ".pdf",
+        image: { type: "jpeg", quality: 0.98 },
+        html2canvas: { scale: 2, useCORS: true, backgroundColor: C.bg },
+        jsPDF: { unit: "pt", format: "a4", orientation: "portrait" },
+        pagebreak: { mode: ["css", "legacy"] },
+      }).from(holder.firstElementChild).save();
+    } finally {
+      document.body.removeChild(holder);
     }
-    const pcl = Math.max(0, Math.min(targetPct, 100)), na = Math.PI - pcl / 100 * Math.PI;
-    doc.setDrawColor(30, 30, 30); doc.setLineWidth(2.5); doc.line(gx, gy, gx + (gr - 14) * Math.cos(na), gy - (gr - 14) * Math.sin(na));
-    doc.setFillColor(30, 30, 30); doc.circle(gx, gy, 4, "F");
-    txt(targetPct.toFixed(0) + "%", gx, gy - 16, 20, true, [30, 30, 30], "center");
-    txt("of monthly target", gx, gy + 16, 8, false, [120, 120, 120], "center");
-    txt(rsL(mtd) + " / " + rsL(MONTHLY_TARGET), gx, gy + 30, 8, false, [120, 120, 120], "center");
-
-    const stats: [string, string][] = [["Sales (this day)", rs(tTotal)], ["Month to date", rsL(mtd)], ["Projected month-end", rsL(projected)]];
-    let scy = 232;
-    stats.forEach(([lab, val]) => {
-      doc.setFillColor(245, 245, 245); doc.roundedRect(300, scy, W - M - 300, 40, 4, 4, "F");
-      txt(lab, 312, scy + 15, 8, false, [120, 120, 120]); txt(val, 312, scy + 33, 14, true, [20, 20, 20]); scy += 48;
-    });
-
-    const cy0 = 400;
-    doc.setFillColor(253, 242, 242); doc.setDrawColor(220, 90, 90); doc.setLineWidth(1); doc.roundedRect(M, cy0, W - 2 * M, 116, 5, 5, "FD");
-    txt("BIGGEST DRAIN THIS MONTH", M + 16, cy0 + 24, 11, true, [180, 50, 50]);
-    if (worstPnl) {
-      txt(worstPnl.name + "  (" + rs(worstPnl.netProfit) + ")", M + 16, cy0 + 46, 14, true, [30, 30, 30]);
-      doc.setFontSize(9); doc.setFont("helvetica", "normal"); doc.setTextColor(70, 70, 70);
-      const wl = doc.splitTextToSize("Why: " + whyBleed(worstPnl), W - 2 * M - 32); let ly = cy0 + 66; wl.forEach((l: string) => { doc.text(l, M + 16, ly); ly += 13; });
-      doc.setTextColor(150, 100, 0); const fl = doc.splitTextToSize("Fix: " + fixBleed(worstPnl), W - 2 * M - 32); fl.forEach((l: string) => { doc.text(l, M + 16, ly); ly += 13; });
-    } else { txt("No outlet is in the red this month. Good going!", M + 16, cy0 + 48, 12, true, [40, 130, 50]); }
-
-    let gC = 0, oC = 0, grC = 0;
-    OUTLETS.forEach(o => { const r = out.find((x: any) => x.outlet_id === o); if (!r) { grC++; return; } const tot = (Number(r.shop_sales_value) || 0) + (Number(r.swiggy_sales_value) || 0) + (Number(r.zomato_sales_value) || 0); const tgt = Number(r.target) || OUTLET_TARGETS[o] || 0; if (tgt > 0 && tot >= tgt) gC++; else oC++; });
-    const ty0 = cy0 + 150;
-    txt("OUTLET HEALTH (this day)", M, ty0, 11, true, [40, 40, 40]);
-    const dotY = ty0 + 24;
-    doc.setFillColor(40, 170, 80); doc.circle(M + 8, dotY - 4, 7, "F"); txt(gC + " hit target", M + 22, dotY, 10, false, [50, 50, 50]);
-    doc.setFillColor(240, 150, 40); doc.circle(M + 145, dotY - 4, 7, "F"); txt(oC + " below target", M + 159, dotY, 10, false, [50, 50, 50]);
-    doc.setFillColor(160, 160, 160); doc.circle(M + 320, dotY - 4, 7, "F"); txt(grC + " not reported", M + 334, dotY, 10, false, [50, 50, 50]);
-    const offNames = offRows.map((id: string) => (DUTY_STAFF.find(s => s.id === id)?.name) || id);
-    txt("Off today: " + (offNames.length ? offNames.join(", ") : "none"), M, ty0 + 50, 10, false, offNames.length ? [170, 110, 0] : [80, 80, 80]);
-    if (noFixedCount > 0) txt("Note: fixed costs missing for " + noFixedCount + " outlet(s) in Sales Target — profit is overstated until added.", M, ty0 + 70, 8, false, [170, 110, 0]);
-    txt("Page 1 of 2 — detail & per-outlet breakdown overleaf", M, H - 30, 8, false, [160, 160, 160]);
-
-    doc.addPage();
-    let y = 50;
-    const put = (s: string, size = 10, bold = false, c: number[] = [30, 30, 30]) => {
-      doc.setFontSize(size); doc.setFont("helvetica", bold ? "bold" : "normal"); doc.setTextColor(c[0], c[1], c[2]);
-      const ls = doc.splitTextToSize(s, W - 2 * M); ls.forEach((l: string) => { if (y > H - 50) { doc.addPage(); y = 50; } doc.text(l, M, y); y += size + 5; });
-    };
-    doc.setFillColor(250, 204, 21); doc.rect(0, 0, W, 8, "F");
-    put("PROFIT / LOSS BY OUTLET — MONTH TO DATE", 13, true, [0, 0, 0]); y += 4;
-    doc.setFontSize(8); doc.setFont("helvetica", "bold"); doc.setTextColor(120, 120, 120);
-    doc.text("OUTLET", M, y); doc.text("SALES (MTD)", M + 200, y); doc.text("NET P/L", M + 320, y); doc.text("STATUS", M + 430, y);
-    y += 6; doc.setDrawColor(220, 220, 220); doc.line(M, y, W - M, y); y += 14;
-    pnl.forEach(p => {
-      if (y > H - 50) { doc.addPage(); y = 50; }
-      const good = p.netProfit >= 0;
-      doc.setFillColor(good ? 40 : 200, good ? 170 : 55, good ? 80 : 55); doc.circle(M + 432, y - 3, 4, "F");
-      doc.setFont("helvetica", "normal"); doc.setFontSize(9); doc.setTextColor(40, 40, 40);
-      doc.text((p.name).slice(0, 22), M, y); doc.text(rs(p.net + p.online), M + 200, y);
-      doc.setTextColor(good ? 40 : 190, good ? 130 : 50, good ? 60 : 50); doc.setFont("helvetica", "bold"); doc.text((good ? "+" : "") + rs(p.netProfit), M + 320, y);
-      doc.setFont("helvetica", "normal"); doc.setTextColor(90, 90, 90); doc.text(good ? "OK" : "LOSS", M + 444, y);
-      y += 17;
-    });
-    y += 6; doc.setDrawColor(220, 220, 220); doc.line(M, y, W - M, y); y += 16;
-    put("TOTAL: " + (totalProfit >= 0 ? "Making " : "Losing ") + rs(Math.abs(totalProfit)) + " net this month.", 11, true, totalProfit >= 0 ? [40, 120, 40] : [180, 60, 60]); y += 10;
-
-    put("SALES VS TARGET (this day)", 12, true, [0, 0, 0]); y += 4;
-    const chMax = Math.max(...OUTLETS.map(o => { const rr = out.find((x: any) => x.outlet_id === o); const tt = rr ? (Number(rr.shop_sales_value) || 0) + (Number(rr.swiggy_sales_value) || 0) + (Number(rr.zomato_sales_value) || 0) : 0; return Math.max(tt, Number(rr?.target) || OUTLET_TARGETS[o] || 0); }), 1);
-    const barX = M + 95, barW = W - M - barX - 50, barH = 11;
-    OUTLETS.forEach((o) => {
-      if (y > H - 50) { doc.addPage(); y = 50; }
-      const r = out.find((x: any) => x.outlet_id === o);
-      const tot = r ? (Number(r.shop_sales_value) || 0) + (Number(r.swiggy_sales_value) || 0) + (Number(r.zomato_sales_value) || 0) : 0;
-      const tgt = r ? (Number(r.target) || OUTLET_TARGETS[o] || 0) : (OUTLET_TARGETS[o] || 0);
-      const hit = tgt > 0 && tot >= tgt;
-      doc.setFontSize(8); doc.setFont("helvetica", "normal"); doc.setTextColor(40, 40, 40); doc.text((OUTLET_NAMES[o] || o).slice(0, 16), M, y + 9);
-      doc.setFillColor(235, 235, 235); doc.rect(barX, y, barW, barH, "F");
-      const w = Math.min((tot / chMax) * barW, barW);
-      if (!r) doc.setFillColor(160, 160, 160); else if (hit) doc.setFillColor(34, 160, 70); else doc.setFillColor(240, 140, 30);
-      doc.rect(barX, y, w, barH, "F");
-      if (tgt > 0) { const tx = barX + Math.min((tgt / chMax) * barW, barW); doc.setDrawColor(220, 180, 0); doc.setLineWidth(1.4); doc.line(tx, y - 1, tx, y + barH + 1); }
-      doc.setFontSize(7); doc.setTextColor(90, 90, 90); doc.text(r ? rs(tot) : "n/r", barX + barW + 4, y + 9);
-      y += barH + 6;
-    });
-    y += 4; put("Green = hit  |  Orange = below  |  Grey = not reported  |  Yellow line = target", 8, false, [120, 120, 120]); y += 10;
-
-    put("PER OUTLET — WHAT TO DO", 12, true, [0, 0, 0]);
-    const weak: { name: string; gap: number; comment: string }[] = [];
-    OUTLETS.forEach((o) => {
-      const r = out.find((x: any) => x.outlet_id === o);
-      const name = OUTLET_NAMES[o] || o;
-      if (!r) { put(name + ": NOT REPORTED — follow up with the manager before anything else.", 10, true, [180, 60, 60]); weak.push({ name, gap: -1e9, comment: "not reported — follow up" }); return; }
-      const shop = Number(r.shop_sales_value) || 0, sw = Number(r.swiggy_sales_value) || 0, zo = Number(r.zomato_sales_value) || 0;
-      const online = sw + zo, total = shop + online, tgt = Number(r.target) || OUTLET_TARGETS[o] || 0, g = total - tgt;
-      let cmt: string;
-      if (tgt <= 0) cmt = rs(total) + " for the day (no target set).";
-      else if (g >= 0) cmt = "Hit target — " + rs(total) + " vs " + rs(tgt) + " (+" + rs(g) + "). Strong day, keep it going.";
-      else {
-        const pctUnder = Math.round(Math.abs(g) / tgt * 100), split = "Walk-in " + rs(shop) + " vs online " + rs(online) + ".";
-        if (pctUnder < 10) cmt = "So close — just " + rs(Math.abs(g)) + " (" + pctUnder + "%) off. One push closes it.";
-        else if (pctUnder > 40) cmt = "Big gap — " + rs(Math.abs(g)) + " (" + pctUnder + "%) under. Needs a proper review. " + (online < shop ? "Online barely moving — start there." : "Footfall is the problem — start there.");
-        else if (online < shop) cmt = rs(Math.abs(g)) + " short (" + pctUnder + "% under). Online is soft — push Swiggy/Zomato combos & visibility. " + split;
-        else cmt = rs(Math.abs(g)) + " short (" + pctUnder + "% under). Walk-ins soft — drive footfall & counter upsell. " + split;
-        weak.push({ name, gap: g, comment: cmt });
-      }
-      put(name + ": " + rs(total) + " / " + rs(tgt) + " target  [" + (g >= 0 ? "HIT" : "SHORT") + "]", 10, true);
-      put("    " + cmt, 9, false, g >= 0 ? [40, 120, 40] : [180, 60, 60]);
-    });
-    y += 8;
-    const worst = weak.filter(w => w.gap < 0).sort((a, b) => a.gap - b.gap).slice(0, 3);
-    if (worst.length) { put("TOP 3 TO FIX FIRST", 12, true, [180, 60, 60]); worst.forEach((w, i) => put((i + 1) + ". " + w.name + " — " + w.comment, 9)); }
-    if (atlasResults.length > 0) {
-      y += 14;
-      if (y > H - 80) { doc.addPage(); y = 50; }
-      put("ATLAS RECONCILIATION — " + d0.toLocaleDateString("en-IN", { month: "long", year: "numeric" }).toUpperCase(), 12, true, [0, 0, 0]);
-      y += 4;
-      const colR = [200, 283, 355, 438, W - M];
-      doc.setFontSize(7); doc.setFont("helvetica", "bold"); doc.setTextColor(120, 120, 120);
-      doc.text("OUTLET", M, y);
-      doc.text("ATLAS GROSS", colR[0], y, { align: "right" });
-      doc.text("REPORTED", colR[1], y, { align: "right" });
-      doc.text("DIFF", colR[2], y, { align: "right" });
-      doc.text("ATLAS NET", colR[3], y, { align: "right" });
-      doc.text("LOST REV.", colR[4], y, { align: "right" });
-      y += 5; doc.setDrawColor(220, 220, 220); doc.line(M, y, W - M, y); y += 11;
-      atlasReconRows.forEach(row => {
-        if (y > H - 50) { doc.addPage(); y = 50; }
-        const hasAtlas = row.atlasGross !== null;
-        const ok = hasAtlas && Math.abs(row.diff!) <= ATLAS_THRESHOLD;
-        doc.setFont("helvetica", "normal"); doc.setFontSize(8); doc.setTextColor(40, 40, 40);
-        doc.text((OUTLET_NAMES[row.outlet_id] || row.outlet_id).slice(0, 18), M, y);
-        doc.setTextColor(40, 40, 40);
-        doc.text(hasAtlas ? rs(row.atlasGross!) : "—", colR[0], y, { align: "right" });
-        doc.setTextColor(90, 90, 90);
-        doc.text(rs(row.reportedGross), colR[1], y, { align: "right" });
-        if (hasAtlas) {
-          doc.setTextColor(ok ? 120 : (row.diff! < 0 ? 200 : 170), ok ? 120 : 55, ok ? 120 : 50);
-          doc.text((row.diff! >= 0 ? "+" : "−") + rs(Math.abs(row.diff!)), colR[2], y, { align: "right" });
-        } else { doc.setTextColor(160, 160, 160); doc.text("—", colR[2], y, { align: "right" }); }
-        doc.setTextColor(60, 100, 180);
-        doc.text(hasAtlas ? rs(row.atlasNet!) : "—", colR[3], y, { align: "right" });
-        doc.setTextColor(hasAtlas && row.atlasLost! > 0 ? 190 : 150, hasAtlas && row.atlasLost! > 0 ? 50 : 150, 50);
-        doc.text(hasAtlas && row.atlasLost! > 0 ? rs(row.atlasLost!) : "—", colR[4], y, { align: "right" });
-        y += 13;
-      });
-      y += 2; doc.setDrawColor(220, 220, 220); doc.line(M, y, W - M, y); y += 11;
-      const _tAG = atlasReconRows.reduce((s, row) => s + (row.atlasGross ?? 0), 0);
-      const _tRG = atlasReconRows.reduce((s, row) => s + row.reportedGross, 0);
-      const _tD = _tAG - _tRG;
-      doc.setFont("helvetica", "bold"); doc.setFontSize(8); doc.setTextColor(30, 30, 30);
-      doc.text("TOTAL", M, y);
-      doc.text(rs(_tAG), colR[0], y, { align: "right" });
-      doc.setTextColor(90, 90, 90); doc.text(rs(_tRG), colR[1], y, { align: "right" });
-      doc.setTextColor(_tD < 0 ? 200 : 170, _tD < 0 ? 55 : 100, 50);
-      doc.text((_tD >= 0 ? "+" : "−") + rs(Math.abs(_tD)), colR[2], y, { align: "right" });
-      doc.setTextColor(60, 100, 180);
-      doc.text(rs(atlasReconRows.reduce((s, row) => s + (row.atlasNet ?? 0), 0)), colR[3], y, { align: "right" });
-      doc.setTextColor(190, 50, 50);
-      doc.text(rs(atlasReconRows.reduce((s, row) => s + (row.atlasLost ?? 0), 0)), colR[4], y, { align: "right" });
-      y += 14;
-      put("● = gap over Rs 500 between Atlas and staff-reported gross. Atlas Net = founder-verified revenue. Lost Rev. = platform cancellations.", 7, false, [150, 150, 150]);
-    }
-
-    doc.save("BrownieHeaven_Report_" + date + ".pdf");
+  };
   };
   const Hero = ({ label, value, sub, accent }: any) => (
     <div className="flex-1 min-w-[150px] bg-gradient-to-b from-zinc-900 to-[#0e0e10] border border-zinc-800 p-5">
