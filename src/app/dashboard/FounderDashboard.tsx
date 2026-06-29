@@ -262,6 +262,13 @@ const downloadPDF = async () => {
           </div>
           <div style="font-size:11px;color:${C.soft};margin-top:7px">For every ₹1 walk-in, ₹${offlineRatio > 0 ? (1 / offlineRatio).toFixed(1) : "—"} comes from online (50% app commission territory).</div>
         </div>
+
+        <div style="background:${C.card};border:1px solid ${C.line};border-radius:14px;padding:18px 20px;margin-top:14px;text-align:center">
+          <div style="font-size:12px;font-weight:700;color:${C.ink};margin-bottom:10px">🎯 Monthly target gauge</div>
+          <div style="font-size:30px;font-weight:900;color:${onTrack ? C.green : C.gold}">${targetPct.toFixed(0)}%</div>
+          <div style="height:16px;background:${C.line};border-radius:9px;overflow:hidden;margin:10px 0"><div style="height:100%;width:${tgtPct}%;background:linear-gradient(90deg,${C.gold2},${C.gold})"></div></div>
+          <div style="font-size:11px;color:${C.soft}">${lk(mtd)} of ${lk(MONTHLY_TARGET)} · projected ${lk(projected)} ${onTrack ? "✅ on track" : "⚠️ below target"}</div>
+        </div>
       </div>
 
       <div style="padding:8px 32px 28px;page-break-before:always">
@@ -277,10 +284,23 @@ const downloadPDF = async () => {
         <div style="text-align:center;background:${making ? "#E9F5EA" : "#FBEAE7"};border:1px solid ${making ? C.green : C.red};border-radius:12px;padding:14px;margin-top:14px;font-size:16px;font-weight:800;color:${making ? C.green : C.red}">
           ${making ? "🎉" : "⚠️"} TOTAL: ${making ? "Making" : "Losing"} ${rsF(Math.abs(totalProfit))} net this month
         </div>
-        <div style="text-align:center;font-size:10px;color:${C.soft};margin-top:18px">🍫 Brownie Heaven · Generated ${dateStr} · 🟢 profit · 🔴 loss · ⚪️ no data yet</div>
+       <div style="font-size:16px;font-weight:800;color:${C.ink};margin:22px 0 12px">🎯 Sales vs target by outlet (month)</div>
+        <div style="background:${C.card};border:1px solid ${C.line};border-radius:14px;padding:14px 18px">
+          ${sorted.map(p => {
+            const tot = p.net + p.online;
+            const mt = (OUTLET_TARGETS[p.o] || 0) * daysInMonth;
+            const pct = mt > 0 ? Math.min(120, (tot / mt) * 100) : 0;
+            const hit = mt > 0 && tot >= mt;
+            const barCol = hit ? C.green : (pct >= 60 ? C.gold : C.red);
+            return `<div style="margin-bottom:11px">
+              <div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:3px"><span style="color:${C.ink};font-weight:600">${hit ? "✅" : ""} ${p.name}</span><span style="color:${C.soft}">${rsF(tot)} / ${mt > 0 ? rsF(mt) : "—"}${mt > 0 ? ` · ${((tot / mt) * 100).toFixed(0)}%` : ""}</span></div>
+              <div style="height:9px;background:${C.line};border-radius:5px;overflow:hidden"><div style="height:100%;width:${Math.min(100, pct)}%;background:${barCol}"></div></div>
+            </div>`;
+          }).join("")}
+        </div>
+        <div style="text-align:center;font-size:10px;color:${C.soft};margin-top:18px">🍫 Brownie Heaven · Generated ${dateStr} · 🟢 profit · 🔴 loss · ⚪️ no data yet · target = daily target × ${daysInMonth} days</div>
       </div>
     </div>`;
-
     const holder = document.createElement("div");
     holder.style.position = "fixed"; holder.style.left = "-9999px"; holder.style.top = "0";
     holder.innerHTML = html;
