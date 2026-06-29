@@ -44,6 +44,7 @@ export default function FounderDashboard({ user }: { user: Staff }) {
   const [stMonthSales, setStMonthSales] = useState<Record<string, { net: number; online: number }>>({});
   const [revs, setRevs] = useState<any[]>([]);
   const [payouts, setPayouts] = useState<any[]>([]);
+  const [atlasResults, setAtlasResults] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   const d0 = new Date(date + "T00:00:00");
@@ -54,7 +55,7 @@ export default function FounderDashboard({ user }: { user: Staff }) {
   useEffect(() => {
     (async () => {
       setLoading(true);
-     const [o, mo, d, r, p, off, st] = await Promise.all([
+     const [o, mo, d, r, p, off, st, atlasRaw] = await Promise.all([
         supabase.from("outlet_reports").select("*").eq("report_date", date),
         supabase.from("outlet_reports").select("outlet_id,report_date,shop_sales_value,swiggy_sales_value,zomato_sales_value,swiggy_sales_count,zomato_sales_count").gte("report_date", monthStart).lte("report_date", date),
         supabase.from("reports").select("staff_id,report_date,is_late,is_backfill,no_points").eq("report_date", date),
@@ -62,8 +63,10 @@ export default function FounderDashboard({ user }: { user: Staff }) {
         supabase.from("outlet_payouts").select("outlet_id,platform,period_start,amount_transferable,net_payout").order("period_start", { ascending: false }).limit(60),
         supabase.from("day_off").select("staff_id").eq("off_date", date),
         supabase.from("sales_target").select("outlet_id,line_items").eq("brand", "BH"),
+        supabase.from("atlas_monthly_results").select("*").eq("month", monthStart.slice(0, 7)),
       ]);
       setOut(o.data || []); setMonth(mo.data || []); setDaily(d.data || []); setRevs(r.data || []); setPayouts(p.data || []); setOffRows((off.data || []).map((x: any) => x.staff_id));
+      setAtlasResults(atlasRaw.data || []);
      const fm: Record<string, any> = {}; const sm: Record<string, { net: number; online: number }> = {};
       const _mk = monthStart.slice(0, 7);
       (st.data || []).forEach((row: any) => {
@@ -145,6 +148,24 @@ export default function FounderDashboard({ user }: { user: Staff }) {
 
   const latestPay: Record<string, any> = {};
   payouts.forEach(p => { const k = p.outlet_id + "_" + p.platform; if (!latestPay[k]) latestPay[k] = p; });
+
+  const reportedByOutletMtd: Record<string, number> = {};
+  (month as any[]).forEach((r: any) => {
+    const g = (Number(r.shop_sales_value) || 0) + (Number(r.swiggy_sales_value) || 0) + (Number(r.zomato_sales_value) || 0);
+    reportedByOutletMtd[r.outlet_id] = (reportedByOutletMtd[r.outlet_id] || 0) + g;
+  });
+  const atlasMap: Record<string, any> = {};
+  atlasResults.forEach((r: any) => { atlasMap[r.outlet_id] = r; });
+  const ATLAS_THRESHOLD = 500;
+  const atlasReconRows = OUTLETS.map(o => {
+    const ar = atlasMap[o];
+    const rg = reportedByOutletMtd[o] || 0;
+    const ag: number | null = ar ? (Number(ar.atlas_gross) || 0) : null;
+    const an: number | null = ar ? (Number(ar.atlas_net) || 0) : null;
+    const al: number | null = ar ? (Number(ar.atlas_lost) || 0) : null;
+    const diff: number | null = ag !== null ? ag - rg : null;
+    return { outlet_id: o, atlasGross: ag, atlasNet: an, atlasLost: al, reportedGross: rg, diff };
+  });
 
   const loadJsPDF = (): Promise<any> => new Promise((resolve, reject) => {
     const w = window as any;
@@ -302,6 +323,58 @@ export default function FounderDashboard({ user }: { user: Staff }) {
     y += 8;
     const worst = weak.filter(w => w.gap < 0).sort((a, b) => a.gap - b.gap).slice(0, 3);
     if (worst.length) { put("TOP 3 TO FIX FIRST", 12, true, [180, 60, 60]); worst.forEach((w, i) => put((i + 1) + ". " + w.name + " — " + w.comment, 9)); }
+    if (atlasResults.length > 0) {
+      y += 14;
+      if (y > H - 80) { doc.addPage(); y = 50; }
+      put("ATLAS RECONCILIATION — " + d0.toLocaleDateString("en-IN", { month: "long", year: "numeric" }).toUpperCase(), 12, true, [0, 0, 0]);
+      y += 4;
+      const colR = [200, 283, 355, 438, W - M];
+      doc.setFontSize(7); doc.setFont("helvetica", "bold"); doc.setTextColor(120, 120, 120);
+      doc.text("OUTLET", M, y);
+      doc.text("ATLAS GROSS", colR[0], y, { align: "right" });
+      doc.text("REPORTED", colR[1], y, { align: "right" });
+      doc.text("DIFF", colR[2], y, { align: "right" });
+      doc.text("ATLAS NET", colR[3], y, { align: "right" });
+      doc.text("LOST REV.", colR[4], y, { align: "right" });
+      y += 5; doc.setDrawColor(220, 220, 220); doc.line(M, y, W - M, y); y += 11;
+      atlasReconRows.forEach(row => {
+        if (y > H - 50) { doc.addPage(); y = 50; }
+        const hasAtlas = row.atlasGross !== null;
+        const ok = hasAtlas && Math.abs(row.diff!) <= ATLAS_THRESHOLD;
+        doc.setFont("helvetica", "normal"); doc.setFontSize(8); doc.setTextColor(40, 40, 40);
+        doc.text((OUTLET_NAMES[row.outlet_id] || row.outlet_id).slice(0, 18), M, y);
+        doc.setTextColor(40, 40, 40);
+        doc.text(hasAtlas ? rs(row.atlasGross!) : "—", colR[0], y, { align: "right" });
+        doc.setTextColor(90, 90, 90);
+        doc.text(rs(row.reportedGross), colR[1], y, { align: "right" });
+        if (hasAtlas) {
+          doc.setTextColor(ok ? 120 : (row.diff! < 0 ? 200 : 170), ok ? 120 : 55, ok ? 120 : 50);
+          doc.text((row.diff! >= 0 ? "+" : "−") + rs(Math.abs(row.diff!)), colR[2], y, { align: "right" });
+        } else { doc.setTextColor(160, 160, 160); doc.text("—", colR[2], y, { align: "right" }); }
+        doc.setTextColor(60, 100, 180);
+        doc.text(hasAtlas ? rs(row.atlasNet!) : "—", colR[3], y, { align: "right" });
+        doc.setTextColor(hasAtlas && row.atlasLost! > 0 ? 190 : 150, hasAtlas && row.atlasLost! > 0 ? 50 : 150, 50);
+        doc.text(hasAtlas && row.atlasLost! > 0 ? rs(row.atlasLost!) : "—", colR[4], y, { align: "right" });
+        y += 13;
+      });
+      y += 2; doc.setDrawColor(220, 220, 220); doc.line(M, y, W - M, y); y += 11;
+      const _tAG = atlasReconRows.reduce((s, row) => s + (row.atlasGross ?? 0), 0);
+      const _tRG = atlasReconRows.reduce((s, row) => s + row.reportedGross, 0);
+      const _tD = _tAG - _tRG;
+      doc.setFont("helvetica", "bold"); doc.setFontSize(8); doc.setTextColor(30, 30, 30);
+      doc.text("TOTAL", M, y);
+      doc.text(rs(_tAG), colR[0], y, { align: "right" });
+      doc.setTextColor(90, 90, 90); doc.text(rs(_tRG), colR[1], y, { align: "right" });
+      doc.setTextColor(_tD < 0 ? 200 : 170, _tD < 0 ? 55 : 100, 50);
+      doc.text((_tD >= 0 ? "+" : "−") + rs(Math.abs(_tD)), colR[2], y, { align: "right" });
+      doc.setTextColor(60, 100, 180);
+      doc.text(rs(atlasReconRows.reduce((s, row) => s + (row.atlasNet ?? 0), 0)), colR[3], y, { align: "right" });
+      doc.setTextColor(190, 50, 50);
+      doc.text(rs(atlasReconRows.reduce((s, row) => s + (row.atlasLost ?? 0), 0)), colR[4], y, { align: "right" });
+      y += 14;
+      put("● = gap over Rs 500 between Atlas and staff-reported gross. Atlas Net = founder-verified revenue. Lost Rev. = platform cancellations.", 7, false, [150, 150, 150]);
+    }
+
     doc.save("BrownieHeaven_Report_" + date + ".pdf");
   };
   const Hero = ({ label, value, sub, accent }: any) => (
@@ -455,6 +528,74 @@ export default function FounderDashboard({ user }: { user: Staff }) {
               })}
               {OUTLETS.every(o => !latestPay[o + "_swiggy"] && !latestPay[o + "_zomato"]) && <p className="text-zinc-600 text-xs">No payout data yet.</p>}
             </div>
+          </Card>
+
+          <Card title={`Atlas Reconciliation — ${d0.toLocaleDateString("en-IN", { month: "long", year: "numeric" })}`}>
+            {atlasResults.length === 0 ? (
+              <p className="text-zinc-600 text-xs font-mono">No Atlas data saved for {d0.toLocaleDateString("en-IN", { month: "long", year: "numeric" })} yet — run Reconciliation for this month and save to dashboard.</p>
+            ) : (
+              <>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs font-mono whitespace-nowrap">
+                    <thead>
+                      <tr className="text-zinc-500 uppercase tracking-widest text-[10px] border-b border-zinc-800">
+                        <th className="text-left py-2 pr-3">Outlet</th>
+                        <th className="text-right py-2 pl-3">Atlas Gross</th>
+                        <th className="text-right py-2 pl-3">Reported</th>
+                        <th className="text-right py-2 pl-3">Diff</th>
+                        <th className="text-center py-2 pl-3">Flag</th>
+                        <th className="text-right py-2 pl-3">Atlas Net</th>
+                        <th className="text-right py-2 pl-3">Lost Rev.</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {atlasReconRows.map(r => {
+                        const hasAtlas = r.atlasGross !== null;
+                        const ok = hasAtlas && Math.abs(r.diff!) <= ATLAS_THRESHOLD;
+                        return (
+                          <tr key={r.outlet_id} className="border-b border-zinc-800/40">
+                            <td className="py-1.5 pr-3 text-zinc-300">{OUTLET_NAMES[r.outlet_id]}</td>
+                            <td className="py-1.5 pl-3 text-right">{hasAtlas ? inr(r.atlasGross!) : <span className="text-zinc-600">—</span>}</td>
+                            <td className="py-1.5 pl-3 text-right text-zinc-400">{inr(r.reportedGross)}</td>
+                            <td className={`py-1.5 pl-3 text-right font-semibold ${!hasAtlas ? "text-zinc-600" : ok ? "text-zinc-500" : r.diff! < 0 ? "text-red-400" : "text-yellow-400"}`}>
+                              {!hasAtlas ? "—" : `${r.diff! >= 0 ? "+" : "−"}${inr(Math.abs(r.diff!))}`}
+                            </td>
+                            <td className="py-1.5 pl-3 text-center">
+                              {hasAtlas && (
+                                <span className={`text-[10px] uppercase tracking-widest border px-1.5 py-0.5 ${ok ? "border-green-500/40 text-green-400" : "border-red-500/40 text-red-400"}`}>
+                                  {ok ? "✓" : "⚠"}
+                                </span>
+                              )}
+                            </td>
+                            <td className="py-1.5 pl-3 text-right text-blue-400">{hasAtlas ? inr(r.atlasNet!) : <span className="text-zinc-600">—</span>}</td>
+                            <td className="py-1.5 pl-3 text-right text-red-400">{hasAtlas && r.atlasLost! > 0 ? inr(r.atlasLost!) : <span className="text-zinc-600">—</span>}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                    <tfoot>
+                      {(() => {
+                        const tAG = atlasReconRows.reduce((s, r) => s + (r.atlasGross ?? 0), 0);
+                        const tRG = atlasReconRows.reduce((s, r) => s + r.reportedGross, 0);
+                        const tD = tAG - tRG;
+                        return (
+                          <tr className="border-t border-zinc-700">
+                            <td className="py-2 text-zinc-400 font-bold text-[10px] uppercase tracking-widest">Total</td>
+                            <td className="py-2 pl-3 text-right font-bold text-white">{inr(tAG)}</td>
+                            <td className="py-2 pl-3 text-right font-bold text-zinc-300">{inr(tRG)}</td>
+                            <td className={`py-2 pl-3 text-right font-bold ${tD < 0 ? "text-red-400" : "text-yellow-400"}`}>{tD >= 0 ? "+" : "−"}{inr(Math.abs(tD))}</td>
+                            <td></td>
+                            <td className="py-2 pl-3 text-right font-bold text-blue-400">{inr(atlasReconRows.reduce((s, r) => s + (r.atlasNet ?? 0), 0))}</td>
+                            <td className="py-2 pl-3 text-right font-bold text-red-400">{inr(atlasReconRows.reduce((s, r) => s + (r.atlasLost ?? 0), 0))}</td>
+                          </tr>
+                        );
+                      })()}
+                    </tfoot>
+                  </table>
+                </div>
+                <p className="text-[10px] font-mono text-zinc-600 mt-2">Atlas Gross vs staff-reported MTD (shop + Swiggy + Zomato) · ⚠ = gap &gt; {inr(ATLAS_THRESHOLD)} · Atlas Net = verified founder figure · Lost Rev. = platform cancellations</p>
+              </>
+            )}
           </Card>
         </>
       )}

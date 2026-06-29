@@ -85,6 +85,8 @@ export default function ReconciliationTab() {
   const [unmapped, setUnmapped] = useState<string[]>([]);
   const [reconLoading, setReconLoading] = useState(false);
   const [threshold, setThreshold] = useState(DEFAULT_THRESHOLD);
+  const [savingDash, setSavingDash] = useState(false);
+  const [savedDash, setSavedDash] = useState(false);
 
   const loadMaps = async () => {
     setMapLoading(true);
@@ -117,6 +119,7 @@ export default function ReconciliationTab() {
     setReconLoading(true);
     setReconRows(null);
     setUnmapped([]);
+    setSavedDash(false);
 
     const text = await csvFile.text();
     const csvRows = parseCSV(text);
@@ -170,6 +173,22 @@ export default function ReconciliationTab() {
     setReconRows(result);
     setUnmapped(Array.from(unmappedSet).sort());
     setReconLoading(false);
+  };
+
+  const saveToDashboard = async () => {
+    if (!reconRows || reconRows.length === 0) return;
+    setSavingDash(true);
+    const rows = reconRows.map(r => ({
+      month,
+      outlet_id: r.outlet_id,
+      atlas_gross: r.atlasGross,
+      atlas_net: r.atlasNet,
+      atlas_lost: r.atlasLost,
+    }));
+    const { error } = await supabase.from("atlas_monthly_results").upsert(rows, { onConflict: "month,outlet_id" });
+    setSavingDash(false);
+    if (error) { alert("Error saving: " + error.message); return; }
+    setSavedDash(true);
   };
 
   const inputCls = "w-full bg-black border border-zinc-800 text-white px-3 py-2 focus:outline-none focus:border-yellow-400 transition-colors text-sm";
@@ -365,6 +384,13 @@ export default function ReconciliationTab() {
                 <p className="text-[10px] font-mono text-zinc-600 mt-2 leading-relaxed max-w-3xl">
                   Atlas Gross = &ldquo;Gross Revenue&rdquo; summed for all mapped rows &middot; Reported Gross = shop + Swiggy + Zomato from daily outlet_reports &middot; Diff = Atlas &minus; Reported &middot; positive (+) means staff under-reported, negative (&minus;) means over-reported &middot; Atlas Net = founder&rsquo;s true revenue figure &middot; Lost Revenue = potential lost to cancellations/refusals &middot; flag threshold {fmt(threshold)}
                 </p>
+                <div className="mt-4 flex items-center gap-4">
+                  <button onClick={saveToDashboard} disabled={savingDash || savedDash}
+                    className="bg-yellow-400 text-black font-bold text-[11px] uppercase tracking-widest px-4 py-2 hover:bg-yellow-300 transition-colors disabled:opacity-50">
+                    {savingDash ? "Saving…" : savedDash ? "✓ Saved" : "Save to Founder Dashboard"}
+                  </button>
+                  {savedDash && <p className="text-[11px] font-mono text-green-400">Founder&apos;s Office will now show this month&apos;s Atlas data.</p>}
+                </div>
               </div>
             );
           })()}
