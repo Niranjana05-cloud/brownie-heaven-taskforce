@@ -436,8 +436,8 @@ export default function FounderDashboard({ user }: { user: Staff }) {
             <p className="text-[11px] text-zinc-500 mb-4">{targetPct.toFixed(1)}% of target · {lakh(Math.max(MONTHLY_TARGET - mtd, 0))} to go</p>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 pt-3 border-t border-zinc-800">
               <div><p className="text-[10px] text-zinc-500 uppercase">Current run rate</p><p className="text-base font-bold">{lakh(runRate)}<span className="text-[10px] text-zinc-500">/day</span></p></div>
-              <div><p className="text-[10px] text-zinc-500 uppercase">Required run rate</p><p className={`text-base font-bold ${required > runRate ? "text-red-400" : "text-green-400"}`}>{lakh(required)}<span className="text-[10px] text-zinc-500">/day</span></p></div>
-              <div><p className="text-[10px] text-zinc-500 uppercase">Gap / day</p><p className={`text-base font-bold ${required > runRate ? "text-red-400" : "text-green-400"}`}>{required > runRate ? lakh(required - runRate) : "On pace"}</p></div>
+             <div><p className="text-[10px] text-zinc-500 uppercase">Required run rate</p><p className={`text-base font-bold ${required > runRate ? "text-red-400" : "text-green-400"}`}>{daysLeft <= 2 ? "Month ending" : <>{lakh(required)}<span className="text-[10px] text-zinc-500">/day</span></>}</p></div>
+             <div><p className="text-[10px] text-zinc-500 uppercase">Gap / day</p><p className={`text-base font-bold ${required > runRate ? "text-red-400" : "text-green-400"}`}>{daysLeft <= 2 ? "—" : (required > runRate ? lakh(required - runRate) : "On pace")}</p></div>
               <div><p className="text-[10px] text-zinc-500 uppercase">Proj. shortfall</p><p className={`text-base font-bold ${shortfall >= 0 ? "text-green-400" : "text-red-400"}`}>{shortfall >= 0 ? "+" : "−"}{lakh(Math.abs(shortfall))}</p></div>
             </div>
             <p className="text-[11px] text-zinc-500 mt-3 pt-3 border-t border-zinc-800">Channel mix (MTD): Offline {lakh(mShop)} · Online {lakh(mOnline)} — for every ₹1 walk-in, <span className="text-yellow-400 font-bold">₹{offlineRatio.toFixed(1)}</span> online.</p>
