@@ -298,7 +298,6 @@ const downloadPDF = async () => {
       document.body.removeChild(holder);
     }
   };
-  };
   const Hero = ({ label, value, sub, accent }: any) => (
     <div className="flex-1 min-w-[150px] bg-gradient-to-b from-zinc-900 to-[#0e0e10] border border-zinc-800 p-5">
       <p className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-2">{label}</p>
