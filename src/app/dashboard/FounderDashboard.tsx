@@ -360,9 +360,7 @@ const downloadPDF = async () => {
         <div style="text-align:center;font-size:10px;color:${C.soft};margin-top:18px">🍫 Brownie Heaven · Generated ${dateStr} · 🟢 profit · 🔴 loss · ⚪️ no data yet · monthly target = daily × ${daysInMonth} · per-day = ${sdStr} actual</div>
       </div>
     </div>`;
-      </div>
-    </div>`;
-    const holder = document.createElement("div");
+         const holder = document.createElement("div");
     holder.style.position = "fixed"; holder.style.left = "-9999px"; holder.style.top = "0";
     holder.innerHTML = html;
     document.body.appendChild(holder);
