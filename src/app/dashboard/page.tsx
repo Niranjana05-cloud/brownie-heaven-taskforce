@@ -275,11 +275,14 @@ export default function DashboardPage() {
             let acc = 0;
             const segs = [[tShop, "#FACC15"], [tSw, "#FB923C"], [tZo, "#EF4444"]].map(([v, c]: any) => { const frac = v / tAll; const len = frac * CIRC; const off = -acc * CIRC; acc += frac; return `<circle cx="${CX}" cy="${CY}" r="${R}" fill="none" stroke="${c}" stroke-width="${SW}" stroke-dasharray="${len} ${CIRC - len}" stroke-dashoffset="${off}" transform="rotate(-90 ${CX} ${CY})"></circle>`; }).join("");
             const leg = (c: string, n: string, v: number) => `<div style="display:flex;align-items:center;gap:7px;margin-bottom:5px"><span style="width:11px;height:11px;background:${c};border-radius:2px;display:inline-block"></span><span style="font-size:12px;color:${C.ink};font-weight:600;min-width:62px">${n}</span><span style="font-size:12px;color:${C.soft}">${rs(v)} · ${((v / tAll) * 100).toFixed(0)}%</span></div>`;
+            const CLOUD = ["Pallavaram", "Velachery", "Vadapalani"];
+            const dineIn = summ.filter(s => !CLOUD.includes(s.Outlet));
             const byTotal = [...summ].sort((a, b) => b.Total - a.Total);
             const star = byTotal[0], slug = byTotal[byTotal.length - 1];
             const onShare = (s: any) => s.Total > 0 ? ((s.Swiggy + s.Zomato) / s.Total) * 100 : 0;
-            const mostOnline = [...summ].sort((a, b) => onShare(b) - onShare(a))[0];
-            const bestShop = [...summ].sort((a, b) => b.Shop - a.Shop)[0];
+            const onlinePool = dineIn.length > 0 ? dineIn : summ;
+            const mostOnline = [...onlinePool].sort((a, b) => onShare(b) - onShare(a))[0];
+            const bestShop = [...onlinePool].sort((a, b) => b.Shop - a.Shop)[0];
             const multi = summ.length > 1;
             const card = (emoji: string, title: string, name: string, val: string, quip: string, accent: string) => `<div style="flex:1;min-width:150px;background:${C.card};border:1px solid ${C.line};border-top:4px solid ${accent};border-radius:12px;padding:13px 15px"><div style="font-size:10px;letter-spacing:1px;text-transform:uppercase;color:${C.soft};margin-bottom:5px">${emoji} ${title}</div><div style="font-size:15px;font-weight:800;color:${C.ink}">${name}</div><div style="font-size:12px;font-weight:700;color:${accent};margin:2px 0 4px">${val}</div><div style="font-size:10px;color:${C.soft};font-style:italic">${quip}</div></div>`;
             const awards = multi ? `
