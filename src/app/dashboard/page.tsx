@@ -319,8 +319,29 @@ export default function DashboardPage() {
             </div>
           </div>`;
           })()}
+          ${(() => {
+            const DOW = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+            const full: Record<string, string> = { Sun: "Sunday", Mon: "Monday", Tue: "Tuesday", Wed: "Wednesday", Thu: "Thursday", Fri: "Friday", Sat: "Saturday" };
+            const tot = [0, 0, 0, 0, 0, 0, 0], cnt = [0, 0, 0, 0, 0, 0, 0];
+            data.forEach(d => { const sd = new Date(d.Date + "T00:00:00"); sd.setDate(sd.getDate() - 1); const wd = sd.getDay(); tot[wd] += d.Total; cnt[wd]++; });
+            const avg = tot.map((t, i) => cnt[i] > 0 ? t / cnt[i] : 0);
+            const maxAvg = Math.max(...avg, 1);
+            const order = [1, 2, 3, 4, 5, 6, 0];
+            const bestI = avg.indexOf(Math.max(...avg));
+            const nz = avg.map((v, i) => ({ v, i })).filter(x => x.v > 0).sort((a, b) => a.v - b.v);
+            const worstI = nz.length ? nz[0].i : bestI;
+            const bars = order.map(i => { const pct = (avg[i] / maxAvg) * 100; const best = i === bestI && avg[i] > 0; return `<div style="display:flex;align-items:center;gap:10px;margin-bottom:6px"><span style="width:34px;font-size:11px;font-weight:700;color:${best ? C.gold : C.ink}">${DOW[i]}</span><div style="flex:1;height:15px;background:${C.line};border-radius:8px;overflow:hidden"><div style="height:100%;width:${pct}%;background:${best ? C.gold : "#D9C3A0"}"></div></div><span style="width:96px;text-align:right;font-size:11px;color:${C.soft}">${rs(avg[i])}/day</span></div>`; }).join("");
+            const quip = (bestI === 0 || bestI === 6) ? "Weekends are the goldmine 🤑 — staff up Fri–Sun!" : "Midweek is quietly carrying the month 💪 — most people bet on weekends.";
+            return `
+          <div style="font-size:15px;font-weight:800;margin:18px 0 10px;color:${C.ink}">📅 Which day sells best? <span style="font-size:11px;font-weight:400;color:${C.soft}">(avg sales per weekday)</span></div>
+          <div style="background:${C.card};border:1px solid ${C.line};border-radius:12px;padding:16px 18px;margin-bottom:18px">
+            ${bars}
+            <div style="margin-top:10px;font-size:12px;color:${C.ink};font-weight:700">🏆 Best: ${full[DOW[bestI]]} (${rs(avg[bestI])}/day) &nbsp;·&nbsp; 😴 Slowest: ${full[DOW[worstI]]} (${rs(avg[worstI])}/day)</div>
+            <div style="font-size:11px;color:${C.soft};font-style:italic;margin-top:4px">${quip}</div>
+          </div>
           <div style="font-size:13px;font-weight:800;margin:4px 0 8px;color:${C.ink}">💬 The honest verdict 👀</div>
-          ${noteCards}
+          ${noteCards}`;
+          })()}
           <div style="font-size:15px;font-weight:800;margin:18px 0 10px;page-break-before:always">🗓️ Daily detail</div>
           <table style="width:100%;border-collapse:collapse;background:${C.card};border:1px solid ${C.line};border-radius:12px;overflow:hidden">
             <thead><tr style="background:${C.ink}"><th style="padding:7px 8px;text-align:left;color:#FFF6E5;font-size:9px">DATE</th><th style="padding:7px 8px;text-align:left;color:#FFF6E5;font-size:9px">OUTLET</th><th style="padding:7px 8px;text-align:right;color:#FFF6E5;font-size:9px">SHOP</th><th style="padding:7px 8px;text-align:right;color:#FFF6E5;font-size:9px">SWIGGY</th><th style="padding:7px 8px;text-align:right;color:#FFF6E5;font-size:9px">ZOMATO</th><th style="padding:7px 8px;text-align:right;color:#FFF6E5;font-size:9px">TOTAL</th></tr></thead>
