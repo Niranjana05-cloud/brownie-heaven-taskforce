@@ -265,28 +265,55 @@ export default function DashboardPage() {
             <thead><tr style="background:${C.ink}"><th style="padding:8px 10px;text-align:left;color:#FFF6E5;font-size:10px">OUTLET</th><th style="padding:8px 10px;text-align:right;color:#FFF6E5;font-size:10px">DAYS</th><th style="padding:8px 10px;text-align:right;color:#FFF6E5;font-size:10px">SHOP</th><th style="padding:8px 10px;text-align:right;color:#FFF6E5;font-size:10px">SWIGGY</th><th style="padding:8px 10px;text-align:right;color:#FFF6E5;font-size:10px">ZOMATO</th><th style="padding:8px 10px;text-align:right;color:#FFF6E5;font-size:10px">TOTAL</th></tr></thead>
        <tbody>${sumRows}</tbody>
           </table>
-          ${(() => {
+         ${(() => {
             if (summ.length === 0) return "";
+            const tShop = summ.reduce((a, s) => a + s.Shop, 0);
+            const tSw = summ.reduce((a, s) => a + s.Swiggy, 0);
+            const tZo = summ.reduce((a, s) => a + s.Zomato, 0);
+            const tAll = tShop + tSw + tZo || 1;
+            const R = 60, CX = 75, CY = 75, SW = 26, CIRC = 2 * Math.PI * R;
+            let acc = 0;
+            const segs = [[tShop, "#FACC15"], [tSw, "#FB923C"], [tZo, "#EF4444"]].map(([v, c]: any) => { const frac = v / tAll; const len = frac * CIRC; const off = -acc * CIRC; acc += frac; return `<circle cx="${CX}" cy="${CY}" r="${R}" fill="none" stroke="${c}" stroke-width="${SW}" stroke-dasharray="${len} ${CIRC - len}" stroke-dashoffset="${off}" transform="rotate(-90 ${CX} ${CY})"></circle>`; }).join("");
+            const leg = (c: string, n: string, v: number) => `<div style="display:flex;align-items:center;gap:7px;margin-bottom:5px"><span style="width:11px;height:11px;background:${c};border-radius:2px;display:inline-block"></span><span style="font-size:12px;color:${C.ink};font-weight:600;min-width:62px">${n}</span><span style="font-size:12px;color:${C.soft}">${rs(v)} · ${((v / tAll) * 100).toFixed(0)}%</span></div>`;
             const byTotal = [...summ].sort((a, b) => b.Total - a.Total);
-            const star = byTotal[0];
-            const slug = byTotal[byTotal.length - 1];
+            const star = byTotal[0], slug = byTotal[byTotal.length - 1];
             const onShare = (s: any) => s.Total > 0 ? ((s.Swiggy + s.Zomato) / s.Total) * 100 : 0;
             const mostOnline = [...summ].sort((a, b) => onShare(b) - onShare(a))[0];
             const bestShop = [...summ].sort((a, b) => b.Shop - a.Shop)[0];
-            const card = (emoji: string, title: string, name: string, val: string, quip: string, accent: string) => `
-              <div style="flex:1;min-width:160px;background:${C.card};border:1px solid ${C.line};border-top:4px solid ${accent};border-radius:12px;padding:14px 16px">
-                <div style="font-size:11px;letter-spacing:1px;text-transform:uppercase;color:${C.soft};margin-bottom:6px">${emoji} ${title}</div>
-                <div style="font-size:16px;font-weight:800;color:${C.ink}">${name}</div>
-                <div style="font-size:13px;font-weight:700;color:${accent};margin:2px 0 5px">${val}</div>
-                <div style="font-size:11px;color:${C.soft};font-style:italic">${quip}</div>
+            const multi = summ.length > 1;
+            const card = (emoji: string, title: string, name: string, val: string, quip: string, accent: string) => `<div style="flex:1;min-width:150px;background:${C.card};border:1px solid ${C.line};border-top:4px solid ${accent};border-radius:12px;padding:13px 15px"><div style="font-size:10px;letter-spacing:1px;text-transform:uppercase;color:${C.soft};margin-bottom:5px">${emoji} ${title}</div><div style="font-size:15px;font-weight:800;color:${C.ink}">${name}</div><div style="font-size:12px;font-weight:700;color:${accent};margin:2px 0 4px">${val}</div><div style="font-size:10px;color:${C.soft};font-style:italic">${quip}</div></div>`;
+            const awards = multi ? `
+              <div style="display:flex;flex-wrap:wrap;gap:10px">
+                ${card("🏆", "Star Outlet", star.Outlet, rs(star.Total), "The MVP carrying the team 💪", C.gold)}
+                ${card("🐌", "Needs Help", slug.Outlet, rs(slug.Total), "Send backup… and a hug 🫂", "#C62828")}
+                ${card("📱", "Most Online", mostOnline.Outlet, onShare(mostOnline).toFixed(0) + "% online", "Living that delivery life 🛵", "#3B82F6")}
+                ${card("🏪", "Best Walk-in", bestShop.Outlet, rs(bestShop.Shop), "People show up here 🚶", "#2E7D32")}
+              </div>` : `
+              <div style="display:flex;flex-wrap:wrap;gap:10px">
+                ${card("📱", "Online share", star.Outlet, onShare(star).toFixed(0) + "%", onShare(star) > 60 ? "Delivery is the bread & butter 🛵" : "Nice walk-in balance 🚶", "#3B82F6")}
+                ${card("🏪", "Walk-in sales", star.Outlet, rs(star.Shop), "Counter's doing work 💪", "#2E7D32")}
+                ${card("🛵", "Delivery sales", star.Outlet, rs(star.Swiggy + star.Zomato), "Swiggy + Zomato combined 📦", "#FB923C")}
               </div>`;
             return `
-          <div style="font-size:15px;font-weight:800;margin:18px 0 10px;color:${C.ink}">🏅 Awards — the month's hall of fame &amp; shame</div>
-          <div style="display:flex;flex-wrap:wrap;gap:12px;margin-bottom:18px">
-            ${card("🏆", "Star Outlet", star.Outlet, rs(star.Total), "The MVP carrying the team 💪", C.gold)}
-            ${card("🐌", "Needs Help", slug.Outlet, rs(slug.Total), "Send backup… and maybe a hug 🫂", "#C62828")}
-            ${card("📱", "Most Online-Heavy", mostOnline.Outlet, onShare(mostOnline).toFixed(0) + "% online", "Living that delivery life 🛵", "#3B82F6")}
-            ${card("🏪", "Best Walk-in", bestShop.Outlet, rs(bestShop.Shop) + " shop", "People actually show up here 🚶", "#2E7D32")}
+          <div style="display:flex;gap:18px;align-items:flex-start;margin:18px 0">
+            <div style="text-align:center">
+              <div style="font-size:13px;font-weight:800;color:${C.ink};margin-bottom:6px">📱 Channel mix</div>
+              <svg width="150" height="150" viewBox="0 0 150 150">
+                <circle cx="${CX}" cy="${CY}" r="${R}" fill="none" stroke="#EADBC2" stroke-width="${SW}"></circle>
+                ${segs}
+                <text x="${CX}" y="${CY - 4}" text-anchor="middle" style="font-size:14px;font-weight:800;fill:${C.ink}">${rs(tAll)}</text>
+                <text x="${CX}" y="${CY + 12}" text-anchor="middle" style="font-size:8px;fill:${C.soft};letter-spacing:1px">TOTAL</text>
+              </svg>
+              <div style="margin-top:10px;text-align:left">
+                ${leg("#FACC15", "Shop", tShop)}
+                ${leg("#FB923C", "Swiggy", tSw)}
+                ${leg("#EF4444", "Zomato", tZo)}
+              </div>
+            </div>
+            <div style="flex:1">
+              <div style="font-size:15px;font-weight:800;margin-bottom:10px;color:${C.ink}">🏅 ${multi ? "Awards — hall of fame &amp; shame" : "Outlet snapshot"}</div>
+              ${awards}
+            </div>
           </div>`;
           })()}
           <div style="font-size:13px;font-weight:800;margin:4px 0 8px;color:${C.ink}">💬 The honest verdict 👀</div>
