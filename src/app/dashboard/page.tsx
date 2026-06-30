@@ -192,7 +192,40 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [activeTab, setActiveTab] = useState<"tasks" | "my_report" | "all_reports" | "analytics" | "outlet_reports" | "owner_outlets" | "history" | "attendance" | "sales_target" | "payout" | "reconciliation">("tasks");
+  const fetchRangeReports = async (outlets: string[]) => {
+    let q = supabase.from("outlet_reports").select("*").gte("report_date", repFrom).lte("report_date", repTo).order("report_date", { ascending: true });
+    if (outlets.length > 0) q = q.in("outlet_id", outlets);
+    const { data } = await q;
+    return (data || []) as any[];
+  };
+  const buildRangeRows = (rows: any[]) => rows.map(r => {
+    const shop = Number(r.shop_sales_value) || 0, sw = Number(r.swiggy_sales_value) || 0, zo = Number(r.zomato_sales_value) || 0;
+    return { Date: r.report_date, Outlet: (typeof OUTLET_NAMES !== "undefined" ? (OUTLET_NAMES as any)[r.outlet_id] : r.outlet_id) || r.outlet_id, Shop: shop, Swiggy: sw, Zomato: zo, Total: shop + sw + zo, "Shop Orders": Number(r.shop_sales_count) || 0, "Swiggy Orders": Number(r.swiggy_sales_count) || 0, "Zomato Orders": Number(r.zomato_sales_count) || 0, Target: Number(r.target) || 0, Late: r.is_late ? "Yes" : "No", Issues: r.issues || "" };
+  });
+  const downloadRangeExcel = async () => {
+    setRepBusy(true);
+    try {
+      const rows = await fetchRangeReports(repOutlets);
+      if (rows.length === 0) { alert("No reports found for that range/outlets."); setRepBusy(false); return; }
+      const data = buildRangeRows(rows);
+      const wb = XLSX.utils.book_new();
+      const ws = XLSX.utils.json_to_sheet(data);
+      XLSX.utils.book_append_sheet(wb, ws, "Daily Rows");
+      const byOutlet: Record<string, any> = {};
+      data.forEach(d => { const k = d.Outlet; if (!byOutlet[k]) byOutlet[k] = { Outlet: k, Days: 0, Shop: 0, Swiggy: 0, Zomato: 0, Total: 0 }; byOutlet[k].Days++; byOutlet[k].Shop += d.Shop; byOutlet[k].Swiggy += d.Swiggy; byOutlet[k].Zomato += d.Zomato; byOutlet[k].Total += d.Total; });
+      const summary = Object.values(byOutlet).map((s: any) => ({ ...s, "Avg/Day": Math.round(s.Total / s.Days) }));
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(summary), "Summary");
+      XLSX.writeFile(wb, `OutletReports_${repFrom}_to_${repTo}.xlsx`);
+    } catch (e: any) { alert("Export failed: " + (e?.message || "error")); }
+    setRepBusy(false);
+  };
   const [expandedOutlet, setExpandedOutlet] = useState<string | null>(null);
+  const _today = new Date().toISOString().split("T")[0];
+  const _mStart = _today.slice(0, 8) + "01";
+  const [repFrom, setRepFrom] = useState<string>(_mStart);
+  const [repTo, setRepTo] = useState<string>(_today);
+  const [repOutlets, setRepOutlets] = useState<string[]>([]);
+  const [repBusy, setRepBusy] = useState(false);
   const [outletFilter, setOutletFilter] = useState("all");
   const [reportData, setReportData] = useState<Record<string, string>>({});
   const [reportSubmitting, setReportSubmitting] = useState(false);
