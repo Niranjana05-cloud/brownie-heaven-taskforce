@@ -191,7 +191,8 @@ export default function DashboardPage() {
   const [reports, setReports] = useState<Report[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
- const [activeTab, setActiveTab] = useState<"tasks" | "my_report" | "all_reports" | "analytics" | "outlet_reports" | "owner_outlets" | "history" | "attendance" | "sales_target" | "payout" | "reconciliation">("tasks");
+  const [activeTab, setActiveTab] = useState<"tasks" | "my_report" | "all_reports" | "analytics" | "outlet_reports" | "owner_outlets" | "history" | "attendance" | "sales_target" | "payout" | "reconciliation">("tasks");
+  const [expandedOutlet, setExpandedOutlet] = useState<string | null>(null);
   const [outletFilter, setOutletFilter] = useState("all");
   const [reportData, setReportData] = useState<Record<string, string>>({});
   const [reportSubmitting, setReportSubmitting] = useState(false);
@@ -1625,60 +1626,50 @@ else await fetchOutletReportsByDate(outletEntryDate);
     className="bg-black border border-zinc-800 text-white px-4 py-2.5 focus:outline-none focus:border-yellow-400 transition-colors font-mono text-sm"
   />
 </div>
-    {(() => {
-      const COLORS = ["#FACC15","#F97316","#EF4444","#EC4899","#A855F7","#6366F1","#3B82F6","#06B6D4","#10B981","#84CC16","#F59E0B","#14B8A6"];
-      const rows = OUTLETS.map((o, i) => {
-        const r = allOutletReports.find(x => x.outlet_id === o);
-        const tot = r ? (Number(r.shop_sales_value)||0)+(Number(r.swiggy_sales_value)||0)+(Number(r.zomato_sales_value)||0) : 0;
-        return { o, name: OUTLET_NAMES[o] || o, tot, filed: !!r, late: r?.is_late, color: COLORS[i % COLORS.length] };
-      }).sort((a,b) => b.tot - a.tot);
-      const grand = rows.reduce((s,r) => s + r.tot, 0) || 1;
-      const filedCount = rows.filter(r => r.filed).length;
-      const lateCount = rows.filter(r => r.filed && r.late).length;
-      const top = rows[0];
-      // donut segments
-      let acc = 0; const R = 70, CX = 90, CY = 90, SW = 28;
-      const segs = rows.filter(r => r.tot > 0).map(r => {
-        const frac = r.tot / grand; const len = frac * 2 * Math.PI * R;
-        const gap = 2 * Math.PI * R - len;
-        const off = -acc * 2 * Math.PI * R; acc += frac;
-        return { r, dash: `${len} ${gap}`, off };
-      });
+   {(() => {
+      const cols = ["#FACC15", "#FB923C", "#EF4444"];
+      const chLabels = [["Shop", cols[0]], ["Swiggy", cols[1]], ["Zomato", cols[2]]] as [string, string][];
       return (
-        <div className="bg-[#131316] border border-zinc-800 p-5 mb-6">
-          <div className="flex flex-col md:flex-row gap-6 items-center">
-            <div className="relative shrink-0">
-              <svg width="180" height="180" viewBox="0 0 180 180">
-                <circle cx={CX} cy={CY} r={R} fill="none" stroke="#27272a" strokeWidth={SW} />
-                {segs.map((s, i) => (
-                  <circle key={i} cx={CX} cy={CY} r={R} fill="none" stroke={s.r.color} strokeWidth={SW}
-                    strokeDasharray={s.dash} strokeDashoffset={s.off} transform={`rotate(-90 ${CX} ${CY})`} />
-                ))}
-                <text x={CX} y={CY-6} textAnchor="middle" className="fill-white" style={{fontSize:"18px",fontWeight:800}}>₹{(grand/100000).toFixed(1)}L</text>
-                <text x={CX} y={CY+12} textAnchor="middle" className="fill-zinc-500" style={{fontSize:"9px",letterSpacing:"1px"}}>TOTAL SALES</text>
-              </svg>
-            </div>
-            <div className="flex-1 w-full">
-              <div className="grid grid-cols-3 gap-3 mb-4">
-                <div className="bg-black/30 p-3 border border-zinc-800"><p className="text-[9px] font-mono text-zinc-500 uppercase tracking-widest">Filed</p><p className="text-lg font-black text-green-400">{filedCount}/12</p></div>
-                <div className="bg-black/30 p-3 border border-zinc-800"><p className="text-[9px] font-mono text-zinc-500 uppercase tracking-widest">Late</p><p className={`text-lg font-black ${lateCount>0?"text-red-400":"text-zinc-400"}`}>{lateCount}</p></div>
-                <div className="bg-black/30 p-3 border border-zinc-800"><p className="text-[9px] font-mono text-zinc-500 uppercase tracking-widest">Top outlet</p><p className="text-sm font-black text-yellow-400 truncate">{top?.name}</p></div>
-              </div>
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-x-4 gap-y-1.5">
-                {rows.map(r => (
-                  <div key={r.o} className="flex items-center justify-between text-[11px]">
-                    <span className="flex items-center gap-1.5 min-w-0"><span className="w-2.5 h-2.5 rounded-sm shrink-0" style={{background:r.filed?r.color:"#3f3f46"}}></span><span className="text-zinc-300 truncate">{r.name}</span></span>
-                    <span className="font-mono text-zinc-500 shrink-0">{r.filed?`${((r.tot/grand)*100).toFixed(0)}%`:"—"}</span>
+        <div className="mb-6">
+          <p className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-3">Tap an outlet to open its full report ↓</p>
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+            {OUTLETS.map(o => {
+              const r = allOutletReports.find(x => x.outlet_id === o);
+              const shop = r ? Number(r.shop_sales_value) || 0 : 0;
+              const sw = r ? Number(r.swiggy_sales_value) || 0 : 0;
+              const zo = r ? Number(r.zomato_sales_value) || 0 : 0;
+              const tot = shop + sw + zo;
+              const filed = !!r;
+              const sel = expandedOutlet === o;
+              const R = 34, CX = 44, CY = 44, SW = 12, CIRC = 2 * Math.PI * R;
+              let acc = 0;
+              const segs = tot > 0 ? [shop, sw, zo].map((v, i) => { const frac = v / tot; const len = frac * CIRC; const off = -acc * CIRC; acc += frac; return { len, gap: CIRC - len, off, col: cols[i] }; }) : [];
+              return (
+                <div key={o} onClick={() => setExpandedOutlet(sel ? null : o)} className={`cursor-pointer bg-[#131316] border ${sel ? "border-yellow-400" : filed ? "border-green-400/30" : "border-zinc-800"} p-3 hover:border-yellow-400/50 transition-colors`}>
+                  <div className="flex items-center gap-3">
+                    <svg width="56" height="56" viewBox="0 0 88 88" className="shrink-0">
+                      <circle cx={CX} cy={CY} r={R} fill="none" stroke="#27272a" strokeWidth={SW} />
+                      {segs.map((s, i) => (<circle key={i} cx={CX} cy={CY} r={R} fill="none" stroke={s.col} strokeWidth={SW} strokeDasharray={`${s.len} ${s.gap}`} strokeDashoffset={s.off} transform={`rotate(-90 ${CX} ${CY})`} />))}
+                    </svg>
+                    <div className="min-w-0">
+                      <p className="text-xs font-bold text-white truncate">{OUTLET_NAMES[o] || o}</p>
+                      <p className="text-[11px] font-mono text-zinc-400">{filed ? `₹${(tot / 1000).toFixed(1)}k` : "—"}</p>
+                      <p className={`text-[9px] font-mono uppercase tracking-widest ${!filed ? "text-zinc-600" : r.is_late ? "text-red-400" : "text-green-400"}`}>{!filed ? "not filed" : r.is_late ? "late" : "on time"}</p>
+                    </div>
                   </div>
-                ))}
-              </div>
-            </div>
+                </div>
+              );
+            })}
+          </div>
+          <div className="flex gap-4 mt-3 text-[10px] font-mono text-zinc-500">
+            {chLabels.map(([n, c]) => (<span key={n} className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm" style={{ background: c }}></span>{n}</span>))}
           </div>
         </div>
       );
     })()}
-    <div className="grid grid-cols-1 gap-4">
-      {OUTLETS.map(o => {
+   <div className="grid grid-cols-1 gap-4">
+      {!expandedOutlet && <p className="text-center text-sm text-zinc-600 py-10">Tap an outlet donut above to open its full report.</p>}
+      {OUTLETS.filter(o => o === expandedOutlet).map(o => {
         const report = allOutletReports.find(r => r.outlet_id === o);
       const manager = ALL_STAFF.find(s => (s.outlets as string[]).includes(o));
         return (
