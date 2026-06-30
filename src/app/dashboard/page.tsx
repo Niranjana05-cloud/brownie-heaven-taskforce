@@ -215,7 +215,52 @@ export default function DashboardPage() {
       data.forEach(d => { const k = d.Outlet; if (!byOutlet[k]) byOutlet[k] = { Outlet: k, Days: 0, Shop: 0, Swiggy: 0, Zomato: 0, Total: 0 }; byOutlet[k].Days++; byOutlet[k].Shop += d.Shop; byOutlet[k].Swiggy += d.Swiggy; byOutlet[k].Zomato += d.Zomato; byOutlet[k].Total += d.Total; });
       const summary = Object.values(byOutlet).map((s: any) => ({ ...s, "Avg/Day": Math.round(s.Total / s.Days) }));
       XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(summary), "Summary");
-      XLSX.writeFile(wb, `OutletReports_${repFrom}_to_${repTo}.xlsx`);
+     XLSX.writeFile(wb, `OutletReports_${repFrom}_to_${repTo}.xlsx`);
+    } catch (e: any) { alert("Export failed: " + (e?.message || "error")); }
+    setRepBusy(false);
+  };
+  const loadH2P = (): Promise<any> => new Promise((res, rej) => { const w = window as any; if (w.html2pdf) return res(w.html2pdf); const s = document.createElement("script"); s.src = "https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"; s.onload = () => res((window as any).html2pdf); s.onerror = () => rej(new Error("pdf lib failed")); document.body.appendChild(s); });
+  const downloadRangePDF = async () => {
+    setRepBusy(true);
+    let h2p: any; try { h2p = await loadH2P(); } catch { alert("Could not load the PDF tool."); setRepBusy(false); return; }
+    try {
+      const rows = await fetchRangeReports(repOutlets);
+      if (rows.length === 0) { alert("No reports found for that range/outlets."); setRepBusy(false); return; }
+      const data = buildRangeRows(rows);
+      const rs = (n: number) => "₹" + Math.round(n).toLocaleString("en-IN");
+      const byO: Record<string, any> = {};
+      data.forEach(d => { if (!byO[d.Outlet]) byO[d.Outlet] = { Outlet: d.Outlet, Days: 0, Shop: 0, Swiggy: 0, Zomato: 0, Total: 0 }; const b = byO[d.Outlet]; b.Days++; b.Shop += d.Shop; b.Swiggy += d.Swiggy; b.Zomato += d.Zomato; b.Total += d.Total; });
+      const summ = Object.values(byO) as any[];
+      const grand = summ.reduce((s, x) => s + x.Total, 0);
+      const C = { bg: "#FAF3E7", card: "#FFFDF8", ink: "#3E2415", soft: "#8A6A4A", gold: "#C8901E", line: "#EADBC2" };
+      const sumRows = summ.map(s => `<tr><td style="padding:7px 10px;border-bottom:1px solid ${C.line};font-weight:600;color:${C.ink};font-size:12px">${s.Outlet}</td><td style="padding:7px 10px;border-bottom:1px solid ${C.line};text-align:right;font-size:12px;color:${C.soft}">${s.Days}</td><td style="padding:7px 10px;border-bottom:1px solid ${C.line};text-align:right;font-size:12px;color:${C.soft}">${rs(s.Shop)}</td><td style="padding:7px 10px;border-bottom:1px solid ${C.line};text-align:right;font-size:12px;color:${C.soft}">${rs(s.Swiggy)}</td><td style="padding:7px 10px;border-bottom:1px solid ${C.line};text-align:right;font-size:12px;color:${C.soft}">${rs(s.Zomato)}</td><td style="padding:7px 10px;border-bottom:1px solid ${C.line};text-align:right;font-weight:800;color:${C.ink};font-size:12px">${rs(s.Total)}</td></tr>`).join("");
+      const dayRows = data.map(d => `<tr><td style="padding:5px 8px;border-bottom:1px solid ${C.line};font-size:10px;color:${C.soft}">${d.Date}</td><td style="padding:5px 8px;border-bottom:1px solid ${C.line};font-size:10px;color:${C.ink}">${d.Outlet}</td><td style="padding:5px 8px;border-bottom:1px solid ${C.line};text-align:right;font-size:10px;color:${C.soft}">${rs(d.Shop)}</td><td style="padding:5px 8px;border-bottom:1px solid ${C.line};text-align:right;font-size:10px;color:${C.soft}">${rs(d.Swiggy)}</td><td style="padding:5px 8px;border-bottom:1px solid ${C.line};text-align:right;font-size:10px;color:${C.soft}">${rs(d.Zomato)}</td><td style="padding:5px 8px;border-bottom:1px solid ${C.line};text-align:right;font-weight:700;color:${C.ink};font-size:10px">${rs(d.Total)}</td></tr>`).join("");
+      const html = `<div style="width:794px;background:${C.bg};font-family:'Segoe UI',Arial,sans-serif;color:${C.ink}">
+        <div style="background:linear-gradient(135deg,${C.ink},#5C3A22);padding:22px 32px">
+          <div style="font-size:22px;font-weight:800;color:#FFF6E5">🍫 Brownie Heaven — Outlet Reports</div>
+          <div style="font-size:12px;color:#E0A52E;letter-spacing:1px">📅 ${repFrom} → ${repTo} · ${repOutlets.length ? repOutlets.length + " outlet(s)" : "all outlets"}</div>
+        </div>
+        <div style="padding:24px 32px">
+          <div style="background:${C.card};border:1px solid ${C.line};border-radius:14px;padding:18px;text-align:center;margin-bottom:18px">
+            <div style="font-size:12px;color:${C.soft};text-transform:uppercase;letter-spacing:1px">💰 Total sales in range</div>
+            <div style="font-size:34px;font-weight:900;color:${C.ink}">${rs(grand)}</div>
+            <div style="font-size:11px;color:${C.soft}">${data.length} daily reports across ${summ.length} outlet(s)</div>
+          </div>
+          <div style="font-size:15px;font-weight:800;margin:6px 0 10px">📊 Summary by outlet</div>
+          <table style="width:100%;border-collapse:collapse;background:${C.card};border:1px solid ${C.line};border-radius:12px;overflow:hidden;margin-bottom:22px">
+            <thead><tr style="background:${C.ink}"><th style="padding:8px 10px;text-align:left;color:#FFF6E5;font-size:10px">OUTLET</th><th style="padding:8px 10px;text-align:right;color:#FFF6E5;font-size:10px">DAYS</th><th style="padding:8px 10px;text-align:right;color:#FFF6E5;font-size:10px">SHOP</th><th style="padding:8px 10px;text-align:right;color:#FFF6E5;font-size:10px">SWIGGY</th><th style="padding:8px 10px;text-align:right;color:#FFF6E5;font-size:10px">ZOMATO</th><th style="padding:8px 10px;text-align:right;color:#FFF6E5;font-size:10px">TOTAL</th></tr></thead>
+            <tbody>${sumRows}</tbody>
+          </table>
+          <div style="font-size:15px;font-weight:800;margin:6px 0 10px;page-break-before:always">🗓️ Daily detail</div>
+          <table style="width:100%;border-collapse:collapse;background:${C.card};border:1px solid ${C.line};border-radius:12px;overflow:hidden">
+            <thead><tr style="background:${C.ink}"><th style="padding:7px 8px;text-align:left;color:#FFF6E5;font-size:9px">DATE</th><th style="padding:7px 8px;text-align:left;color:#FFF6E5;font-size:9px">OUTLET</th><th style="padding:7px 8px;text-align:right;color:#FFF6E5;font-size:9px">SHOP</th><th style="padding:7px 8px;text-align:right;color:#FFF6E5;font-size:9px">SWIGGY</th><th style="padding:7px 8px;text-align:right;color:#FFF6E5;font-size:9px">ZOMATO</th><th style="padding:7px 8px;text-align:right;color:#FFF6E5;font-size:9px">TOTAL</th></tr></thead>
+            <tbody>${dayRows}</tbody>
+          </table>
+          <div style="text-align:center;font-size:10px;color:${C.soft};margin-top:18px">🍫 Brownie Heaven · ${repFrom} to ${repTo}</div>
+        </div></div>`;
+      const holder = document.createElement("div"); holder.style.position = "fixed"; holder.style.left = "-9999px"; holder.innerHTML = html; document.body.appendChild(holder);
+      try { await h2p().set({ margin: 0, filename: `OutletReports_${repFrom}_to_${repTo}.pdf`, image: { type: "jpeg", quality: 0.97 }, html2canvas: { scale: 2, backgroundColor: "#FAF3E7" }, jsPDF: { unit: "pt", format: "a4", orientation: "portrait" }, pagebreak: { mode: ["css", "legacy"] } }).from(holder.firstElementChild).save(); }
+      finally { document.body.removeChild(holder); }
     } catch (e: any) { alert("Export failed: " + (e?.message || "error")); }
     setRepBusy(false);
   };
@@ -1659,6 +1704,32 @@ else await fetchOutletReportsByDate(outletEntryDate);
     className="bg-black border border-zinc-800 text-white px-4 py-2.5 focus:outline-none focus:border-yellow-400 transition-colors font-mono text-sm"
   />
 </div>
+  <div className="bg-[#131316] border border-zinc-800 p-5 mb-6">
+    <p className="text-sm font-bold uppercase tracking-widest mb-1">📥 Download custom report</p>
+    <p className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-4">Pick a date range + outlets · Excel or PDF · daily rows + summary</p>
+    <div className="flex flex-col md:flex-row gap-3 mb-4">
+      <div><label className="text-[10px] font-mono text-zinc-500 uppercase block mb-1">From</label><input type="date" value={repFrom} onChange={e => setRepFrom(e.target.value)} className="bg-black border border-zinc-800 text-white px-3 py-2 text-sm font-mono focus:outline-none focus:border-yellow-400" /></div>
+      <div><label className="text-[10px] font-mono text-zinc-500 uppercase block mb-1">To</label><input type="date" value={repTo} onChange={e => setRepTo(e.target.value)} className="bg-black border border-zinc-800 text-white px-3 py-2 text-sm font-mono focus:outline-none focus:border-yellow-400" /></div>
+    </div>
+    <div className="mb-4">
+      <div className="flex items-center justify-between mb-2">
+        <label className="text-[10px] font-mono text-zinc-500 uppercase">Outlets {repOutlets.length === 0 ? "(all)" : `(${repOutlets.length})`}</label>
+        <div className="flex gap-2">
+          <button onClick={() => setRepOutlets([...OUTLETS])} className="text-[10px] font-mono text-yellow-400 uppercase">All</button>
+          <button onClick={() => setRepOutlets([])} className="text-[10px] font-mono text-zinc-500 uppercase">Clear</button>
+        </div>
+      </div>
+      <div className="flex flex-wrap gap-2">
+        {OUTLETS.map(o => { const on = repOutlets.includes(o); return (
+          <button key={o} onClick={() => setRepOutlets(on ? repOutlets.filter(x => x !== o) : [...repOutlets, o])} className={`text-[11px] px-3 py-1.5 border font-mono uppercase tracking-wide transition-colors ${on ? "bg-yellow-400 text-black border-yellow-400" : "bg-black text-zinc-400 border-zinc-800 hover:border-zinc-600"}`}>{OUTLET_NAMES[o] || o}</button>
+        ); })}
+      </div>
+    </div>
+    <div className="flex gap-3">
+      <button onClick={downloadRangeExcel} disabled={repBusy} className="bg-green-600 text-white font-bold text-xs px-5 py-2.5 uppercase tracking-widest disabled:opacity-50 hover:opacity-90">{repBusy ? "Working…" : "⬇ Excel"}</button>
+      <button onClick={downloadRangePDF} disabled={repBusy} className="bg-yellow-400 text-black font-bold text-xs px-5 py-2.5 uppercase tracking-widest disabled:opacity-50 hover:opacity-90">{repBusy ? "Working…" : "⬇ PDF"}</button>
+    </div>
+  </div>
    {(() => {
       const cols = ["#FACC15", "#FB923C", "#EF4444"];
       const chLabels = [["Shop", cols[0]], ["Swiggy", cols[1]], ["Zomato", cols[2]]] as [string, string][];
