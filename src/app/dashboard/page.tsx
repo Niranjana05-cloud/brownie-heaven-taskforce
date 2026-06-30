@@ -232,8 +232,20 @@ export default function DashboardPage() {
       data.forEach(d => { if (!byO[d.Outlet]) byO[d.Outlet] = { Outlet: d.Outlet, Days: 0, Shop: 0, Swiggy: 0, Zomato: 0, Total: 0 }; const b = byO[d.Outlet]; b.Days++; b.Shop += d.Shop; b.Swiggy += d.Swiggy; b.Zomato += d.Zomato; b.Total += d.Total; });
       const summ = Object.values(byO) as any[];
       const grand = summ.reduce((s, x) => s + x.Total, 0);
-      const C = { bg: "#FAF3E7", card: "#FFFDF8", ink: "#3E2415", soft: "#8A6A4A", gold: "#C8901E", line: "#EADBC2" };
-      const sumRows = summ.map(s => `<tr><td style="padding:7px 10px;border-bottom:1px solid ${C.line};font-weight:600;color:${C.ink};font-size:12px">${s.Outlet}</td><td style="padding:7px 10px;border-bottom:1px solid ${C.line};text-align:right;font-size:12px;color:${C.soft}">${s.Days}</td><td style="padding:7px 10px;border-bottom:1px solid ${C.line};text-align:right;font-size:12px;color:${C.soft}">${rs(s.Shop)}</td><td style="padding:7px 10px;border-bottom:1px solid ${C.line};text-align:right;font-size:12px;color:${C.soft}">${rs(s.Swiggy)}</td><td style="padding:7px 10px;border-bottom:1px solid ${C.line};text-align:right;font-size:12px;color:${C.soft}">${rs(s.Zomato)}</td><td style="padding:7px 10px;border-bottom:1px solid ${C.line};text-align:right;font-weight:800;color:${C.ink};font-size:12px">${rs(s.Total)}</td></tr>`).join("");
+      const C = { bg: "#FAF3E7", card: "#FFFDF8", ink: "#3E2415", soft: "#8A6A4A", gold: "#C8901E", line: "#EADBC2", green: "#2E7D32", red: "#C62828" };
+      const avgPerDay = (s: any) => s.Days > 0 ? s.Total / s.Days : 0;
+      const comment = (perDay: number) => {
+        if (perDay >= 80000) return ["🔥", "On fire! Crushing it 🤑", C.green];
+        if (perDay >= 50000) return ["💪", "Strong stuff, keep going 👏", C.green];
+        if (perDay >= 30000) return ["🙂", "Doing okay, room to grow 📈", C.gold];
+        if (perDay >= 15000) return ["😬", "A bit slow… push harder 🏃", C.gold];
+        if (perDay > 0)      return ["🥲", "Yikes, needs serious love 🚑", C.red];
+        return ["💤", "Fast asleep — wake up! ⏰", C.soft];
+      };
+      const days = (new Date(repTo).getTime() - new Date(repFrom).getTime()) / 86400000 + 1;
+      const gPerDay = days > 0 ? grand / days : 0;
+      const gVerdict = gPerDay >= 80000 * summ.length ? "🎉 Money machine go brrr! We're cooking 🧑‍🍳" : gPerDay >= 40000 * Math.max(summ.length, 1) ? "😎 Solid month, brownies are selling 🍫" : "😅 Could be tastier — let's hustle next month 💸";
+     const sumRows = summ.map(s => { const [emo, msg, col] = comment(avgPerDay(s)); return `<tr><td style="padding:7px 10px;border-bottom:1px solid ${C.line};font-weight:600;color:${C.ink};font-size:12px">${emo} ${s.Outlet}</td><td style="padding:7px 10px;border-bottom:1px solid ${C.line};text-align:right;font-size:12px;color:${C.soft}">${s.Days}</td><td style="padding:7px 10px;border-bottom:1px solid ${C.line};text-align:right;font-size:12px;color:${C.soft}">${rs(s.Shop)}</td><td style="padding:7px 10px;border-bottom:1px solid ${C.line};text-align:right;font-size:12px;color:${C.soft}">${rs(s.Swiggy)}</td><td style="padding:7px 10px;border-bottom:1px solid ${C.line};text-align:right;font-size:12px;color:${C.soft}">${rs(s.Zomato)}</td><td style="padding:7px 10px;border-bottom:1px solid ${C.line};text-align:right;font-weight:800;color:${C.ink};font-size:12px">${rs(s.Total)}</td><td style="padding:7px 10px;border-bottom:1px solid ${C.line};font-size:10px;color:${col};font-style:italic">${msg}</td></tr>`; }).join("");
       const dayRows = data.map(d => `<tr><td style="padding:5px 8px;border-bottom:1px solid ${C.line};font-size:10px;color:${C.soft}">${d.Date}</td><td style="padding:5px 8px;border-bottom:1px solid ${C.line};font-size:10px;color:${C.ink}">${d.Outlet}</td><td style="padding:5px 8px;border-bottom:1px solid ${C.line};text-align:right;font-size:10px;color:${C.soft}">${rs(d.Shop)}</td><td style="padding:5px 8px;border-bottom:1px solid ${C.line};text-align:right;font-size:10px;color:${C.soft}">${rs(d.Swiggy)}</td><td style="padding:5px 8px;border-bottom:1px solid ${C.line};text-align:right;font-size:10px;color:${C.soft}">${rs(d.Zomato)}</td><td style="padding:5px 8px;border-bottom:1px solid ${C.line};text-align:right;font-weight:700;color:${C.ink};font-size:10px">${rs(d.Total)}</td></tr>`).join("");
       const html = `<div style="width:794px;background:${C.bg};font-family:'Segoe UI',Arial,sans-serif;color:${C.ink}">
         <div style="background:linear-gradient(135deg,${C.ink},#5C3A22);padding:22px 32px">
@@ -244,12 +256,12 @@ export default function DashboardPage() {
           <div style="background:${C.card};border:1px solid ${C.line};border-radius:14px;padding:18px;text-align:center;margin-bottom:18px">
             <div style="font-size:12px;color:${C.soft};text-transform:uppercase;letter-spacing:1px">💰 Total sales in range</div>
             <div style="font-size:34px;font-weight:900;color:${C.ink}">${rs(grand)}</div>
-            <div style="font-size:11px;color:${C.soft}">${data.length} daily reports across ${summ.length} outlet(s)</div>
+          <div style="font-size:11px;color:${C.soft}">${data.length} daily reports across ${summ.length} outlet(s)</div>
+            <div style="margin-top:10px;font-size:14px;font-weight:700;color:${C.ink}">${gVerdict}</div>
           </div>
-          <div style="font-size:15px;font-weight:800;margin:6px 0 10px">📊 Summary by outlet</div>
+          <div style="font-size:15px;font-weight:800;margin:6px 0 10px">📊 Summary by outlet — with the honest verdict 👀</div>
           <table style="width:100%;border-collapse:collapse;background:${C.card};border:1px solid ${C.line};border-radius:12px;overflow:hidden;margin-bottom:22px">
-            <thead><tr style="background:${C.ink}"><th style="padding:8px 10px;text-align:left;color:#FFF6E5;font-size:10px">OUTLET</th><th style="padding:8px 10px;text-align:right;color:#FFF6E5;font-size:10px">DAYS</th><th style="padding:8px 10px;text-align:right;color:#FFF6E5;font-size:10px">SHOP</th><th style="padding:8px 10px;text-align:right;color:#FFF6E5;font-size:10px">SWIGGY</th><th style="padding:8px 10px;text-align:right;color:#FFF6E5;font-size:10px">ZOMATO</th><th style="padding:8px 10px;text-align:right;color:#FFF6E5;font-size:10px">TOTAL</th></tr></thead>
-            <tbody>${sumRows}</tbody>
+            <thead><tr style="background:${C.ink}"><th style="padding:8px 10px;text-align:left;color:#FFF6E5;font-size:10px">OUTLET</th><th style="padding:8px 10px;text-align:right;color:#FFF6E5;font-size:10px">DAYS</th><th style="padding:8px 10px;text-align:right;color:#FFF6E5;font-size:10px">SHOP</th><th style="padding:8px 10px;text-align:right;color:#FFF6E5;font-size:10px">SWIGGY</th><th style="padding:8px 10px;text-align:right;color:#FFF6E5;font-size:10px">ZOMATO</th><th style="padding:8px 10px;text-align:right;color:#FFF6E5;font-size:10px">TOTAL</th><th style="padding:8px 10px;text-align:left;color:#FFF6E5;font-size:10px">VERDICT</th></tr></thead>
           </table>
           <div style="font-size:15px;font-weight:800;margin:6px 0 10px;page-break-before:always">🗓️ Daily detail</div>
           <table style="width:100%;border-collapse:collapse;background:${C.card};border:1px solid ${C.line};border-radius:12px;overflow:hidden">
