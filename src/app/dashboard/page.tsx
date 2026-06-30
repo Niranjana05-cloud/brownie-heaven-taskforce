@@ -263,8 +263,32 @@ export default function DashboardPage() {
           <div style="font-size:15px;font-weight:800;margin:6px 0 10px">📊 Summary by outlet — with the honest verdict 👀</div>
         <table style="width:100%;border-collapse:collapse;background:${C.card};border:1px solid ${C.line};border-radius:12px;overflow:hidden;margin-bottom:14px">
             <thead><tr style="background:${C.ink}"><th style="padding:8px 10px;text-align:left;color:#FFF6E5;font-size:10px">OUTLET</th><th style="padding:8px 10px;text-align:right;color:#FFF6E5;font-size:10px">DAYS</th><th style="padding:8px 10px;text-align:right;color:#FFF6E5;font-size:10px">SHOP</th><th style="padding:8px 10px;text-align:right;color:#FFF6E5;font-size:10px">SWIGGY</th><th style="padding:8px 10px;text-align:right;color:#FFF6E5;font-size:10px">ZOMATO</th><th style="padding:8px 10px;text-align:right;color:#FFF6E5;font-size:10px">TOTAL</th></tr></thead>
-         <tbody>${sumRows}</tbody>
+       <tbody>${sumRows}</tbody>
           </table>
+          ${(() => {
+            if (summ.length === 0) return "";
+            const byTotal = [...summ].sort((a, b) => b.Total - a.Total);
+            const star = byTotal[0];
+            const slug = byTotal[byTotal.length - 1];
+            const onShare = (s: any) => s.Total > 0 ? ((s.Swiggy + s.Zomato) / s.Total) * 100 : 0;
+            const mostOnline = [...summ].sort((a, b) => onShare(b) - onShare(a))[0];
+            const bestShop = [...summ].sort((a, b) => b.Shop - a.Shop)[0];
+            const card = (emoji: string, title: string, name: string, val: string, quip: string, accent: string) => `
+              <div style="flex:1;min-width:160px;background:${C.card};border:1px solid ${C.line};border-top:4px solid ${accent};border-radius:12px;padding:14px 16px">
+                <div style="font-size:11px;letter-spacing:1px;text-transform:uppercase;color:${C.soft};margin-bottom:6px">${emoji} ${title}</div>
+                <div style="font-size:16px;font-weight:800;color:${C.ink}">${name}</div>
+                <div style="font-size:13px;font-weight:700;color:${accent};margin:2px 0 5px">${val}</div>
+                <div style="font-size:11px;color:${C.soft};font-style:italic">${quip}</div>
+              </div>`;
+            return `
+          <div style="font-size:15px;font-weight:800;margin:18px 0 10px;color:${C.ink}">🏅 Awards — the month's hall of fame &amp; shame</div>
+          <div style="display:flex;flex-wrap:wrap;gap:12px;margin-bottom:18px">
+            ${card("🏆", "Star Outlet", star.Outlet, rs(star.Total), "The MVP carrying the team 💪", C.gold)}
+            ${card("🐌", "Needs Help", slug.Outlet, rs(slug.Total), "Send backup… and maybe a hug 🫂", "#C62828")}
+            ${card("📱", "Most Online-Heavy", mostOnline.Outlet, onShare(mostOnline).toFixed(0) + "% online", "Living that delivery life 🛵", "#3B82F6")}
+            ${card("🏪", "Best Walk-in", bestShop.Outlet, rs(bestShop.Shop) + " shop", "People actually show up here 🚶", "#2E7D32")}
+          </div>`;
+          })()}
           <div style="font-size:13px;font-weight:800;margin:4px 0 8px;color:${C.ink}">💬 The honest verdict 👀</div>
           ${noteCards}
           <div style="font-size:15px;font-weight:800;margin:18px 0 10px;page-break-before:always">🗓️ Daily detail</div>
