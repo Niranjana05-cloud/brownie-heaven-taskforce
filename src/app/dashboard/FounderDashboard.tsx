@@ -33,9 +33,12 @@ const reviewPoints = (rating: number, valid: boolean) => {
 const inr = (n: number) => "₹" + Math.round(n).toLocaleString("en-IN");
 const lakh = (n: number) => "₹" + (n / 100000).toFixed(2) + " L";
 
-export default function FounderDashboard({ user }: { user: Staff }) {
+  export default function FounderDashboard({ user }: { user: Staff }) {
   const today = new Date().toISOString().split("T")[0];
-  const [date, setDate] = useState(today);
+  const _now0 = new Date();
+  const _fmtDate = (dd: Date) => `${dd.getFullYear()}-${String(dd.getMonth() + 1).padStart(2, "0")}-${String(dd.getDate()).padStart(2, "0")}`;
+  const _defaultDate = _now0.getDate() === 1 ? _fmtDate(new Date(_now0.getFullYear(), _now0.getMonth(), 0)) : today;
+  const [date, setDate] = useState(_defaultDate);
   const [out, setOut] = useState<any[]>([]);
   const [month, setMonth] = useState<any[]>([]);
   const [daily, setDaily] = useState<any[]>([]);
@@ -67,18 +70,13 @@ export default function FounderDashboard({ user }: { user: Staff }) {
       ]);
       setOut(o.data || []); setMonth(mo.data || []); setDaily(d.data || []); setRevs(r.data || []); setPayouts(p.data || []); setOffRows((off.data || []).map((x: any) => x.staff_id));
       setAtlasResults(atlasRaw.data || []);
-     const fm: Record<string, any> = {}; const sm: Record<string, { net: number; online: number }> = {};
-      const _mk = monthStart.slice(0, 7);
-      (st.data || []).forEach((row: any) => {
-        const li = row.line_items || {};
-        fm[row.outlet_id] = li.fixed || {};
-        const sales = li.sales || {};
-        const dKeys = Object.keys(sales).filter((k) => k.length === 10 && k.startsWith(_mk));
-        const dNet = dKeys.reduce((s, k) => s + (Number(sales[k]?.net) || 0), 0);
-        const dOnline = dKeys.reduce((s, k) => s + (Number(sales[k]?.online) || 0), 0);
-        const moNet = Number(li.monthly?.[_mk]?.net) || 0;
-        const moOnline = Number(li.monthly?.[_mk]?.online) || 0;
-        sm[row.outlet_id] = { net: moNet + dNet, online: moOnline + dOnline };
+      const fm: Record<string, any> = {}; const sm: Record<string, { net: number; online: number }> = {};
+      (st.data || []).forEach((row: any) => { fm[row.outlet_id] = (row.line_items || {}).fixed || {}; });
+      (mo.data || []).forEach((row: any) => {
+        const oid = row.outlet_id;
+        if (!sm[oid]) sm[oid] = { net: 0, online: 0 };
+        sm[oid].net += Number(row.shop_sales_value) || 0;
+        sm[oid].online += (Number(row.swiggy_sales_value) || 0) + (Number(row.zomato_sales_value) || 0);
       });
       setStFixed(fm); setStMonthSales(sm);
       setLoading(false);
