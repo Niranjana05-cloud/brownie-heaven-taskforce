@@ -1107,6 +1107,7 @@ else await fetchOutletReportsByDate(outletEntryDate);
   const overdue = tasks.filter(t => t.status !== "completed" && new Date(t.due_at) < new Date()).length;
   const rate = total > 0 ? Math.round(completed / total * 100) : 0;
   const canAssign = user?.role === "Owner" || user?.role === "Manager";
+  const isFO = user?.role === "Founder's Office";
   const hasReportDuty = user?.role !== "Owner" && user?.role !== "Founder's Office";
   const reportFields = user ? REPORT_FIELDS[user.id] || [] : [];
   const reportInput = (f: { label: string; key: string }) => {
@@ -1224,13 +1225,15 @@ else await fetchOutletReportsByDate(outletEntryDate);
               <span>⚖️</span> Reconciliation
             </div>
           )}
+         {(canAssign || isFO) && (
+            <div onClick={() => { setActiveTab("analytics"); setSidebarOpen(false); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "analytics" ? "text-white bg-zinc-900 border-l-2 border-yellow-400" : "text-zinc-500 hover:text-white"}`}>
+              <span>◬</span> Analytics
+            </div>
+          )}
           {canAssign && (
             <>
              <div onClick={() => { setActiveTab("all_reports"); setSidebarOpen(false); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "all_reports" ? "text-white bg-zinc-900 border-l-2 border-yellow-400" : "text-zinc-500 hover:text-white"}`}>
                 <span>📋</span> Reports
-              </div>
-              <div onClick={() => { setActiveTab("analytics"); setSidebarOpen(false); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "analytics" ? "text-white bg-zinc-900 border-l-2 border-yellow-400" : "text-zinc-500 hover:text-white"}`}>
-                <span>◬</span> Analytics
               </div>
               <div onClick={() => { setActiveTab("owner_outlets"); setSidebarOpen(false); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "owner_outlets" ? "text-white bg-zinc-900 border-l-2 border-yellow-400" : "text-zinc-500 hover:text-white"}`}>
               <span>🏪</span> Outlet Reports
