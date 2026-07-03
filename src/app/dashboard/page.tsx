@@ -408,6 +408,39 @@ export default function DashboardPage() {
   const [revSaving, setRevSaving] = useState(false);
   const [targetCheck, setTargetCheck] = useState<any[] | null>(null);
   const [targetReaction, setTargetReaction] = useState(false);
+  const [anFrom, setAnFrom] = useState<string>(() => { const d = new Date(); d.setDate(d.getDate() - 29); return d.toISOString().slice(0, 10); });
+  const [anTo, setAnTo] = useState<string>(() => new Date().toISOString().slice(0, 10));
+  const [anRows, setAnRows] = useState<any[]>([]);
+  const [anLoading, setAnLoading] = useState(false);
+
+  useEffect(() => {
+    if (activeTab !== "analytics") return;
+    let cancelled = false;
+    (async () => {
+      setAnLoading(true);
+      const { data } = await supabase.from("outlet_reports")
+        .select("shop_sales_count,shop_sales_value,swiggy_sales_count,swiggy_sales_value,zomato_sales_count,zomato_sales_value,report_date")
+        .gte("report_date", anFrom).lte("report_date", anTo);
+      if (cancelled) return;
+      setAnRows(data || []);
+      setAnLoading(false);
+    })();
+    return () => { cancelled = true; };
+  }, [activeTab, anFrom, anTo]);
+
+  const anAgg = (() => {
+    const ch = { shop: { c: 0, v: 0 }, swiggy: { c: 0, v: 0 }, zomato: { c: 0, v: 0 } };
+    anRows.forEach((r: any) => {
+      ch.shop.c += Number(r.shop_sales_count) || 0; ch.shop.v += Number(r.shop_sales_value) || 0;
+      ch.swiggy.c += Number(r.swiggy_sales_count) || 0; ch.swiggy.v += Number(r.swiggy_sales_value) || 0;
+      ch.zomato.c += Number(r.zomato_sales_count) || 0; ch.zomato.v += Number(r.zomato_sales_value) || 0;
+    });
+    const totalV = ch.shop.v + ch.swiggy.v + ch.zomato.v;
+    const totalC = ch.shop.c + ch.swiggy.c + ch.zomato.c;
+    return { ch, totalV, totalC };
+  })();
+  const anINR = (v: number) => "₹" + Math.round(v || 0).toLocaleString("en-IN");
+  const anPct = (part: number, whole: number) => (whole > 0 ? Math.round((part / whole) * 100) : 0);
   const [outletHistoryDate, setOutletHistoryDate] = useState<string>(new Date().toISOString().split("T")[0]);
   const [lastOutletRatings, setLastOutletRatings] = useState<Record<string, OutletReport>>({});
   const [allOutletReports, setAllOutletReports] = useState<OutletReport[]>([]);
@@ -2232,8 +2265,65 @@ else await fetchOutletReportsByDate(outletEntryDate);
           <div>
             <div className="mb-8 pb-5 border-b border-zinc-800">
               <h2 className="text-2xl font-black tracking-tight">Analytics</h2>
-              <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mt-1">Performance overview — all staff</p>
+             <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mt-1">Sales performance · channel mix</p>
             </div>
+
+            {/* Sales performance (date range) */}
+            <div className="mb-10">
+              <div className="flex flex-wrap items-end gap-3 mb-6">
+                <div>
+                  <label className="block text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-1">From</label>
+                  <input type="date" value={anFrom} onChange={(e) => setAnFrom(e.target.value)} className="bg-black border border-zinc-800 text-white px-3 py-2 text-sm focus:outline-none focus:border-yellow-400 transition-colors" />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-1">To</label>
+                  <input type="date" value={anTo} onChange={(e) => setAnTo(e.target.value)} className="bg-black border border-zinc-800 text-white px-3 py-2 text-sm focus:outline-none focus:border-yellow-400 transition-colors" />
+                </div>
+                <span className="text-[10px] font-mono text-zinc-600 pb-2">{anLoading ? "Loading…" : `${anRows.length} report-days`}</span>
+              </div>
+
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                <div className="bg-[#131316] border border-zinc-800 p-5">
+                  <p className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-2">Total Sales</p>
+                  <p className="text-2xl font-black tracking-tight">{anINR(anAgg.totalV)}</p>
+                </div>
+                <div className="bg-[#131316] border border-zinc-800 p-5">
+                  <p className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-2">Total Orders</p>
+                  <p className="text-2xl font-black tracking-tight">{anAgg.totalC.toLocaleString("en-IN")}</p>
+                </div>
+                <div className="bg-[#131316] border border-zinc-800 p-5">
+                  <p className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-2">Avg Order Value</p>
+                  <p className="text-2xl font-black tracking-tight">{anINR(anAgg.totalC ? anAgg.totalV / anAgg.totalC : 0)}</p>
+                </div>
+                <div className="bg-[#131316] border border-zinc-800 p-5">
+                  <p className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-2">Delivery Share</p>
+                  <p className="text-2xl font-black tracking-tight">{anPct(anAgg.ch.swiggy.v + anAgg.ch.zomato.v, anAgg.totalV)}%</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {([["shop", "Shop / Store", "text-blue-400", "bg-blue-400"], ["swiggy", "Swiggy", "text-orange-400", "bg-orange-400"], ["zomato", "Zomato", "text-red-400", "bg-red-400"]] as const).map(([key, label, tc, bc]) => {
+                  const c = anAgg.ch[key];
+                  const share = anPct(c.v, anAgg.totalV);
+                  const aov = c.c ? c.v / c.c : 0;
+                  return (
+                    <div key={key} className="bg-[#131316] border border-zinc-800 p-5">
+                      <div className="flex justify-between items-center mb-3">
+                        <p className={`text-[10px] font-mono uppercase tracking-widest ${tc}`}>{label}</p>
+                        <span className="font-mono text-xs text-zinc-500">{share}%</span>
+                      </div>
+                      <p className="text-xl font-black tracking-tight mb-2">{anINR(c.v)}</p>
+                      <div className="h-2 bg-zinc-800 border border-zinc-700 mb-3"><div className={`h-full ${bc}`} style={{ width: `${share}%` }} /></div>
+                      <div className="flex justify-between text-xs font-mono text-zinc-500">
+                        <span>{c.c.toLocaleString("en-IN")} orders</span>
+                        <span>AOV {anINR(aov)}</span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="bg-[#131316] border border-zinc-800 p-6">
                 <p className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-6">Completion Rate by Staff</p>
