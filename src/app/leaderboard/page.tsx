@@ -54,8 +54,33 @@ export default function LeaderboardPage() {
   const [giving, setGiving] = useState(false);
 
   const now = new Date();
-  const monthLabel = now.toLocaleString("en-IN", { month: "long", year: "numeric" }).toUpperCase();
 
+  // ── Month being viewed (defaults to the current month) ─────────────────
+  const [viewYear, setViewYear] = useState(now.getFullYear());
+  const [viewMonth, setViewMonth] = useState(now.getMonth()); // 0-indexed
+
+  const isCurrentMonth = viewYear === now.getFullYear() && viewMonth === now.getMonth();
+  const monthLabel = new Date(viewYear, viewMonth, 1)
+    .toLocaleString("en-IN", { month: "long", year: "numeric" }).toUpperCase();
+
+  // Build the list of selectable months: from the season-start month up to the current month.
+  const monthOptions: { y: number; m: number; label: string }[] = [];
+  {
+    const seasonStart = new Date(SEASON_START + "T00:00:00");
+    let d = new Date(seasonStart.getFullYear(), seasonStart.getMonth(), 1);
+    const cur = new Date(now.getFullYear(), now.getMonth(), 1);
+    while (d <= cur) {
+      monthOptions.push({
+        y: d.getFullYear(),
+        m: d.getMonth(),
+        label: d.toLocaleString("en-IN", { month: "long", year: "numeric" }),
+      });
+      d = new Date(d.getFullYear(), d.getMonth() + 1, 1);
+    }
+    monthOptions.reverse(); // most recent first
+  }
+
+  // Auth check (runs once)
   useEffect(() => {
     const stored = localStorage.getItem("currentUser");
     if (!stored) { router.push("/"); return; }
@@ -65,8 +90,13 @@ export default function LeaderboardPage() {
       if (typeof parsed === "string") { localStorage.removeItem("currentUser"); router.push("/"); return; }
     } catch { localStorage.removeItem("currentUser"); router.push("/"); return; }
     setUser(parsed);
-    fetchScores();
   }, [router]);
+
+  // Fetch whenever the user is known OR the viewed month changes
+  useEffect(() => {
+    if (user) fetchScores();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, viewYear, viewMonth]);
 
   const givePointsFn = async () => {
     if (!giveStaff || !givePoints) return;
@@ -80,8 +110,9 @@ export default function LeaderboardPage() {
 
   const fetchScores = async () => {
     setLoading(true);
-    const y = now.getFullYear();
-    const m = now.getMonth();
+    // Use the VIEWED month rather than always the current month.
+    const y = viewYear;
+    const m = viewMonth;
     const pad = (n: number) => String(n).padStart(2, "0");
     const monthStart = `${y}-${pad(m + 1)}-01`;
     const startDate = SEASON_START > monthStart ? SEASON_START : monthStart;
@@ -124,6 +155,7 @@ export default function LeaderboardPage() {
       row.dailyPoints += (d.backfill || d.late) ? -PTS_DAILY_PENALTY : PTS_DAILY;
     });
 
+    // Tasks: only count those completed within the viewed month's window
     (taskRes.data || []).forEach((t: any) => {
       const row = map[t.assigned_to]; if (!row) return;
       const d = t.completed_at || t.created_at;
@@ -153,6 +185,7 @@ export default function LeaderboardPage() {
       { day: 22, reward: false },
       { day: lastDay, reward: true },
     ].filter(wk => `${y}-${pad(m + 1)}-${pad(wk.day)}` >= RATING_START);
+    // Gate rating checkpoints so we never count a checkpoint that is still in the future.
     const todayStr = now.toISOString().split("T")[0];
     const byOutlet: Record<string, any[]> = {};
     (outRes.data || []).forEach((o: any) => {
@@ -197,16 +230,24 @@ export default function LeaderboardPage() {
     const arunOwn = arunRow ? arunRow.points : 0;
     const teamTotal = all.reduce((s, r) => (r.id === "arun" ? s : s + r.points), 0) + arunOwn;
     if (arunRow) arunRow.points = teamTotal;
-    const _now2 = new Date();
-    const _todayStr2 = _now2.toISOString().split("T")[0];
-    const _afterNoon = _now2.getHours() >= 12;
-    const _after10 = _now2.getHours() >= 22;
-    const _filedDaily = new Set<string>();
-    (repRes.data || []).forEach((r: any) => { const d = r.report_date || (r.submitted_at ? r.submitted_at.split("T")[0] : ""); if (d === _todayStr2) _filedDaily.add(r.staff_id); });
-    const _outletFiled = new Set<string>();
-    (outRes.data || []).forEach((o: any) => { if (o.report_date === _todayStr2) _outletFiled.add(o.outlet_id); });
-    const _MGR_OUTLETS: Record<string, string[]> = { nilani: ["ra_puram","anna_nagar","pallavaram","vadapalani"], vishnu: ["velachery","perumbakkam","tambaram","porur"], ahila: ["royapettah","adayar","bsr_mall","besant_nagar"] };
-    all.forEach(r => { r.off = _offMonth.has(r.id + "_" + _todayStr2); const md = _after10 && !_filedDaily.has(r.id); const mo = _afterNoon && (_MGR_OUTLETS[r.id] || []).some(o => !_outletFiled.has(o)); r.missing = !r.off && (md || mo); });
+
+    // ── Live "not filed / off today" flags only make sense for the current month ──
+    if (isCurrentMonth) {
+      const _now2 = new Date();
+      const _todayStr2 = _now2.toISOString().split("T")[0];
+      const _afterNoon = _now2.getHours() >= 12;
+      const _after10 = _now2.getHours() >= 22;
+      const _filedDaily = new Set<string>();
+      (repRes.data || []).forEach((r: any) => { const d = r.report_date || (r.submitted_at ? r.submitted_at.split("T")[0] : ""); if (d === _todayStr2) _filedDaily.add(r.staff_id); });
+      const _outletFiled = new Set<string>();
+      (outRes.data || []).forEach((o: any) => { if (o.report_date === _todayStr2) _outletFiled.add(o.outlet_id); });
+      const _MGR_OUTLETS: Record<string, string[]> = { nilani: ["ra_puram","anna_nagar","pallavaram","vadapalani"], vishnu: ["velachery","perumbakkam","tambaram","porur"], ahila: ["royapettah","adayar","bsr_mall","besant_nagar"] };
+      all.forEach(r => { r.off = _offMonth.has(r.id + "_" + _todayStr2); const md = _after10 && !_filedDaily.has(r.id); const mo = _afterNoon && (_MGR_OUTLETS[r.id] || []).some(o => !_outletFiled.has(o)); r.missing = !r.off && (md || mo); });
+    } else {
+      // Historic month: no real-time flags
+      all.forEach(r => { r.off = false; r.missing = false; });
+    }
+
     setArun(arunRow || null);
     setRows(all.filter(r => r.id !== "arun").sort((a, b) => b.points - a.points));
     setLoading(false);
@@ -243,7 +284,33 @@ export default function LeaderboardPage() {
           ← DASHBOARD
         </button>
       </div>
-      <div style={{ color: C.muted, marginBottom: "18px", fontSize: "13px" }}>{monthLabel}</div>
+
+      {/* ── Month selector: view any month back to the season start ── */}
+      <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "18px", flexWrap: "wrap" }}>
+        <span style={{ color: C.muted, fontSize: "12px", textTransform: "uppercase", letterSpacing: "1px" }}>Viewing</span>
+        <select
+          value={`${viewYear}-${viewMonth}`}
+          onChange={(e) => { const [yy, mm] = e.target.value.split("-").map(Number); setViewYear(yy); setViewMonth(mm); }}
+          style={{ background: "#000", color: C.accent, border: `1px solid ${C.accent}`, padding: "6px 10px", fontFamily: "monospace", fontSize: "13px", cursor: "pointer" }}
+        >
+          {monthOptions.map(opt => (
+            <option key={`${opt.y}-${opt.m}`} value={`${opt.y}-${opt.m}`}>
+              {opt.label}{opt.y === now.getFullYear() && opt.m === now.getMonth() ? " (current)" : ""}
+            </option>
+          ))}
+        </select>
+        {!isCurrentMonth && (
+          <>
+            <span style={{ background: "#3f3f46", color: "#fbbf24", fontSize: "10px", fontWeight: "bold", padding: "3px 8px", borderRadius: "3px" }}>
+              PAST MONTH · READ ONLY
+            </span>
+            <button onClick={() => { setViewYear(now.getFullYear()); setViewMonth(now.getMonth()); }}
+              style={{ background: "transparent", color: C.muted, border: `1px solid ${C.border}`, padding: "5px 10px", cursor: "pointer", fontFamily: "monospace", fontSize: "12px" }}>
+              ← back to current
+            </button>
+          </>
+        )}
+      </div>
 
       <div style={{ background: C.panel, border: `1px solid ${C.accent}`, padding: "12px 16px", marginBottom: "22px", fontSize: "13px", lineHeight: 1.7 }}>
       💰 Monthly cash incentive (outlet managers) — <span style={{ color: "#22c55e", fontWeight: "bold" }}>6800+ = ₹3000</span> · <span style={{ color: "#22c55e", fontWeight: "bold" }}>6400+ = ₹2000</span> · <span style={{ color: "#ef4444", fontWeight: "bold" }}>5600 or below = -₹500</span>
@@ -251,7 +318,7 @@ export default function LeaderboardPage() {
 
       {arun && (
         <div style={{ background: C.panel, border: `1px solid ${C.accent}`, padding: "20px", marginBottom: "26px" }}>
-          <div style={{ color: C.muted, fontSize: "12px", textTransform: "uppercase", letterSpacing: "1px" }}>Arun — Team Total (everyone's points)</div>
+          <div style={{ color: C.muted, fontSize: "12px", textTransform: "uppercase", letterSpacing: "1px" }}>Arun — Team Total (everyone's points) · {monthLabel}</div>
           <div style={{ fontSize: "40px", color: C.accent, fontWeight: "bold", lineHeight: 1.2 }}>{arun.points} <span style={{ fontSize: "16px", color: C.muted }}>/ {ARUN_TARGET}</span></div>
           <div style={{ background: "#000", height: "10px", borderRadius: "5px", overflow: "hidden", margin: "12px 0" }}>
             <div style={{ height: "100%", width: `${Math.min(100, Math.max(0, (arun.points / ARUN_TARGET) * 100))}%`, background: arun.points >= ARUN_TARGET ? "#22c55e" : C.accent }}></div>
@@ -264,10 +331,10 @@ export default function LeaderboardPage() {
 
       {!isOwner && me && (
         <div style={{ background: C.panel, border: `1px solid ${C.border}`, padding: "20px", marginBottom: "26px" }}>
-          <div style={{ color: C.muted, fontSize: "12px", textTransform: "uppercase" }}>Your Score</div>
+          <div style={{ color: C.muted, fontSize: "12px", textTransform: "uppercase" }}>Your Score · {monthLabel}</div>
           <div style={{ fontSize: "48px", color: C.accent, fontWeight: "bold", lineHeight: 1.1 }}>{me.points}</div>
          <div style={{ color: C.muted, marginBottom: "10px" }}>Rank #{myRank} of {rows.length}</div>
-          <div style={{ marginBottom: "16px", fontSize: "15px" }}>This month&apos;s cash: <span style={{ color: cashColor(me.points, me.id), fontWeight: "bold" }}>{cashLabel(me.points, me.id)}</span></div>
+          <div style={{ marginBottom: "16px", fontSize: "15px" }}>{isCurrentMonth ? "This month's cash: " : "Cash: "}<span style={{ color: cashColor(me.points, me.id), fontWeight: "bold" }}>{cashLabel(me.points, me.id)}</span></div>
           <div style={{ fontSize: "13px", lineHeight: 1.9 }}>
             {(STARTING_POINTS[me.id] || 0) > 0 && <div>Starting credit: {STARTING_POINTS[me.id]}</div>}
             <div>Daily reports: {me.myReports} filed → {me.dailyPoints >= 0 ? "+" : ""}{me.dailyPoints} (on-time +{PTS_DAILY}, late/back-dated -{PTS_DAILY_PENALTY})</div>
@@ -284,7 +351,7 @@ export default function LeaderboardPage() {
         </div>
       )}
 
-      {user?.role === "Owner" && (
+      {user?.role === "Owner" && isCurrentMonth && (
         <div style={{ background: C.panel, border: `1px solid ${C.border}`, padding: "16px", marginBottom: "22px" }}>
           <div style={{ color: C.muted, fontSize: "12px", textTransform: "uppercase", marginBottom: "10px", letterSpacing: "1px" }}>Give Points</div>
           <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
