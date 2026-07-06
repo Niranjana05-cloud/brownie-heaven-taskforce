@@ -56,12 +56,6 @@ export default function LeaderboardPage() {
   const [banBest, setBanBest] = useState<ScoreRow | null>(null);
   const [banWorst, setBanWorst] = useState<ScoreRow | null>(null);
 
-  useEffect(() => {
-    let cancelled = false;
-    computeScores().then((res) => { if (!cancelled) { setBanBest(res.best); setBanWorst(res.worst); } }).catch(() => {});
-    return () => { cancelled = true; };
-  }, []);
-
   const now = new Date();
 
   // ── Month being viewed (defaults to the current month) ─────────────────
@@ -104,6 +98,9 @@ export default function LeaderboardPage() {
   // Fetch whenever the user is known OR the viewed month changes
   useEffect(() => {
     if (user) fetchScores();
+    let cancelled = false;
+    computeScores(viewYear, viewMonth).then((res) => { if (!cancelled) { setBanBest(res.best); setBanWorst(res.worst); } }).catch(() => {});
+    return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, viewYear, viewMonth]);
 
