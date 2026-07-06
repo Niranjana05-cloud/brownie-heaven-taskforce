@@ -463,7 +463,7 @@ export default function DashboardPage() {
   useEffect(() => {
     const stored = localStorage.getItem("currentUser");
     if (!stored) { router.push("/"); return; }
-    let parsed;
+    let parsed: any;
     try {
       parsed = JSON.parse(stored);
       if (typeof parsed === "string") { localStorage.removeItem("currentUser"); router.push("/"); return; }
