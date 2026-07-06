@@ -20,7 +20,7 @@ const DUTY_STAFF = [
   { id: "ahila", name: "Ahila" }, { id: "gowtham", name: "Gowtham" }, { id: "bharani", name: "Bharani" },
 ];
 const OUTLET_OWNER: Record<string, string> = {
-  ra_puram: "nilani", anna_nagar: "nilani", pallavaram: "nilani", vadapalani: "nilani",
+  ra_puram: "ahila", anna_nagar: "vishnu", pallavaram: "ahila", vadapalani: "vishnu",
   velachery: "vishnu", perumbakkam: "vishnu", tambaram: "vishnu", porur: "vishnu",
   royapettah: "ahila", adayar: "ahila", bsr_mall: "ahila", besant_nagar: "ahila",
 };
