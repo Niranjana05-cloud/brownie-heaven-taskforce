@@ -247,7 +247,7 @@ export default function LeaderboardPage() {
       (repRes.data || []).forEach((r: any) => { const d = r.report_date || (r.submitted_at ? r.submitted_at.split("T")[0] : ""); if (d === _todayStr2) _filedDaily.add(r.staff_id); });
       const _outletFiled = new Set<string>();
       (outRes.data || []).forEach((o: any) => { if (o.report_date === _todayStr2) _outletFiled.add(o.outlet_id); });
-      const _MGR_OUTLETS: Record<string, string[]> = { nilani: ["ra_puram","anna_nagar","pallavaram","vadapalani"], vishnu: ["velachery","perumbakkam","tambaram","porur"], ahila: ["royapettah","adayar","bsr_mall","besant_nagar"] };
+     const _MGR_OUTLETS: Record<string, string[]> = { nilani: [], vishnu: ["velachery","perumbakkam","tambaram","porur","anna_nagar","vadapalani"], ahila: ["royapettah","adayar","bsr_mall","besant_nagar","pallavaram","ra_puram"] };
       all.forEach(r => { r.off = _offMonth.has(r.id + "_" + _todayStr2); const md = _after10 && !_filedDaily.has(r.id); const mo = _afterNoon && (_MGR_OUTLETS[r.id] || []).some(o => !_outletFiled.has(o)); r.missing = !r.off && (md || mo); });
     } else {
       // Historic month: no real-time flags
