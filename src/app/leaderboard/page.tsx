@@ -219,9 +219,10 @@ export default function LeaderboardPage() {
       row.adjustments += a.points;
     });
 
+   const _applyStart = (viewYear * 12 + viewMonth) <= (2026 * 12 + 6); // June+July 2026 only
     Object.values(map).forEach(row => {
       row.points =
-        (STARTING_POINTS[row.id] || 0) +
+        (_applyStart ? (STARTING_POINTS[row.id] || 0) : 0) +
         row.dailyPoints +
         (row.outlets - row.outletLate) * PTS_REPORT +
         row.targetMet * PTS_TARGET_MET - row.targetMiss * PTS_TARGET_MISS +
