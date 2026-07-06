@@ -2383,7 +2383,7 @@ else await fetchOutletReportsByDate(outletEntryDate);
                       <div key={r.id} className="mb-4">
                         <div className="flex justify-between mb-1">
                           <span className="text-sm font-medium">{i + 1}. {r.name.split(" ")[0]}{isBest && <span className="text-green-400 ml-1">★</span>}{isWorst && <span className="text-red-500 ml-1">⚠</span>}</span>
-                          <span className="font-mono text-xs text-zinc-500">{r.points} pts</span>
+                         <span className="font-mono text-xs text-zinc-500">{r.dailyToday === "done" && <span className="text-green-400 mr-2">report ✓</span>}{r.dailyToday === "missed" && <span className="text-red-500 mr-2">report ✗</span>}{r.dailyToday === "pending" && <span className="text-zinc-500 mr-2">report …</span>}{r.dailyToday === "off" && <span className="text-zinc-600 mr-2">off</span>}{r.points} pts</span>
                         </div>
                         <div className="h-2 bg-zinc-800 border border-zinc-700">
                           <div className={`h-full transition-all ${isWorst ? "bg-red-500" : isBest ? "bg-green-400" : "bg-zinc-600"}`} style={{ width: `${w}%` }} />
