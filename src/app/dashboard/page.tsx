@@ -413,14 +413,12 @@ export default function DashboardPage() {
   const [anTo, setAnTo] = useState<string>(() => new Date().toISOString().slice(0, 10));
   const [anRows, setAnRows] = useState<any[]>([]);
   const [anLoading, setAnLoading] = useState(false);
-  const [worst, setWorst] = useState<ScoreRow | null>(null);
   const [scoreRows, setScoreRows] = useState<ScoreRow[]>([]);
-  const [best, setBest] = useState<ScoreRow | null>(null);
 
   useEffect(() => {
     if (!user) return;
     let cancelled = false;
-    computeScores().then((res) => { if (!cancelled) { setWorst(res.worst); setBest(res.best); setScoreRows(res.rows); } }).catch(() => {});
+    computeScores().then((res) => { if (!cancelled) { setScoreRows(res.rows); } }).catch(() => {});
     return () => { cancelled = true; };
   }, [user]);
 
@@ -1274,21 +1272,7 @@ else await fetchOutletReportsByDate(outletEntryDate);
 
        {activeTab === "tasks" && user && user.role === "Founder's Office" && <FounderDashboard user={user} />}
        {activeTab === "tasks" && user?.role !== "Founder's Office" && (
-          <div>
-           {best && (
-              <div className="mb-3 border border-green-500/30 bg-green-950/20 p-5">
-                <p className="text-[10px] font-mono text-green-400 uppercase tracking-[0.2em] mb-1">★ Best Performer of TASKFORCE</p>
-                <p className="text-2xl md:text-3xl font-black tracking-tight">Mr/Ms {best.name.split(" ")[0]}</p>
-                <p className="text-[11px] font-mono text-zinc-500 mt-1">{best.points} pts this month · top score</p>
-              </div>
-            )}
-            {worst && (
-              <div className="mb-6 border border-red-500/30 bg-red-950/20 p-5">
-                <p className="text-[10px] font-mono text-red-400 uppercase tracking-[0.2em] mb-1">⚠ Worst Performer of TASKFORCE</p>
-                <p className="text-2xl md:text-3xl font-black tracking-tight">Mr/Ms {worst.name.split(" ")[0]}</p>
-                <p className="text-[11px] font-mono text-zinc-500 mt-1">{worst.points} pts this month · lowest score</p>
-              </div>
-            )}
+         <div>
             <div className="flex justify-between items-start mb-6 pb-5 border-b border-zinc-800">
               <div>
                 <h2 className="text-2xl md:text-3xl font-black tracking-tight">{canAssign ? "Command Center" : "My Tasks"}</h2>
@@ -2297,22 +2281,7 @@ else await fetchOutletReportsByDate(outletEntryDate);
               <h2 className="text-2xl font-black tracking-tight">Analytics</h2>
              <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mt-1">Sales performance · channel mix</p>
             </div>
-
-          {best && (
-              <div className="mb-3 border border-green-500/30 bg-green-950/20 p-5">
-                <p className="text-[10px] font-mono text-green-400 uppercase tracking-[0.2em] mb-1">★ Best Performer of TASKFORCE</p>
-                <p className="text-2xl md:text-3xl font-black tracking-tight">Mr/Ms {best.name.split(" ")[0]}</p>
-                <p className="text-[11px] font-mono text-zinc-500 mt-1">{best.points} pts this month · top score</p>
-              </div>
-            )}
-           {worst && (
-              <div className="mb-8 border border-red-500/30 bg-red-950/20 p-5">
-                <p className="text-[10px] font-mono text-red-400 uppercase tracking-[0.2em] mb-1">⚠ Worst Performer of TASKFORCE</p>
-                <p className="text-2xl md:text-3xl font-black tracking-tight">Mr/Ms {worst.name.split(" ")[0]}</p>
-                <p className="text-[11px] font-mono text-zinc-500 mt-1">{worst.points} pts this month · lowest score</p>
-              </div>
-            )}
-
+            
             {/* Sales performance (date range) */}
             <div className="mb-10">
               <div className="flex flex-wrap items-end gap-3 mb-6">
@@ -2377,18 +2346,16 @@ else await fetchOutletReportsByDate(outletEntryDate);
                   const pmax = Math.max(...scoreRows.map(x => x.points), 1);
                   const pmin = Math.min(...scoreRows.map(x => x.points), 0);
                   const span = (pmax - pmin) || 1;
-                 return scoreRows.map((r, i) => {
-                    const isWorst = worst?.id === r.id;
-                    const isBest = best?.id === r.id;
+               return scoreRows.map((r, i) => {
                     const w = Math.max(3, Math.round((r.points - pmin) / span * 100));
                     return (
                       <div key={r.id} className="mb-4">
                         <div className="flex justify-between mb-1">
-                          <span className="text-sm font-medium">{i + 1}. {r.name.split(" ")[0]}{isBest && <span className="text-green-400 ml-1">★</span>}{isWorst && <span className="text-red-500 ml-1">⚠</span>}</span>
+                          <span className="text-sm font-medium">{i + 1}. {r.name.split(" ")[0]}</span>
                          <span className="font-mono text-xs text-zinc-500">{r.dailyToday === "done" && <span className="text-green-400 mr-2">report ✓</span>}{r.dailyToday === "missed" && <span className="text-red-500 mr-2">report ✗</span>}{r.dailyToday === "pending" && <span className="text-zinc-500 mr-2">report …</span>}{r.dailyToday === "off" && <span className="text-zinc-600 mr-2">off</span>}{r.points} pts</span>
                         </div>
                         <div className="h-2 bg-zinc-800 border border-zinc-700">
-                          <div className={`h-full transition-all ${isWorst ? "bg-red-500" : isBest ? "bg-green-400" : "bg-zinc-600"}`} style={{ width: `${w}%` }} />
+                          <div className="h-full transition-all bg-zinc-500" style={{ width: `${w}%` }} />
                         </div>
                       </div>
                     );
