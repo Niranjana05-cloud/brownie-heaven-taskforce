@@ -36,7 +36,7 @@ export type ScoreData = {
   reports: any[]; tasks: any[]; outlets: any[]; adjustments: any[]; offs: any[];
 };
 
-export type ScoreResult = { rows: ScoreRow[]; arun: ScoreRow | null; worst: ScoreRow | null };
+export type ScoreResult = { rows: ScoreRow[]; arun: ScoreRow | null; worst: ScoreRow | null; best: ScoreRow | null };
 
 const pad = (n: number) => String(n).padStart(2, "0");
 
@@ -165,9 +165,10 @@ export function scoreFromData(y: number, m: number, now: Date, data: ScoreData):
     all.forEach((r) => { r.off = false; r.missing = false; });
   }
 
-  const rows = all.filter((r) => r.id !== "arun").sort((a, b) => b.points - a.points);
+  const rows = all.filter((r) => r.id !== "arun" && r.id !== "bharani").sort((a, b) => b.points - a.points);
   const worst = rows.length ? rows[rows.length - 1] : null;
-  return { rows, arun: arunRow, worst };
+  const best = rows.length ? rows[0] : null;
+  return { rows, arun: arunRow, worst, best };
 }
 
 // ── Fetch + compute for a month (defaults to the current month) ─────────────
