@@ -4,6 +4,7 @@ import * as XLSX from "xlsx";
 import { useRouter } from "next/navigation";
 import { createClient } from "@supabase/supabase-js";
 import { celebrate } from "../celebrate";
+import { computeScores, type ScoreRow } from "@/lib/score";
 import PayoutTab from "./PayoutTab";
 import FounderDashboard from "./FounderDashboard";
 import ReconciliationTab from "./ReconciliationTab";
@@ -412,6 +413,15 @@ export default function DashboardPage() {
   const [anTo, setAnTo] = useState<string>(() => new Date().toISOString().slice(0, 10));
   const [anRows, setAnRows] = useState<any[]>([]);
   const [anLoading, setAnLoading] = useState(false);
+  const [worst, setWorst] = useState<ScoreRow | null>(null);
+  const [scoreRows, setScoreRows] = useState<ScoreRow[]>([]);
+
+  useEffect(() => {
+    if (!user) return;
+    let cancelled = false;
+    computeScores().then((res) => { if (!cancelled) { setWorst(res.worst); setScoreRows(res.rows); } }).catch(() => {});
+    return () => { cancelled = true; };
+  }, [user]);
 
   useEffect(() => {
     if (activeTab !== "analytics") return;
@@ -1260,8 +1270,15 @@ else await fetchOutletReportsByDate(outletEntryDate);
       <main className="flex-1 px-4 py-4 md:px-8 md:py-8 overflow-auto">
 
        {activeTab === "tasks" && user && user.role === "Founder's Office" && <FounderDashboard user={user} />}
-        {activeTab === "tasks" && user?.role !== "Founder's Office" && (
+       {activeTab === "tasks" && user?.role !== "Founder's Office" && (
           <div>
+            {worst && (
+              <div className="mb-6 border border-red-500/30 bg-red-950/20 p-5">
+                <p className="text-[10px] font-mono text-red-400 uppercase tracking-[0.2em] mb-1">⚠ Worst Performer of TASKFORCE</p>
+                <p className="text-2xl md:text-3xl font-black tracking-tight">Mr/Ms {worst.name.split(" ")[0]}</p>
+                <p className="text-[11px] font-mono text-zinc-500 mt-1">{worst.points} pts this month · lowest score</p>
+              </div>
+            )}
             <div className="flex justify-between items-start mb-6 pb-5 border-b border-zinc-800">
               <div>
                 <h2 className="text-2xl md:text-3xl font-black tracking-tight">{canAssign ? "Command Center" : "My Tasks"}</h2>
@@ -2271,6 +2288,14 @@ else await fetchOutletReportsByDate(outletEntryDate);
              <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mt-1">Sales performance · channel mix</p>
             </div>
 
+           {worst && (
+              <div className="mb-8 border border-red-500/30 bg-red-950/20 p-5">
+                <p className="text-[10px] font-mono text-red-400 uppercase tracking-[0.2em] mb-1">⚠ Worst Performer of TASKFORCE</p>
+                <p className="text-2xl md:text-3xl font-black tracking-tight">Mr/Ms {worst.name.split(" ")[0]}</p>
+                <p className="text-[11px] font-mono text-zinc-500 mt-1">{worst.points} pts this month · lowest score</p>
+              </div>
+            )}
+
             {/* Sales performance (date range) */}
             <div className="mb-10">
               <div className="flex flex-wrap items-end gap-3 mb-6">
@@ -2328,25 +2353,29 @@ else await fetchOutletReportsByDate(outletEntryDate);
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="bg-[#131316] border border-zinc-800 p-6">
-                <p className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-6">Completion Rate by Staff</p>
-                {ALL_STAFF.filter(s => s.id !== "nishant").map(s => {
-                  const staffTasks = tasks.filter(t => t.assigned_to === s.id);
-                  const done = staffTasks.filter(t => t.status === "completed").length;
-                  const tot = staffTasks.length || 1;
-                  const pct = Math.round(done / tot * 100);
-                  return (
-                    <div key={s.id} className="mb-4">
-                      <div className="flex justify-between mb-1">
-                        <span className="text-sm font-medium">{s.name.split(" ")[0]}</span>
-                        <span className="font-mono text-xs text-zinc-500">{done}/{staffTasks.length} · {pct}%</span>
+            <div className="bg-[#131316] border border-zinc-800 p-6">
+                <p className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-6">Performance by Staff · this month</p>
+                {scoreRows.length === 0 && <p className="text-zinc-600 font-mono text-xs">Loading scores…</p>}
+                {(() => {
+                  const pmax = Math.max(...scoreRows.map(x => x.points), 1);
+                  const pmin = Math.min(...scoreRows.map(x => x.points), 0);
+                  const span = (pmax - pmin) || 1;
+                  return scoreRows.map((r, i) => {
+                    const isWorst = worst?.id === r.id;
+                    const w = Math.max(3, Math.round((r.points - pmin) / span * 100));
+                    return (
+                      <div key={r.id} className="mb-4">
+                        <div className="flex justify-between mb-1">
+                          <span className="text-sm font-medium">{i + 1}. {r.name.split(" ")[0]}{isWorst && <span className="text-red-500 ml-1">⚠</span>}</span>
+                          <span className="font-mono text-xs text-zinc-500">{r.points} pts</span>
+                        </div>
+                        <div className="h-2 bg-zinc-800 border border-zinc-700">
+                          <div className={`h-full transition-all ${isWorst ? "bg-red-500" : "bg-green-400"}`} style={{ width: `${w}%` }} />
+                        </div>
                       </div>
-                      <div className="h-2 bg-zinc-800 border border-zinc-700">
-                        <div className={`h-full transition-all ${pct >= 70 ? "bg-green-400" : pct >= 40 ? "bg-yellow-400" : "bg-red-500"}`} style={{ width: `${pct}%` }} />
-                      </div>
-                    </div>
-                  );
-                })}
+                    );
+                  });
+                })()}
               </div>
               <div className="bg-[#131316] border border-zinc-800 p-6">
                 <p className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-6">Task Breakdown</p>
