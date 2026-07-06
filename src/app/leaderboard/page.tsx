@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@supabase/supabase-js";
+import { computeScores, type ScoreRow } from "@/lib/score";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -52,6 +53,14 @@ export default function LeaderboardPage() {
   const [givePoints, setGivePoints] = useState("");
   const [giveReason, setGiveReason] = useState("");
   const [giving, setGiving] = useState(false);
+  const [banBest, setBanBest] = useState<ScoreRow | null>(null);
+  const [banWorst, setBanWorst] = useState<ScoreRow | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    computeScores().then((res) => { if (!cancelled) { setBanBest(res.best); setBanWorst(res.worst); } }).catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
 
   const now = new Date();
 
@@ -312,8 +321,27 @@ export default function LeaderboardPage() {
         )}
       </div>
 
+      {(banBest || banWorst) && (
+        <div style={{ display: "flex", gap: "12px", flexWrap: "wrap", marginBottom: "22px" }}>
+          {banBest && (
+            <div style={{ flex: "1", minWidth: "220px", background: C.panel, border: "1px solid rgba(34,197,94,0.4)", padding: "16px" }}>
+              <div style={{ color: "#22c55e", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", marginBottom: "4px" }}>★ Best Performer of TASKFORCE</div>
+              <div style={{ fontSize: "24px", fontWeight: "bold" }}>Mr/Ms {banBest.name.split(" ")[0]}</div>
+              <div style={{ color: C.muted, fontSize: "12px", marginTop: "2px" }}>{banBest.points} pts · top score</div>
+            </div>
+          )}
+          {banWorst && (
+            <div style={{ flex: "1", minWidth: "220px", background: C.panel, border: "1px solid rgba(239,68,68,0.4)", padding: "16px" }}>
+              <div style={{ color: "#ef4444", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", marginBottom: "4px" }}>⚠ Worst Performer of TASKFORCE</div>
+              <div style={{ fontSize: "24px", fontWeight: "bold" }}>Mr/Ms {banWorst.name.split(" ")[0]}</div>
+              <div style={{ color: C.muted, fontSize: "12px", marginTop: "2px" }}>{banWorst.points} pts · lowest score</div>
+            </div>
+          )}
+        </div>
+      )}
+
       <div style={{ background: C.panel, border: `1px solid ${C.accent}`, padding: "12px 16px", marginBottom: "22px", fontSize: "13px", lineHeight: 1.7 }}>
-      💰 Monthly cash incentive (outlet managers) — <span style={{ color: "#22c55e", fontWeight: "bold" }}>6800+ = ₹3000</span> · <span style={{ color: "#22c55e", fontWeight: "bold" }}>6400+ = ₹2000</span> · <span style={{ color: "#ef4444", fontWeight: "bold" }}>5600 or below = -₹500</span>
+      💰 Monthly cash incentive(outlet managers) — <span style={{ color: "#22c55e", fontWeight: "bold" }}>6800+ = ₹3000</span> · <span style={{ color: "#22c55e", fontWeight: "bold" }}>6400+ = ₹2000</span> · <span style={{ color: "#ef4444", fontWeight: "bold" }}>5600 or below = -₹500</span>
       </div>
 
       {arun && (
