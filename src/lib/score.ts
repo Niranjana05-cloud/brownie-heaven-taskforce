@@ -29,7 +29,7 @@ export type ScoreRow = {
   myReports: number; myLate: number; dailyPoints: number;
   outlets: number; outletLate: number; targetMet: number; targetMiss: number;
   tasks: number; ratingPoints: number; backfills: number; adjustments: number;
-  points: number; missing: boolean; off: boolean;
+  points: number; missing: boolean; off: boolean; dailyToday: string;
 };
 
 export type ScoreData = {
@@ -57,7 +57,7 @@ export function scoreFromData(y: number, m: number, now: Date, data: ScoreData):
 
   const map: Record<string, ScoreRow> = {};
   SCORE_STAFF.filter((s) => s.role !== "Owner").forEach((s) => {
-    map[s.id] = { id: s.id, name: s.name, role: s.role, myReports: 0, myLate: 0, dailyPoints: 0, outlets: 0, outletLate: 0, targetMet: 0, targetMiss: 0, tasks: 0, ratingPoints: 0, backfills: 0, adjustments: 0, points: 0, missing: false, off: false };
+    map[s.id] = { id: s.id, name: s.name, role: s.role, myReports: 0, myLate: 0, dailyPoints: 0, outlets: 0, outletLate: 0, targetMet: 0, targetMiss: 0, tasks: 0, ratingPoints: 0, backfills: 0, adjustments: 0, points: 0, missing: false, off: false, dailyToday: "" };
   });
 
   const _offMonth = new Set((data.offs || []).map((o: any) => o.staff_id + "_" + o.off_date));
@@ -147,9 +147,6 @@ export function scoreFromData(y: number, m: number, now: Date, data: ScoreData):
 
   const all = Object.values(map);
   const arunRow = all.find((r) => r.id === "arun") || null;
-  const arunOwn = arunRow ? arunRow.points : 0;
-  const teamTotal = all.reduce((s, r) => (r.id === "arun" ? s : s + r.points), 0) + arunOwn;
-  if (arunRow) arunRow.points = teamTotal;
 
   if (isCurrentMonth) {
     const _todayStr2 = now.toISOString().split("T")[0];
@@ -160,12 +157,12 @@ export function scoreFromData(y: number, m: number, now: Date, data: ScoreData):
     const _outletFiled = new Set<string>();
     (data.outlets || []).forEach((o: any) => { if (o.report_date === _todayStr2) _outletFiled.add(o.outlet_id); });
     const _MGR_OUTLETS: Record<string, string[]> = { nilani: ["ra_puram", "anna_nagar", "pallavaram", "vadapalani"], vishnu: ["velachery", "perumbakkam", "tambaram", "porur"], ahila: ["royapettah", "adayar", "bsr_mall", "besant_nagar"] };
-    all.forEach((r) => { r.off = _offMonth.has(r.id + "_" + _todayStr2); const md = _after10 && !_filedDaily.has(r.id); const mo = _afterNoon && (_MGR_OUTLETS[r.id] || []).some((o) => !_outletFiled.has(o)); r.missing = !r.off && (md || mo); });
+    all.forEach((r) => { r.off = _offMonth.has(r.id + "_" + _todayStr2); const md = _after10 && !_filedDaily.has(r.id); const mo = _afterNoon && (_MGR_OUTLETS[r.id] || []).some((o) => !_outletFiled.has(o)); r.missing = !r.off && (md || mo); r.dailyToday = r.off ? "off" : (_filedDaily.has(r.id) ? "done" : (_after10 ? "missed" : "pending")); });
   } else {
-    all.forEach((r) => { r.off = false; r.missing = false; });
+    all.forEach((r) => { r.off = false; r.missing = false; r.dailyToday = ""; });
   }
 
-  const rows = all.filter((r) => r.id !== "arun" && r.id !== "bharani").sort((a, b) => b.points - a.points);
+  const rows = all.filter((r) => r.id !== "bharani").sort((a, b) => b.points - a.points);
   const worst = rows.length ? rows[rows.length - 1] : null;
   const best = rows.length ? rows[0] : null;
   return { rows, arun: arunRow, worst, best };
