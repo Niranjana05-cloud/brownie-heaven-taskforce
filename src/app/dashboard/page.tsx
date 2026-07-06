@@ -468,6 +468,8 @@ export default function DashboardPage() {
       parsed = JSON.parse(stored);
       if (typeof parsed === "string") { localStorage.removeItem("currentUser"); router.push("/"); return; }
     } catch { localStorage.removeItem("currentUser"); router.push("/"); return; }
+    const _fresh = ALL_STAFF.find(s => s.id === parsed.id);
+    if (_fresh) parsed = { ...parsed, outlets: (_fresh as any).outlets, role: _fresh.role };
     setUser(parsed);
     fetchDayOff(parsed.id);
     fetchTasks(parsed);
