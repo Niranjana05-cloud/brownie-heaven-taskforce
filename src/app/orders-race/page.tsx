@@ -15,9 +15,9 @@ const ALLOWED = ["nishant", "arun", "nilani", "vishnu", "ahila"];
 
 // The 3 managers and their 4 outlets each
 const MANAGERS = [
-  { id: "nilani", name: "Nilani", outlets: ["ra_puram", "anna_nagar", "pallavaram", "vadapalani"] },
-  { id: "vishnu", name: "Vishnu", outlets: ["velachery", "perumbakkam", "tambaram", "porur"] },
-  { id: "ahila", name: "Ahila", outlets: ["royapettah", "adayar", "bsr_mall", "besant_nagar"] },
+ { id: "nilani", name: "Nilani", outlets: [] },
+  { id: "vishnu", name: "Vishnu", outlets: ["velachery", "perumbakkam", "tambaram", "porur", "anna_nagar", "vadapalani"] },
+  { id: "ahila", name: "Ahila", outlets: ["royapettah", "adayar", "bsr_mall", "besant_nagar", "pallavaram", "ra_puram"] },
 ];
 
 const OUTLET_NAMES: Record<string, string> = {
