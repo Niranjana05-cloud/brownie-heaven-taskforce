@@ -133,9 +133,10 @@ export function scoreFromData(y: number, m: number, now: Date, data: ScoreData):
     row.adjustments += a.points;
   });
 
+ const _applyStart = (y * 12 + m) <= (2026 * 12 + 6); // June(5)+July(6) 2026 only; 0 from Aug onward
   Object.values(map).forEach((row) => {
     row.points =
-      (STARTING_POINTS[row.id] || 0) +
+      (_applyStart ? (STARTING_POINTS[row.id] || 0) : 0) +
       row.dailyPoints +
       (row.outlets - row.outletLate) * PTS_REPORT +
       row.targetMet * PTS_TARGET_MET - row.targetMiss * PTS_TARGET_MISS +
