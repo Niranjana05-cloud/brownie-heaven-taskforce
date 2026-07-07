@@ -40,6 +40,7 @@ const ALL_STAFF = [
   { id: "vishnu", name: "Vishnu", role: "Asst. Ops Manager", report_time: "22:00", outlets: ["velachery","perumbakkam","tambaram","porur","anna_nagar","vadapalani"] },
   { id: "ahila", name: "Ahila", role: "Custom Cakes & Asst Ops", report_time: "22:00", outlets: ["royapettah","adayar","bsr_mall","besant_nagar","pallavaram","ra_puram"] },
   { id: "niranjana", name: "Niranjana", role: "Founder's Office", report_time: null, outlets: [] },
+  { id: "rafiq", name: "Rafiq", role: "Head Chef", report_time: null, outlets: [] },
 ];
 
 const OUTLETS = ["royapettah","adayar","bsr_mall","velachery","ra_puram","anna_nagar","pallavaram","vadapalani","besant_nagar","perumbakkam","tambaram","porur"];
@@ -1119,7 +1120,7 @@ else await fetchOutletReportsByDate(outletEntryDate);
   const rate = total > 0 ? Math.round(completed / total * 100) : 0;
   const canAssign = user?.role === "Owner" || user?.role === "Manager";
   const isFO = user?.role === "Founder's Office";
-  const hasReportDuty = user?.role !== "Owner" && user?.role !== "Founder's Office";
+  const hasReportDuty = user?.role !== "Owner" && user?.role !== "Founder's Office" && user?.role !== "Head Chef";
   const reportFields = user ? REPORT_FIELDS[user.id] || [] : [];
   const reportInput = (f: { label: string; key: string }) => {
     if (user && user.id === "arun" && f.key === "achievement") {
@@ -1271,7 +1272,14 @@ else await fetchOutletReportsByDate(outletEntryDate);
       <main className="flex-1 px-4 py-4 md:px-8 md:py-8 overflow-auto">
 
        {activeTab === "tasks" && user && user.role === "Founder's Office" && <FounderDashboard user={user} />}
-       {activeTab === "tasks" && user?.role !== "Founder's Office" && (
+      {activeTab === "tasks" && user?.role === "Head Chef" && (
+          <div className="flex flex-col items-center justify-center py-32 text-center">
+            <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-[0.3em] mb-3">{user.role}</p>
+            <h2 className="text-4xl md:text-5xl font-black tracking-tight mb-3">Coming soon</h2>
+            <p className="text-sm text-zinc-500">Your workspace is being set up, {user.name.split(" ")[0]}.</p>
+          </div>
+       )}
+       {activeTab === "tasks" && user?.role !== "Founder's Office" && user?.role !== "Head Chef" && (
          <div>
             <div className="flex justify-between items-start mb-6 pb-5 border-b border-zinc-800">
               <div>
