@@ -1016,14 +1016,15 @@ const submitOutletReport = async () => {
   const earnedBonus = newRating > 4.5 && newRating > prevRating;
   const isBackfill = outletEntryDate < new Date().toISOString().split("T")[0];
   const isLate = !isBackfill && _afterNoon;
+const _clean = (v: any) => String(v ?? "").replace(/[^0-9.]/g, "");
   const payload = {
-    shop_sales_count: parseInt(d.shop_sales_count?.replace(/,/g, "")) || 0,
-    shop_sales_value: parseFloat(d.shop_sales_value?.replace(/,/g, "")) || 0,
-    swiggy_sales_count: parseInt(d.swiggy_sales_count?.replace(/,/g, "")) || 0,
-    swiggy_sales_value: parseFloat(d.swiggy_sales_value?.replace(/,/g, "")) || 0,
-    zomato_sales_count: parseInt(d.zomato_sales_count?.replace(/,/g, "")) || 0,
-    zomato_sales_value: parseFloat(d.zomato_sales_value?.replace(/,/g, "")) || 0,
-    target: parseFloat(d.target?.replace(/,/g, "")) || 0,
+    shop_sales_count: parseInt(_clean(d.shop_sales_count)) || 0,
+    shop_sales_value: parseFloat(_clean(d.shop_sales_value)) || 0,
+    swiggy_sales_count: parseInt(_clean(d.swiggy_sales_count)) || 0,
+    swiggy_sales_value: parseFloat(_clean(d.swiggy_sales_value)) || 0,
+    zomato_sales_count: parseInt(_clean(d.zomato_sales_count)) || 0,
+    zomato_sales_value: parseFloat(_clean(d.zomato_sales_value)) || 0,
+    target: parseFloat(_clean(d.target)) || 0,
     swiggy_live: (d.swiggy_live || "yes").toLowerCase() === "yes",
     zomato_live: (d.zomato_live || "yes").toLowerCase() === "yes",
     discount_running: d.discount_running || "",
