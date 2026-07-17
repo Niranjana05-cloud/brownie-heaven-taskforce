@@ -11,8 +11,8 @@ const OUTLET_NAMES: Record<string, string> = {
   besant_nagar: "Besant Nagar", perumbakkam: "Perumbakkam", tambaram: "Tambaram", porur: "Porur",
 };
 const OUTLET_TARGETS: Record<string, number> = {
-  royapettah: 80000, adayar: 18333, bsr_mall: 35000, ra_puram: 21666, anna_nagar: 50000,
-  porur: 50000, perumbakkam: 13000, tambaram: 20000, velachery: 0, pallavaram: 0, vadapalani: 23333, besant_nagar: 11667,
+  royapettah: 80000, adayar: 18333, bsr_mall: 35000, ra_puram: 21667, anna_nagar: 51667,
+  porur: 50000, perumbakkam: 13333, tambaram: 20000, velachery: 23333, pallavaram: 23333, vadapalani: 23333, besant_nagar: 11667,
 };
 const MONTHLY_TARGET = 8750000; // ₹87.5 L company-wide
 const DUTY_STAFF = [
