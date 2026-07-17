@@ -62,17 +62,31 @@ const OUTLET_TARGETS: Record<string, string> = {
   royapettah: "80000",
   adayar: "18333",
   bsr_mall: "35000",
-  ra_puram: "21666",
-  anna_nagar: "50000",
+  ra_puram: "21667",
+  anna_nagar: "51667",
   porur: "50000",
-  perumbakkam: "13000",
+  perumbakkam: "13333",
   tambaram: "20000",
   velachery: "23333",
-  pallavaram: "18000",
+  pallavaram: "23333",
   vadapalani: "23333",
   besant_nagar: "11667",
 };
 
+// Official FY 2026-27 monthly targets by brand (BH = Brownie Heaven, CBH = Cakes by BH, ICBH = Ice Creams by BH).
+// Vadapalani & Besant Nagar not on the official sheet yet -> no brand split; they keep their default daily target above.
+const BRAND_TARGETS: Record<string, { bh: number; cbh: number; icbh: number; total: number }> = {
+  royapettah:  { bh: 1500000, cbh: 700000, icbh: 200000, total: 2400000 },
+  anna_nagar:  { bh: 800000,  cbh: 600000, icbh: 150000, total: 1550000 },
+  porur:       { bh: 750000,  cbh: 600000, icbh: 150000, total: 1500000 },
+  bsr_mall:    { bh: 600000,  cbh: 300000, icbh: 150000, total: 1050000 },
+  tambaram:    { bh: 300000,  cbh: 200000, icbh: 100000, total: 600000 },
+  ra_puram:    { bh: 350000,  cbh: 200000, icbh: 100000, total: 650000 },
+  adayar:      { bh: 300000,  cbh: 150000, icbh: 100000, total: 550000 },
+  perumbakkam: { bh: 300000,  cbh: 100000, icbh: 0,      total: 400000 },
+  pallavaram:  { bh: 350000,  cbh: 250000, icbh: 100000, total: 700000 },
+  velachery:   { bh: 350000,  cbh: 250000, icbh: 100000, total: 700000 },
+};
 const REPORT_FIELDS: Record<string, { label: string; key: string; type?: string }[]> = {
   arun: [
     { label: "Total Sales (Rs)", key: "total_sales" },
@@ -348,6 +362,12 @@ export default function DashboardPage() {
           <div style="font-size:13px;font-weight:800;margin:4px 0 8px;color:${C.ink}">💬 The honest verdict 👀</div>
           ${noteCards}`;
           })()}
+          <div style="font-size:15px;font-weight:800;margin:18px 0 10px;page-break-before:always">🎯 Monthly targets by brand</div>
+          <table style="width:100%;border-collapse:collapse;background:${C.card};border:1px solid ${C.line};border-radius:12px;overflow:hidden">
+            <thead><tr style="background:${C.ink}"><th style="padding:7px 8px;text-align:left;color:#FFF6E5;font-size:9px">OUTLET</th><th style="padding:7px 8px;text-align:right;color:#FFF6E5;font-size:9px">BH</th><th style="padding:7px 8px;text-align:right;color:#FFF6E5;font-size:9px">CBH</th><th style="padding:7px 8px;text-align:right;color:#FFF6E5;font-size:9px">ICBH</th><th style="padding:7px 8px;text-align:right;color:#FFF6E5;font-size:9px">MONTHLY</th><th style="padding:7px 8px;text-align:right;color:#FFF6E5;font-size:9px">DAILY</th></tr></thead>
+            <tbody>${OUTLETS.map((o) => { const bt = (BRAND_TARGETS as any)[o]; const daily = parseFloat(OUTLET_TARGETS[o] || "0") || 0; const monthly = bt ? bt.total : daily * 30; const nm = (OUTLET_NAMES as any)[o] || o; return `<tr><td style="padding:5px 8px;border-bottom:1px solid ${C.line};font-size:10px;color:${C.ink}">${nm}</td><td style="padding:5px 8px;border-bottom:1px solid ${C.line};text-align:right;font-size:10px;color:${C.soft}">${bt ? rs(bt.bh) : "-"}</td><td style="padding:5px 8px;border-bottom:1px solid ${C.line};text-align:right;font-size:10px;color:${C.soft}">${bt ? rs(bt.cbh) : "-"}</td><td style="padding:5px 8px;border-bottom:1px solid ${C.line};text-align:right;font-size:10px;color:${C.soft}">${bt && bt.icbh ? rs(bt.icbh) : "-"}</td><td style="padding:5px 8px;border-bottom:1px solid ${C.line};text-align:right;font-size:10px;font-weight:700;color:${C.ink}">${rs(monthly)}</td><td style="padding:5px 8px;border-bottom:1px solid ${C.line};text-align:right;font-size:10px;color:${C.soft}">${rs(daily)}</td></tr>`; }).join("")}</tbody>
+          </table>
+          <div style="font-size:9px;color:${C.soft};margin:6px 2px 0">BH = Brownie Heaven · CBH = Cakes by Brownie Heaven · ICBH = Ice Creams by Brownie Heaven. Vadapalani & Besant Nagar pending official brand split — showing current default.</div>
           <div style="font-size:15px;font-weight:800;margin:18px 0 10px;page-break-before:always">🗓️ Daily detail</div>
           <table style="width:100%;border-collapse:collapse;background:${C.card};border:1px solid ${C.line};border-radius:12px;overflow:hidden">
             <thead><tr style="background:${C.ink}"><th style="padding:7px 8px;text-align:left;color:#FFF6E5;font-size:9px">DATE</th><th style="padding:7px 8px;text-align:left;color:#FFF6E5;font-size:9px">OUTLET</th><th style="padding:7px 8px;text-align:right;color:#FFF6E5;font-size:9px">SHOP</th><th style="padding:7px 8px;text-align:right;color:#FFF6E5;font-size:9px">SWIGGY</th><th style="padding:7px 8px;text-align:right;color:#FFF6E5;font-size:9px">ZOMATO</th><th style="padding:7px 8px;text-align:right;color:#FFF6E5;font-size:9px">TOTAL</th><th style="padding:7px 8px;text-align:right;color:#FFF6E5;font-size:9px">TARGET</th><th style="padding:7px 8px;text-align:right;color:#FFF6E5;font-size:9px">%</th></tr></thead>
