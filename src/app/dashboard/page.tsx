@@ -207,7 +207,7 @@ export default function DashboardPage() {
   const [reports, setReports] = useState<Report[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
-  const [activeTab, setActiveTab] = useState<"tasks" | "my_report" | "all_reports" | "analytics" | "outlet_reports" | "owner_outlets" | "history" | "attendance" | "sales_target" | "payout" | "reconciliation">("tasks");
+  const [activeTab, setActiveTab] = useState<"tasks" | "my_report" | "all_reports" | "analytics" | "outlet_reports" | "owner_outlets" | "history" | "attendance" | "sales_target" | "payout" | "reconciliation" | "competition">("tasks");
   const fetchRangeReports = async (outlets: string[]) => {
     let q = supabase.from("outlet_reports").select("*").gte("report_date", repFrom).lte("report_date", repTo).order("report_date", { ascending: true });
     if (outlets.length > 0) q = q.in("outlet_id", outlets);
@@ -447,6 +447,24 @@ export default function DashboardPage() {
     computeScores().then((res) => { if (!cancelled) { setScoreRows(res.rows); } }).catch(() => {});
     return () => { cancelled = true; };
   }, [user]);
+
+  const [compRows, setCompRows] = useState<any[]>([]);
+  const [compSaving, setCompSaving] = useState(false);
+  const [compForm, setCompForm] = useState({ competitor: "", area: "", address: "", sales_value: "", our_sales: "", our_outlet_id: "", period_label: "", period_date: new Date().toISOString().slice(0, 10), note: "" });
+  const fetchCompRows = async () => {
+    const { data } = await supabase.from("competitor_sales").select("*").order("period_date", { ascending: false }).order("created_at", { ascending: false });
+    setCompRows(data || []);
+  };
+  const saveComp = async () => {
+    if (!compForm.competitor.trim()) { alert("Competitor name is required"); return; }
+    setCompSaving(true);
+    const { error } = await supabase.from("competitor_sales").insert({ competitor: compForm.competitor.trim(), area: compForm.area.trim() || null, address: compForm.address.trim() || null, sales_value: compForm.sales_value ? Number(compForm.sales_value) : null, our_sales: compForm.our_sales ? Number(compForm.our_sales) : null, our_outlet_id: compForm.our_outlet_id || null, period_label: compForm.period_label.trim() || null, period_date: compForm.period_date, note: compForm.note.trim() || null, entered_by: user?.id || null });
+    setCompSaving(false);
+    if (error) { alert("Save failed: " + error.message); return; }
+    setCompForm({ competitor: "", area: "", address: "", sales_value: "", our_sales: "", our_outlet_id: "", period_label: "", period_date: new Date().toISOString().slice(0, 10), note: "" });
+    fetchCompRows();
+  };
+  useEffect(() => { if (activeTab === "competition") fetchCompRows(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [activeTab]);
 
   useEffect(() => {
     if (activeTab !== "analytics") return;
@@ -1265,7 +1283,12 @@ else await fetchOutletReportsByDate(outletEntryDate);
           )}
          {(canAssign || isFO) && (
             <div onClick={() => { setActiveTab("analytics"); setSidebarOpen(false); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "analytics" ? "text-white bg-zinc-900 border-l-2 border-yellow-400" : "text-zinc-500 hover:text-white"}`}>
-              <span>◬</span> Analytics
+             <span>◬</span> Analytics
+            </div>
+          )}
+          {(canAssign || isFO) && (
+            <div onClick={() => { setActiveTab("competition"); setSidebarOpen(false); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "competition" ? "text-white bg-zinc-900 border-l-2 border-yellow-400" : "text-zinc-500 hover:text-white"}`}>
+              <span>🥊</span> Competition
             </div>
           )}
           {canAssign && (
@@ -2309,6 +2332,52 @@ else await fetchOutletReportsByDate(outletEntryDate);
     </div>
   </div>
 )}
+        {activeTab === "competition" && (
+          <div>
+            <div className="mb-8 pb-5 border-b border-zinc-800">
+              <h2 className="text-2xl font-black tracking-tight">Competition</h2>
+              <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mt-1">Rival bakery sales · expansion signals</p>
+            </div>
+
+            <div className="mb-8 border border-zinc-800 p-5 max-w-2xl">
+              <p className="text-sm font-semibold mb-4">Log a competitor&apos;s numbers</p>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div><label className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest">Competitor *</label><input type="text" value={compForm.competitor} onChange={(e) => setCompForm(pp => ({ ...pp, competitor: e.target.value }))} className="w-full bg-black border border-zinc-800 text-white px-3 py-2 focus:outline-none focus:border-yellow-400 transition-colors text-sm mt-1" placeholder="The Brownie Studio" /></div>
+                <div><label className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest">Area / locality</label><input type="text" value={compForm.area} onChange={(e) => setCompForm(pp => ({ ...pp, area: e.target.value }))} className="w-full bg-black border border-zinc-800 text-white px-3 py-2 focus:outline-none focus:border-yellow-400 transition-colors text-sm mt-1" placeholder="Perambur" /></div>
+                <div><label className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest">Specific address (optional)</label><input type="text" value={compForm.address} onChange={(e) => setCompForm(pp => ({ ...pp, address: e.target.value }))} className="w-full bg-black border border-zinc-800 text-white px-3 py-2 focus:outline-none focus:border-yellow-400 transition-colors text-sm mt-1" placeholder="123 Main Rd, Perambur" /></div>
+                <div><label className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest">Our outlet in this area</label><select value={compForm.our_outlet_id} onChange={(e) => setCompForm(pp => ({ ...pp, our_outlet_id: e.target.value }))} className="w-full bg-black border border-zinc-800 text-white px-3 py-2 focus:outline-none focus:border-yellow-400 transition-colors text-sm mt-1"><option value="">— none (we&apos;re not here) —</option>{OUTLETS.map((o) => <option key={o} value={o}>{(OUTLET_NAMES as any)[o] || o}</option>)}</select></div>
+                <div><label className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest">Their sales (₹)</label><input type="number" value={compForm.sales_value} onChange={(e) => setCompForm(pp => ({ ...pp, sales_value: e.target.value }))} className="w-full bg-black border border-zinc-800 text-white px-3 py-2 focus:outline-none focus:border-yellow-400 transition-colors text-sm mt-1" placeholder="800000" /></div>
+                <div><label className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest">Our sales here (₹, optional)</label><input type="number" value={compForm.our_sales} onChange={(e) => setCompForm(pp => ({ ...pp, our_sales: e.target.value }))} className="w-full bg-black border border-zinc-800 text-white px-3 py-2 focus:outline-none focus:border-yellow-400 transition-colors text-sm mt-1" placeholder="—" /></div>
+                <div><label className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest">Period label</label><input type="text" value={compForm.period_label} onChange={(e) => setCompForm(pp => ({ ...pp, period_label: e.target.value }))} className="w-full bg-black border border-zinc-800 text-white px-3 py-2 focus:outline-none focus:border-yellow-400 transition-colors text-sm mt-1" placeholder="July 2026" /></div>
+                <div><label className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest">Period date</label><input type="date" value={compForm.period_date} onChange={(e) => setCompForm(pp => ({ ...pp, period_date: e.target.value }))} className="w-full bg-black border border-zinc-800 text-white px-3 py-2 focus:outline-none focus:border-yellow-400 transition-colors text-sm mt-1" /></div>
+                <div className="md:col-span-2"><label className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest">Note</label><input type="text" value={compForm.note} onChange={(e) => setCompForm(pp => ({ ...pp, note: e.target.value }))} className="w-full bg-black border border-zinc-800 text-white px-3 py-2 focus:outline-none focus:border-yellow-400 transition-colors text-sm mt-1" placeholder="Sir&apos;s comment / context" /></div>
+              </div>
+              <button onClick={saveComp} disabled={compSaving} className="mt-4 bg-yellow-400 text-black px-5 py-2 text-sm font-semibold hover:bg-yellow-300 disabled:opacity-50 transition-colors">{compSaving ? "Saving…" : "Save entry"}</button>
+            </div>
+
+            <div className="max-w-3xl">
+              <p className="text-sm font-semibold mb-3">Recent entries</p>
+              {compRows.length === 0 ? (
+                <p className="text-sm text-zinc-500">No entries yet.</p>
+              ) : (
+                <div className="space-y-2">
+                  {compRows.slice(0, 10).map((r) => (
+                    <div key={r.id} className="border border-zinc-800 px-4 py-3 text-sm flex flex-wrap gap-x-4 gap-y-1 items-baseline">
+                      <span className="font-semibold">{r.competitor}</span>
+                      {r.area && <span className="text-zinc-400">{r.area}</span>}
+                      {r.sales_value != null && <span className="text-yellow-400 font-mono">₹{Number(r.sales_value).toLocaleString("en-IN")}</span>}
+                      {r.our_sales != null && <span className="text-zinc-500 font-mono">us: ₹{Number(r.our_sales).toLocaleString("en-IN")}</span>}
+                      {!r.our_outlet_id && <span className="text-[10px] font-mono text-orange-400 uppercase">no outlet here</span>}
+                      {r.period_label && <span className="text-zinc-600 text-xs">{r.period_label}</span>}
+                      {r.note && <span className="text-zinc-500 text-xs italic w-full">{r.note}</span>}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         {activeTab === "analytics" && (
           <div>
             <div className="mb-8 pb-5 border-b border-zinc-800">
