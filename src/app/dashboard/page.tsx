@@ -210,26 +210,33 @@ function parseMoney(raw: string): number | null {
   if (u === "cr" || u === "crore") v *= 1e7; else if (u === "l" || u === "lakh") v *= 1e5; else if (u === "k") v *= 1e3;
   return Math.round(v);
 }
-function parseAreaTable(text: string): { competitor: string; rows: { area: string; their: number | null; our: number | null }[] } | null {
+function parseAreaTable(text: string): { rows: { area: string; competitor: string; their: number | null; our: number | null }[] } | null {
   const lines = (text || "").split("\n").map(l => l.trim()).filter(l => l.startsWith("|"));
   if (lines.length < 2) return null;
   const cells = (l: string) => l.split("|").slice(1, -1).map(c => c.trim());
   const header = cells(lines[0]);
-  const norm = header.map(h => h.replace(/\*/g, "").toLowerCase());
-  const areaIdx = norm.findIndex(h => h.includes("area"));
-  const ourIdx = norm.findIndex(h => h.includes("brownie heaven"));
-  const theirIdx = norm.findIndex((h, i) => h.includes("gmv") && i !== ourIdx);
-  if (areaIdx < 0 || ourIdx < 0 || theirIdx < 0) return null;
-  const competitor = header[theirIdx].replace(/\*/g, "").replace(/gmv/i, "").trim();
-  const rows: { area: string; their: number | null; our: number | null }[] = [];
-  for (let i = 1; i < lines.length; i++) {
-    const c = cells(lines[i]);
+  const norm = header.map(h => h.replace(/\*/g, "").toLowerCase().trim());
+  const areaIdx = norm.findIndex(h => h.includes("area") || h.includes("locality"));
+  const ourIdx = norm.findIndex(h => h.includes("brownie heaven") || h === "bh" || h === "ours" || h === "us");
+  if (areaIdx < 0 || ourIdx < 0) return null;
+  const skip = /gap|note|verdict|diff|remark|rank|^$/i;
+  const compCols = header.map((_, i) => i).filter(i => i !== areaIdx && i !== ourIdx && !skip.test(norm[i]));
+  if (compCols.length === 0) return null;
+  const nameOf = (i: number) => header[i].replace(/\*/g, "").replace(/gmv/i, "").trim() || "Unknown";
+  const rows: { area: string; competitor: string; their: number | null; our: number | null }[] = [];
+  for (let li = 1; li < lines.length; li++) {
+    const c = cells(lines[li]);
     if (!c[areaIdx] || /^[-:\s]+$/.test(c[areaIdx])) continue;
     const area = c[areaIdx].replace(/\*/g, "").trim();
     if (!area) continue;
-    rows.push({ area, their: parseMoney(c[theirIdx] || ""), our: parseMoney(c[ourIdx] || "") });
+    const our = parseMoney(c[ourIdx] || "");
+    for (const ci of compCols) {
+      const their = parseMoney(c[ci] || "");
+      if (their == null && our == null) continue;
+      rows.push({ area, competitor: nameOf(ci), their, our });
+    }
   }
-  return { competitor, rows };
+  return rows.length ? { rows } : null;
 }
 
 export default function DashboardPage() {
@@ -487,7 +494,7 @@ export default function DashboardPage() {
   const [compPasteComp, setCompPasteComp] = useState("");
   const [compPasteLabel, setCompPasteLabel] = useState("");
   const [compPasteDate, setCompPasteDate] = useState(new Date().toISOString().slice(0, 10));
-  const [compParsed, setCompParsed] = useState<{ area: string; their: number | null; our: number | null }[] | null>(null);
+  const [compParsed, setCompParsed] = useState<{ area: string; competitor: string; their: number | null; our: number | null }[] | null>(null);
   const [compSavingBulk, setCompSavingBulk] = useState(false);
   const fetchCompRows = async () => {
     const { data } = await supabase.from("competitor_sales").select("*").order("period_date", { ascending: false }).order("created_at", { ascending: false });
@@ -504,22 +511,20 @@ export default function DashboardPage() {
   };
   const parseComp = () => {
     const res = parseAreaTable(compPaste);
-    if (!res || res.rows.length === 0) { alert("Couldn't find an area table. Paste the row with 'Area | ... GMV | Brownie Heaven GMV'."); return; }
+    if (!res || res.rows.length === 0) { alert("Couldn't read a table. Need an Area column, a Brownie Heaven column, and one or more competitor columns."); return; }
     setCompParsed(res.rows);
-    if (res.competitor && !compPasteComp) setCompPasteComp(res.competitor);
   };
   const saveParsedComp = async () => {
     if (!compParsed || !compParsed.length) return;
-    if (!compPasteComp.trim()) { alert("Enter the competitor name"); return; }
     setCompSavingBulk(true);
-    const payload = compParsed.map(r => ({ competitor: compPasteComp.trim(), area: r.area, sales_value: r.their, our_sales: r.our, period_label: compPasteLabel.trim() || null, period_date: compPasteDate, entered_by: user?.id || null }));
+    const payload = compParsed.map(r => ({ competitor: (r.competitor || compPasteComp).trim() || "Unknown", area: r.area, sales_value: r.their, our_sales: r.our, period_label: compPasteLabel.trim() || null, period_date: compPasteDate, entered_by: user?.id || null }));
     const { error } = await supabase.from("competitor_sales").insert(payload);
     setCompSavingBulk(false);
     if (error) { alert("Save failed: " + error.message); return; }
     setCompPaste(""); setCompParsed(null);
     fetchCompRows();
   };
-  (() => { if (activeTab === "competition") fetchCompRows(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [activeTab]);
+  useEffect(() => { if (activeTab === "competition") fetchCompRows(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [activeTab]);
 
   useEffect(() => {
     if (activeTab !== "analytics") return;
@@ -2399,7 +2404,7 @@ else await fetchOutletReportsByDate(outletEntryDate);
               <p className="text-xs text-zinc-500 mb-4">Paste the &quot;Area | … GMV | Brownie Heaven GMV | Gap&quot; table. We parse the rows and compute the gap — you just review and save.</p>
               <textarea value={compPaste} onChange={(e) => setCompPaste(e.target.value)} rows={6} className="w-full bg-black border border-zinc-800 text-white px-3 py-2 focus:outline-none focus:border-yellow-400 transition-colors text-sm font-mono" placeholder="| Area | Brownie Studio GMV | Brownie Heaven GMV | Gap |" />
               <div className="flex flex-wrap gap-3 mt-3 items-end">
-                <div><label className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest">Competitor</label><input type="text" value={compPasteComp} onChange={(e) => setCompPasteComp(e.target.value)} className="bg-black border border-zinc-800 text-white px-3 py-2 focus:outline-none focus:border-yellow-400 transition-colors text-sm mt-1 w-44" placeholder="Brownie Studio" /></div>
+                <div><label className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest">Competitor (fallback)</label><input type="text" value={compPasteComp} onChange={(e) => setCompPasteComp(e.target.value)} className="bg-black border border-zinc-800 text-white px-3 py-2 focus:outline-none focus:border-yellow-400 transition-colors text-sm mt-1 w-44" placeholder="only if table has no name" /></div>
                 <div><label className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest">Period label</label><input type="text" value={compPasteLabel} onChange={(e) => setCompPasteLabel(e.target.value)} className="bg-black border border-zinc-800 text-white px-3 py-2 focus:outline-none focus:border-yellow-400 transition-colors text-sm mt-1 w-40" placeholder="June 2026" /></div>
                 <div><label className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest">Period date</label><input type="date" value={compPasteDate} onChange={(e) => setCompPasteDate(e.target.value)} className="w-full bg-black border border-zinc-800 text-white px-3 py-2 focus:outline-none focus:border-yellow-400 transition-colors text-sm mt-1" /></div>
                 <button onClick={parseComp} className="bg-zinc-800 text-white px-4 py-2 text-sm font-semibold hover:bg-zinc-700 transition-colors">Parse</button>
@@ -2407,11 +2412,12 @@ else await fetchOutletReportsByDate(outletEntryDate);
               {compParsed && (
                 <div className="mt-5">
                   <table className="w-full text-sm">
-                    <thead><tr className="text-left text-[11px] font-mono text-zinc-500 uppercase"><th className="py-1">Area</th><th className="py-1 text-right">{compPasteComp || "Them"}</th><th className="py-1 text-right">Us</th><th className="py-1 text-right">Gap</th></tr></thead>
+                    <thead><tr className="text-left text-[11px] font-mono text-zinc-500 uppercase"><th className="py-1">Area</th><th className="py-1">Competitor</th><th className="py-1 text-right">Them</th><th className="py-1 text-right">Us</th><th className="py-1 text-right">Gap</th></tr></thead>
                     <tbody>
                       {compParsed.map((r, i) => { const gap = (r.their || 0) - (r.our || 0); return (
                         <tr key={i} className="border-t border-zinc-800">
                           <td className="py-1.5">{r.area}</td>
+                          <td className="py-1.5">{r.competitor}</td>
                           <td className="py-1.5 text-right font-mono">{r.their != null ? "₹" + r.their.toLocaleString("en-IN") : "—"}</td>
                           <td className="py-1.5 text-right font-mono text-zinc-400">{r.our != null ? "₹" + r.our.toLocaleString("en-IN") : "—"}</td>
                           <td className={`py-1.5 text-right font-mono ${gap > 0 ? "text-orange-400" : "text-green-400"}`}>{gap > 0 ? "they +" : "we +"}₹{Math.abs(gap).toLocaleString("en-IN")}</td>
