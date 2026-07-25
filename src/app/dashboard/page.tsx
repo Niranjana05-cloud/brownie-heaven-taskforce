@@ -238,6 +238,33 @@ function parseAreaTable(text: string): { rows: { area: string; competitor: strin
   }
   return rows.length ? { rows } : null;
 }
+function parseNum(raw: string): number | null {
+  const s = (raw || "").replace(/[^0-9.]/g, "");
+  if (!s) return null;
+  const n = Math.round(parseFloat(s));
+  return isNaN(n) ? null : n;
+}
+function parseProductTable(text: string): { product: string; gmv: number | null; orders: number | null; units: number | null; areas: number | null }[] | null {
+  const lines = (text || "").split("\n").map(l => l.trim()).filter(l => l.startsWith("|"));
+  if (lines.length < 2) return null;
+  const cells = (l: string) => l.split("|").slice(1, -1).map(c => c.trim());
+  const header = cells(lines[0]);
+  const norm = header.map(h => h.replace(/\*/g, "").toLowerCase().trim());
+  const pIdx = norm.findIndex(h => h.includes("product") || h.includes("item"));
+  if (pIdx < 0) return null;
+  const gIdx = norm.findIndex(h => h.includes("gmv") || h.includes("sales") || h.includes("value"));
+  const oIdx = norm.findIndex(h => h.includes("order"));
+  const uIdx = norm.findIndex(h => h.includes("unit"));
+  const aIdx = norm.findIndex(h => h.includes("area"));
+  const rows: { product: string; gmv: number | null; orders: number | null; units: number | null; areas: number | null }[] = [];
+  for (let i = 1; i < lines.length; i++) {
+    const c = cells(lines[i]);
+    const product = (c[pIdx] || "").replace(/\*/g, "").trim();
+    if (!product || /^[-:\s]+$/.test(product)) continue;
+    rows.push({ product, gmv: gIdx >= 0 ? parseMoney(c[gIdx] || "") : null, orders: oIdx >= 0 ? parseNum(c[oIdx] || "") : null, units: uIdx >= 0 ? parseNum(c[uIdx] || "") : null, areas: aIdx >= 0 ? parseNum(c[aIdx] || "") : null });
+  }
+  return rows.length ? rows : null;
+}
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -497,7 +524,15 @@ export default function DashboardPage() {
   const [compPasteDate, setCompPasteDate] = useState(new Date().toISOString().slice(0, 10));
   const [compParsed, setCompParsed] = useState<{ area: string; competitor: string; their: number | null; our: number | null }[] | null>(null);
   const [compSavingBulk, setCompSavingBulk] = useState(false);
-  const [compView, setCompView] = useState<"entry" | "insights">("entry");
+  const [compView, setCompView] = useState<"entry" | "products" | "insights">("entry");
+  const [prodSide, setProdSide] = useState<"them" | "us">("them");
+  const [prodComp, setProdComp] = useState("");
+  const [prodLabel, setProdLabel] = useState("");
+  const [prodDate, setProdDate] = useState(new Date().toISOString().slice(0, 10));
+  const [prodPaste, setProdPaste] = useState("");
+  const [prodParsed, setProdParsed] = useState<{ product: string; gmv: number | null; orders: number | null; units: number | null; areas: number | null }[] | null>(null);
+  const [prodSaving, setProdSaving] = useState(false);
+  const [compProducts, setCompProducts] = useState<any[]>([]);
   const [compPeriod, setCompPeriod] = useState("");
   const fetchCompRows = async () => {
     const { data } = await supabase.from("competitor_sales").select("*").order("period_date", { ascending: false }).order("created_at", { ascending: false });
@@ -526,6 +561,26 @@ export default function DashboardPage() {
     if (error) { alert("Save failed: " + error.message); return; }
     setCompPaste(""); setCompParsed(null);
     fetchCompRows();
+  };
+  const fetchCompProducts = async () => {
+    const { data } = await supabase.from("competitor_products").select("*").order("gmv", { ascending: false, nullsFirst: false });
+    setCompProducts(data || []);
+  };
+  const parseProd = () => {
+    const rows = parseProductTable(prodPaste);
+    if (!rows || rows.length === 0) { alert("Couldn't read a product table. Need a header with Product and GMV columns."); return; }
+    setProdParsed(rows);
+  };
+  const saveProd = async () => {
+    if (!prodParsed || !prodParsed.length) return;
+    if (prodSide === "them" && !prodComp.trim()) { alert("Enter the competitor name for their products."); return; }
+    setProdSaving(true);
+    const payload = prodParsed.map((r, i) => ({ side: prodSide, competitor: prodSide === "them" ? prodComp.trim() : null, product: r.product, gmv: r.gmv, orders: r.orders, units: r.units, areas: r.areas, rank: i + 1, period_label: prodLabel.trim() || null, period_date: prodDate, entered_by: user?.id || null }));
+    const { error } = await supabase.from("competitor_products").insert(payload);
+    setProdSaving(false);
+    if (error) { alert("Save failed: " + error.message); return; }
+    setProdPaste(""); setProdParsed(null);
+    fetchCompProducts();
   };
   const compFmtL = (n: number) => n >= 100000 ? "₹" + (n / 100000).toFixed(2) + "L" : "₹" + Math.round(n).toLocaleString("en-IN");
   const compPeriods = Array.from(new Set(compRows.map((r: any) => r.period_label || r.period_date))).filter(Boolean) as string[];
@@ -558,8 +613,8 @@ export default function DashboardPage() {
     try { await lib().set({ margin: 0, filename: `Competition_${(compActivePeriod || "report").replace(/[^a-z0-9]+/gi, "_")}.pdf`, image: { type: "jpeg", quality: 0.97 }, html2canvas: { scale: 2, backgroundColor: C.bg }, jsPDF: { unit: "pt", format: "a4", orientation: "portrait" }, pagebreak: { mode: ["css", "legacy"] } }).from(holder.firstElementChild).save(); }
     finally { document.body.removeChild(holder); }
   };
-  useEffect(() => { if (activeTab === "competition") fetchCompRows(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [activeTab]);
-  useEffect(() => { if (user) fetchCompRows(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [user]);
+  useEffect(() => { if (activeTab === "competition") { fetchCompRows(); fetchCompProducts(); } /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [activeTab]);
+  useEffect(() => { if (user) { fetchCompRows(); fetchCompProducts(); } /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [user]);
 
   useEffect(() => {
     if (activeTab !== "analytics") return;
@@ -2442,8 +2497,70 @@ else await fetchOutletReportsByDate(outletEntryDate);
 
             <div className="flex gap-2 mb-6">
               <button onClick={() => setCompView("entry")} className={`px-4 py-2 text-sm font-semibold transition-colors ${compView === "entry" ? "bg-yellow-400 text-black" : "bg-zinc-900 text-zinc-400 hover:text-white"}`}>Entry</button>
+              <button onClick={() => setCompView("products")} className={`px-4 py-2 text-sm font-semibold transition-colors ${compView === "products" ? "bg-yellow-400 text-black" : "bg-zinc-900 text-zinc-400 hover:text-white"}`}>Products</button>
               <button onClick={() => setCompView("insights")} className={`px-4 py-2 text-sm font-semibold transition-colors ${compView === "insights" ? "bg-yellow-400 text-black" : "bg-zinc-900 text-zinc-400 hover:text-white"}`}>Insights</button>
             </div>
+
+            {compView === "products" && (
+              <div>
+                <div className="mb-8 border border-zinc-800 p-5 max-w-3xl">
+                  <p className="text-sm font-semibold mb-1">Paste a top-products table</p>
+                  <p className="text-xs text-zinc-500 mb-4">Rank | Product | GMV | Orders | Units | Areas. Pick whose list it is first.</p>
+                  <div className="flex gap-2 mb-3">
+                    <button onClick={() => setProdSide("them")} className={`px-3 py-1.5 text-sm font-semibold transition-colors ${prodSide === "them" ? "bg-orange-500 text-black" : "bg-zinc-900 text-zinc-400 hover:text-white"}`}>Their products</button>
+                    <button onClick={() => setProdSide("us")} className={`px-3 py-1.5 text-sm font-semibold transition-colors ${prodSide === "us" ? "bg-green-500 text-black" : "bg-zinc-900 text-zinc-400 hover:text-white"}`}>Our products</button>
+                  </div>
+                  <textarea value={prodPaste} onChange={(e) => setProdPaste(e.target.value)} rows={6} className="w-full bg-black border border-zinc-800 text-white px-3 py-2 focus:outline-none focus:border-yellow-400 transition-colors text-sm font-mono" placeholder="| Rank | Product | GMV | Orders | Units | Areas |" />
+                  <div className="flex flex-wrap gap-3 mt-3 items-end">
+                    {prodSide === "them" && <div><label className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest">Competitor</label><input type="text" value={prodComp} onChange={(e) => setProdComp(e.target.value)} className="bg-black border border-zinc-800 text-white px-3 py-2 focus:outline-none focus:border-yellow-400 transition-colors text-sm mt-1 w-44" placeholder="Brownie Studio" /></div>}
+                    <div><label className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest">Period label</label><input type="text" value={prodLabel} onChange={(e) => setProdLabel(e.target.value)} className="bg-black border border-zinc-800 text-white px-3 py-2 focus:outline-none focus:border-yellow-400 transition-colors text-sm mt-1 w-40" placeholder="June 2026" /></div>
+                    <div><label className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest">Period date</label><input type="date" value={prodDate} onChange={(e) => setProdDate(e.target.value)} className="w-full bg-black border border-zinc-800 text-white px-3 py-2 focus:outline-none focus:border-yellow-400 transition-colors text-sm mt-1" /></div>
+                    <button onClick={parseProd} className="bg-zinc-800 text-white px-4 py-2 text-sm font-semibold hover:bg-zinc-700 transition-colors">Parse</button>
+                  </div>
+                  {prodParsed && (
+                    <div className="mt-5">
+                      <table className="w-full text-sm">
+                        <thead><tr className="text-left text-[11px] font-mono text-zinc-500 uppercase"><th className="py-1">#</th><th className="py-1">Product</th><th className="py-1 text-right">GMV</th><th className="py-1 text-right">Orders</th><th className="py-1 text-right">Units</th><th className="py-1 text-right">Areas</th></tr></thead>
+                        <tbody>
+                          {prodParsed.map((r, i) => (
+                            <tr key={i} className="border-t border-zinc-800">
+                              <td className="py-1.5 text-zinc-500">{i + 1}</td>
+                              <td className="py-1.5">{r.product}</td>
+                              <td className="py-1.5 text-right font-mono">{r.gmv != null ? compFmtL(r.gmv) : "—"}</td>
+                              <td className="py-1.5 text-right font-mono text-zinc-400">{r.orders != null ? r.orders.toLocaleString("en-IN") : "—"}</td>
+                              <td className="py-1.5 text-right font-mono text-zinc-400">{r.units != null ? r.units.toLocaleString("en-IN") : "—"}</td>
+                              <td className="py-1.5 text-right font-mono text-zinc-400">{r.areas != null ? r.areas : "—"}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                      <button onClick={saveProd} disabled={prodSaving} className="mt-4 bg-yellow-400 text-black px-5 py-2 text-sm font-semibold hover:bg-yellow-300 disabled:opacity-50 transition-colors">{prodSaving ? "Saving…" : `Save ${prodParsed.length} products (${prodSide === "them" ? "theirs" : "ours"})`}</button>
+                    </div>
+                  )}
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-4xl">
+                  {[{ side: "them", title: "🟠 Their top sellers", color: "text-orange-400" }, { side: "us", title: "🟢 Our top sellers", color: "text-green-400" }].map((col) => {
+                    const rows = compProducts.filter((r) => r.side === col.side).sort((a, b) => (Number(b.gmv) || 0) - (Number(a.gmv) || 0)).slice(0, 15);
+                    return (
+                      <div key={col.side} className="border border-zinc-800 p-4">
+                        <p className={`text-sm font-semibold mb-3 ${col.color}`}>{col.title}</p>
+                        {rows.length === 0 ? <p className="text-sm text-zinc-600">Nothing saved yet.</p> : (
+                          <div className="space-y-1.5">
+                            {rows.map((r, i) => (
+                              <div key={r.id} className="flex items-baseline gap-2 text-sm">
+                                <span className="text-zinc-600 w-5">{i + 1}</span>
+                                <span className="flex-1">{r.product}</span>
+                                <span className="font-mono text-zinc-300">{r.gmv != null ? compFmtL(Number(r.gmv)) : "—"}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
 
             {compView === "insights" && (
               <div>
