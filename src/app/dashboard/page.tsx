@@ -200,6 +200,38 @@ const REPORT_FIELDS: Record<string, { label: string; key: string; type?: string 
   ],
 };
 
+function parseMoney(raw: string): number | null {
+  const s = (raw || "").replace(/\*/g, "").replace(/₹/g, "").replace(/,/g, "").trim();
+  if (!s || /negligible/i.test(s) || /^[-—\s]+$/.test(s)) return null;
+  const m = s.match(/([\d.]+)\s*(cr|crore|l|lakh|k)?/i);
+  if (!m) return null;
+  let v = parseFloat(m[1]); if (isNaN(v)) return null;
+  const u = (m[2] || "").toLowerCase();
+  if (u === "cr" || u === "crore") v *= 1e7; else if (u === "l" || u === "lakh") v *= 1e5; else if (u === "k") v *= 1e3;
+  return Math.round(v);
+}
+function parseAreaTable(text: string): { competitor: string; rows: { area: string; their: number | null; our: number | null }[] } | null {
+  const lines = (text || "").split("\n").map(l => l.trim()).filter(l => l.startsWith("|"));
+  if (lines.length < 2) return null;
+  const cells = (l: string) => l.split("|").slice(1, -1).map(c => c.trim());
+  const header = cells(lines[0]);
+  const norm = header.map(h => h.replace(/\*/g, "").toLowerCase());
+  const areaIdx = norm.findIndex(h => h.includes("area"));
+  const ourIdx = norm.findIndex(h => h.includes("brownie heaven"));
+  const theirIdx = norm.findIndex((h, i) => h.includes("gmv") && i !== ourIdx);
+  if (areaIdx < 0 || ourIdx < 0 || theirIdx < 0) return null;
+  const competitor = header[theirIdx].replace(/\*/g, "").replace(/gmv/i, "").trim();
+  const rows: { area: string; their: number | null; our: number | null }[] = [];
+  for (let i = 1; i < lines.length; i++) {
+    const c = cells(lines[i]);
+    if (!c[areaIdx] || /^[-:\s]+$/.test(c[areaIdx])) continue;
+    const area = c[areaIdx].replace(/\*/g, "").trim();
+    if (!area) continue;
+    rows.push({ area, their: parseMoney(c[theirIdx] || ""), our: parseMoney(c[ourIdx] || "") });
+  }
+  return { competitor, rows };
+}
+
 export default function DashboardPage() {
   const router = useRouter();
   const [user, setUser] = useState<Staff | null>(null);
@@ -451,6 +483,12 @@ export default function DashboardPage() {
   const [compRows, setCompRows] = useState<any[]>([]);
   const [compSaving, setCompSaving] = useState(false);
   const [compForm, setCompForm] = useState({ competitor: "", area: "", address: "", sales_value: "", our_sales: "", our_outlet_id: "", period_label: "", period_date: new Date().toISOString().slice(0, 10), note: "" });
+  const [compPaste, setCompPaste] = useState("");
+  const [compPasteComp, setCompPasteComp] = useState("");
+  const [compPasteLabel, setCompPasteLabel] = useState("");
+  const [compPasteDate, setCompPasteDate] = useState(new Date().toISOString().slice(0, 10));
+  const [compParsed, setCompParsed] = useState<{ area: string; their: number | null; our: number | null }[] | null>(null);
+  const [compSavingBulk, setCompSavingBulk] = useState(false);
   const fetchCompRows = async () => {
     const { data } = await supabase.from("competitor_sales").select("*").order("period_date", { ascending: false }).order("created_at", { ascending: false });
     setCompRows(data || []);
@@ -461,10 +499,27 @@ export default function DashboardPage() {
     const { error } = await supabase.from("competitor_sales").insert({ competitor: compForm.competitor.trim(), area: compForm.area.trim() || null, address: compForm.address.trim() || null, sales_value: compForm.sales_value ? Number(compForm.sales_value) : null, our_sales: compForm.our_sales ? Number(compForm.our_sales) : null, our_outlet_id: compForm.our_outlet_id || null, period_label: compForm.period_label.trim() || null, period_date: compForm.period_date, note: compForm.note.trim() || null, entered_by: user?.id || null });
     setCompSaving(false);
     if (error) { alert("Save failed: " + error.message); return; }
-    setCompForm({ competitor: "", area: "", address: "", sales_value: "", our_sales: "", our_outlet_id: "", period_label: "", period_date: new Date().toISOString().slice(0, 10), note: "" });
+   setCompForm({ competitor: "", area: "", address: "", sales_value: "", our_sales: "", our_outlet_id: "", period_label: "", period_date: new Date().toISOString().slice(0, 10), note: "" });
     fetchCompRows();
   };
-  useEffect(() => { if (activeTab === "competition") fetchCompRows(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [activeTab]);
+  const parseComp = () => {
+    const res = parseAreaTable(compPaste);
+    if (!res || res.rows.length === 0) { alert("Couldn't find an area table. Paste the row with 'Area | ... GMV | Brownie Heaven GMV'."); return; }
+    setCompParsed(res.rows);
+    if (res.competitor && !compPasteComp) setCompPasteComp(res.competitor);
+  };
+  const saveParsedComp = async () => {
+    if (!compParsed || !compParsed.length) return;
+    if (!compPasteComp.trim()) { alert("Enter the competitor name"); return; }
+    setCompSavingBulk(true);
+    const payload = compParsed.map(r => ({ competitor: compPasteComp.trim(), area: r.area, sales_value: r.their, our_sales: r.our, period_label: compPasteLabel.trim() || null, period_date: compPasteDate, entered_by: user?.id || null }));
+    const { error } = await supabase.from("competitor_sales").insert(payload);
+    setCompSavingBulk(false);
+    if (error) { alert("Save failed: " + error.message); return; }
+    setCompPaste(""); setCompParsed(null);
+    fetchCompRows();
+  };
+  (() => { if (activeTab === "competition") fetchCompRows(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [activeTab]);
 
   useEffect(() => {
     if (activeTab !== "analytics") return;
@@ -2336,7 +2391,36 @@ else await fetchOutletReportsByDate(outletEntryDate);
           <div>
             <div className="mb-8 pb-5 border-b border-zinc-800">
               <h2 className="text-2xl font-black tracking-tight">Competition</h2>
-              <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mt-1">Rival bakery sales · expansion signals</p>
+             <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mt-1">Rival bakery sales · expansion signals</p>
+            </div>
+
+            <div className="mb-8 border border-zinc-800 p-5 max-w-3xl">
+              <p className="text-sm font-semibold mb-1">Paste sir&apos;s area comparison table</p>
+              <p className="text-xs text-zinc-500 mb-4">Paste the &quot;Area | … GMV | Brownie Heaven GMV | Gap&quot; table. We parse the rows and compute the gap — you just review and save.</p>
+              <textarea value={compPaste} onChange={(e) => setCompPaste(e.target.value)} rows={6} className="w-full bg-black border border-zinc-800 text-white px-3 py-2 focus:outline-none focus:border-yellow-400 transition-colors text-sm font-mono" placeholder="| Area | Brownie Studio GMV | Brownie Heaven GMV | Gap |" />
+              <div className="flex flex-wrap gap-3 mt-3 items-end">
+                <div><label className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest">Competitor</label><input type="text" value={compPasteComp} onChange={(e) => setCompPasteComp(e.target.value)} className="bg-black border border-zinc-800 text-white px-3 py-2 focus:outline-none focus:border-yellow-400 transition-colors text-sm mt-1 w-44" placeholder="Brownie Studio" /></div>
+                <div><label className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest">Period label</label><input type="text" value={compPasteLabel} onChange={(e) => setCompPasteLabel(e.target.value)} className="bg-black border border-zinc-800 text-white px-3 py-2 focus:outline-none focus:border-yellow-400 transition-colors text-sm mt-1 w-40" placeholder="June 2026" /></div>
+                <div><label className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest">Period date</label><input type="date" value={compPasteDate} onChange={(e) => setCompPasteDate(e.target.value)} className="w-full bg-black border border-zinc-800 text-white px-3 py-2 focus:outline-none focus:border-yellow-400 transition-colors text-sm mt-1" /></div>
+                <button onClick={parseComp} className="bg-zinc-800 text-white px-4 py-2 text-sm font-semibold hover:bg-zinc-700 transition-colors">Parse</button>
+              </div>
+              {compParsed && (
+                <div className="mt-5">
+                  <table className="w-full text-sm">
+                    <thead><tr className="text-left text-[11px] font-mono text-zinc-500 uppercase"><th className="py-1">Area</th><th className="py-1 text-right">{compPasteComp || "Them"}</th><th className="py-1 text-right">Us</th><th className="py-1 text-right">Gap</th></tr></thead>
+                    <tbody>
+                      {compParsed.map((r, i) => { const gap = (r.their || 0) - (r.our || 0); return (
+                        <tr key={i} className="border-t border-zinc-800">
+                          <td className="py-1.5">{r.area}</td>
+                          <td className="py-1.5 text-right font-mono">{r.their != null ? "₹" + r.their.toLocaleString("en-IN") : "—"}</td>
+                          <td className="py-1.5 text-right font-mono text-zinc-400">{r.our != null ? "₹" + r.our.toLocaleString("en-IN") : "—"}</td>
+                          <td className={`py-1.5 text-right font-mono ${gap > 0 ? "text-orange-400" : "text-green-400"}`}>{gap > 0 ? "they +" : "we +"}₹{Math.abs(gap).toLocaleString("en-IN")}</td>
+                        </tr>); })}
+                    </tbody>
+                  </table>
+                  <button onClick={saveParsedComp} disabled={compSavingBulk} className="mt-4 bg-yellow-400 text-black px-5 py-2 text-sm font-semibold hover:bg-yellow-300 disabled:opacity-50 transition-colors">{compSavingBulk ? "Saving…" : `Save ${compParsed.length} rows`}</button>
+                </div>
+              )}
             </div>
 
             <div className="mb-8 border border-zinc-800 p-5 max-w-2xl">
