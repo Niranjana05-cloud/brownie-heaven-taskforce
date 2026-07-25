@@ -496,6 +496,8 @@ export default function DashboardPage() {
   const [compPasteDate, setCompPasteDate] = useState(new Date().toISOString().slice(0, 10));
   const [compParsed, setCompParsed] = useState<{ area: string; competitor: string; their: number | null; our: number | null }[] | null>(null);
   const [compSavingBulk, setCompSavingBulk] = useState(false);
+  const [compView, setCompView] = useState<"entry" | "insights">("entry");
+  const [compPeriod, setCompPeriod] = useState("");
   const fetchCompRows = async () => {
     const { data } = await supabase.from("competitor_sales").select("*").order("period_date", { ascending: false }).order("created_at", { ascending: false });
     setCompRows(data || []);
@@ -524,7 +526,39 @@ export default function DashboardPage() {
     setCompPaste(""); setCompParsed(null);
     fetchCompRows();
   };
+  const compFmtL = (n: number) => n >= 100000 ? "₹" + (n / 100000).toFixed(2) + "L" : "₹" + Math.round(n).toLocaleString("en-IN");
+  const compPeriods = Array.from(new Set(compRows.map((r: any) => r.period_label || r.period_date))).filter(Boolean) as string[];
+  const compActivePeriod = compPeriod || compPeriods[0] || "";
+  const compPeriodRows = compRows.filter((r: any) => (r.period_label || r.period_date) === compActivePeriod).map((r: any) => { const their = Number(r.sales_value) || 0; const our = r.our_sales == null ? null : Number(r.our_sales); return { area: r.area as string, competitor: (r.competitor || "Unknown") as string, their, our: our as number | null, gap: their - (our || 0) }; });
+  const compExpansion = compPeriodRows.filter(r => r.their > (r.our || 0) && (r.our == null || r.our === 0)).sort((a, b) => b.gap - a.gap);
+  const compDefend = compPeriodRows.filter(r => r.our != null && r.our > 0 && r.their > r.our).sort((a, b) => b.gap - a.gap);
+  const compWinning = compPeriodRows.filter(r => (r.our || 0) >= r.their).sort((a, b) => a.gap - b.gap);
+  const compTop = compExpansion[0] || compDefend[0] || compWinning[0] || null;
+  const compFunny = (() => {
+    if (!compTop) return { playful: "", pro: "" };
+    const g = compFmtL(Math.abs(compTop.gap)); const area = compTop.area; const competitor = compTop.competitor;
+    if (compExpansion[0] === compTop) return { playful: `${competitor} is printing money in ${area} — ${g} ahead and we haven't even shown up yet 😬🍫`, pro: `${competitor} leads ${area} by ${g} in an area where we have no real presence — worth a look.` };
+    if (compDefend[0] === compTop) return { playful: `${competitor} is out-baking us in ${area} by ${g}. Time to fire up the ovens 🔥`, pro: `We trail ${competitor} in ${area} by ${g} — a focus area to defend.` };
+    return { playful: `${area} is all ours — ${g} clear of ${competitor}. Chef's kiss 🧑‍🍳`, pro: `We lead ${competitor} in ${area} by ${g}.` };
+  })();
+  const downloadCompPDF = async () => {
+    if (compPeriodRows.length === 0) { alert("No competitor data for this period."); return; }
+    const C = { bg: "#FAF3E7", card: "#FFFDF8", ink: "#3E2415", soft: "#8A6A4A", line: "#EADBC2", green: "#2E7D32", red: "#C62828", orange: "#C2410C" };
+    const rs = (n: number) => "₹" + Math.round(n).toLocaleString("en-IN");
+    type Row = { area: string; competitor: string; their: number; our: number | null; gap: number };
+    const section = (title: string, subtitle: string, rows: Row[], color: string) => {
+      if (!rows.length) return "";
+      const body = rows.map(r => `<tr><td style="padding:5px 8px;border-bottom:1px solid ${C.line};font-size:10px;color:${C.ink}">${r.area}</td><td style="padding:5px 8px;border-bottom:1px solid ${C.line};font-size:10px;color:${C.soft}">${r.competitor}</td><td style="padding:5px 8px;border-bottom:1px solid ${C.line};font-size:10px;text-align:right">${rs(r.their)}</td><td style="padding:5px 8px;border-bottom:1px solid ${C.line};font-size:10px;text-align:right;color:${C.soft}">${r.our != null ? rs(r.our) : "-"}</td><td style="padding:5px 8px;border-bottom:1px solid ${C.line};font-size:10px;text-align:right;font-weight:700;color:${color}">${rs(Math.abs(r.gap))}</td></tr>`).join("");
+      return `<div style="margin-top:20px"><div style="font-size:14px;font-weight:800;color:${color}">${title}</div><div style="font-size:10px;color:${C.soft};margin-bottom:6px">${subtitle}</div><table style="width:100%;border-collapse:collapse;background:${C.card};border:1px solid ${C.line};border-radius:10px;overflow:hidden"><thead><tr style="background:${C.ink}"><th style="padding:7px 8px;text-align:left;color:#FFF6E5;font-size:9px">AREA</th><th style="padding:7px 8px;text-align:left;color:#FFF6E5;font-size:9px">COMPETITOR</th><th style="padding:7px 8px;text-align:right;color:#FFF6E5;font-size:9px">THEM</th><th style="padding:7px 8px;text-align:right;color:#FFF6E5;font-size:9px">US</th><th style="padding:7px 8px;text-align:right;color:#FFF6E5;font-size:9px">GAP</th></tr></thead><tbody>${body}</tbody></table></div>`;
+    };
+    const html = `<div style="width:794px;background:${C.bg};font-family:'Segoe UI',Arial,sans-serif;color:${C.ink};padding:34px"><div style="font-size:22px;font-weight:900">Brownie Heaven — Competition Report</div><div style="font-size:11px;color:${C.soft};margin-bottom:16px">${compActivePeriod}</div><div style="background:${C.card};border:1px solid ${C.line};border-radius:12px;padding:18px;font-size:17px;font-weight:700;line-height:1.5">${compFunny.playful}</div>${section("Expansion candidates", "They lead where we're absent — worth a look", compExpansion, C.orange)}${section("Defend", "We're present but trailing", compDefend, C.red)}${section("Winning", "We're ahead", compWinning, C.green)}<div style="font-size:9px;color:${C.soft};margin-top:18px">Competitor figures are estimates shared by the owner — a directional signal, not a verdict.</div></div>`;
+    const lib = await loadH2P();
+    const holder = document.createElement("div"); holder.style.position = "fixed"; holder.style.left = "-9999px"; holder.innerHTML = html; document.body.appendChild(holder);
+    try { await lib().set({ margin: 0, filename: `Competition_${(compActivePeriod || "report").replace(/[^a-z0-9]+/gi, "_")}.pdf`, image: { type: "jpeg", quality: 0.97 }, html2canvas: { scale: 2, backgroundColor: C.bg }, jsPDF: { unit: "pt", format: "a4", orientation: "portrait" }, pagebreak: { mode: ["css", "legacy"] } }).from(holder.firstElementChild).save(); }
+    finally { document.body.removeChild(holder); }
+  };
   useEffect(() => { if (activeTab === "competition") fetchCompRows(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [activeTab]);
+  useEffect(() => { if (user) fetchCompRows(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [user]);
 
   useEffect(() => {
     if (activeTab !== "analytics") return;
@@ -1390,6 +1424,12 @@ else await fetchOutletReportsByDate(outletEntryDate);
        )}
        {activeTab === "tasks" && user?.role !== "Founder's Office" && user?.role !== "Head Chef" && (
          <div>
+            {canAssign && compTop && (
+              <div className="mb-6 border border-zinc-800 bg-zinc-900/40 px-5 py-4">
+                <p className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-1">Competition watch · {compActivePeriod}</p>
+                <p className="text-base md:text-lg">{compFunny.playful}</p>
+              </div>
+            )}
             <div className="flex justify-between items-start mb-6 pb-5 border-b border-zinc-800">
               <div>
                 <h2 className="text-2xl md:text-3xl font-black tracking-tight">{canAssign ? "Command Center" : "My Tasks"}</h2>
@@ -2399,6 +2439,59 @@ else await fetchOutletReportsByDate(outletEntryDate);
              <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mt-1">Rival bakery sales · expansion signals</p>
             </div>
 
+            <div className="flex gap-2 mb-6">
+              <button onClick={() => setCompView("entry")} className={`px-4 py-2 text-sm font-semibold transition-colors ${compView === "entry" ? "bg-yellow-400 text-black" : "bg-zinc-900 text-zinc-400 hover:text-white"}`}>Entry</button>
+              <button onClick={() => setCompView("insights")} className={`px-4 py-2 text-sm font-semibold transition-colors ${compView === "insights" ? "bg-yellow-400 text-black" : "bg-zinc-900 text-zinc-400 hover:text-white"}`}>Insights</button>
+            </div>
+
+            {compView === "insights" && (
+              <div>
+                <div className="mb-6 flex items-center gap-3 flex-wrap">
+                  {compPeriods.length > 0 && (<><label className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest">Period</label>
+                    <select value={compActivePeriod} onChange={(e) => setCompPeriod(e.target.value)} className="bg-black border border-zinc-800 text-white px-3 py-2 text-sm focus:outline-none focus:border-yellow-400">
+                      {compPeriods.map((pl) => <option key={pl} value={pl}>{pl}</option>)}
+                    </select></>)}
+                  {compPeriodRows.length > 0 && <button onClick={downloadCompPDF} className="ml-auto bg-zinc-800 text-white px-4 py-2 text-sm font-semibold hover:bg-zinc-700 transition-colors">Download report (PDF)</button>}
+                </div>
+                {compPeriodRows.length === 0 ? (
+                  <p className="text-sm text-zinc-500">No competitor data yet. Add some in the Entry tab.</p>
+                ) : (
+                  <>
+                    {compTop && (
+                      <div className="mb-8 border border-zinc-800 p-5 max-w-2xl">
+                        <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mb-3">Headline</p>
+                        <p className="text-lg md:text-xl">{compFunny.playful}</p>
+                      </div>
+                    )}
+                    {[
+                      { title: "🟠 Expansion candidates", sub: "They lead where we're absent", rows: compExpansion, color: "text-orange-400", border: "border-orange-500/30" },
+                      { title: "🔴 Defend", sub: "We're here but trailing", rows: compDefend, color: "text-red-400", border: "border-red-500/30" },
+                      { title: "🟢 Winning", sub: "We're ahead", rows: compWinning, color: "text-green-400", border: "border-green-500/30" },
+                    ].map((b) => (
+                      <div key={b.title} className={`mb-6 border ${b.border} p-4 max-w-3xl`}>
+                        <p className="text-sm font-semibold">{b.title}</p>
+                        <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mb-3">{b.sub}</p>
+                        {b.rows.length === 0 ? <p className="text-sm text-zinc-600">None this period.</p> : (
+                          <div className="space-y-1.5">
+                            {b.rows.map((r, i) => (
+                              <div key={i} className="flex flex-wrap gap-x-4 items-baseline text-sm">
+                                <span className="font-medium w-32">{r.area}</span>
+                                <span className="text-zinc-400 w-36">{r.competitor}</span>
+                                <span className="font-mono text-zinc-300">them {compFmtL(r.their)}</span>
+                                <span className="font-mono text-zinc-500">us {r.our != null ? compFmtL(r.our) : "—"}</span>
+                                <span className={`font-mono ml-auto ${b.color}`}>{compFmtL(Math.abs(r.gap))}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </>
+                )}
+              </div>
+            )}
+
+            {compView === "entry" && (<>
             <div className="mb-8 border border-zinc-800 p-5 max-w-3xl">
               <p className="text-sm font-semibold mb-1">Paste sir&apos;s area comparison table</p>
               <p className="text-xs text-zinc-500 mb-4">Paste the &quot;Area | … GMV | Brownie Heaven GMV | Gap&quot; table. We parse the rows and compute the gap — you just review and save.</p>
@@ -2465,6 +2558,7 @@ else await fetchOutletReportsByDate(outletEntryDate);
                 </div>
               )}
             </div>
+            </>)}
           </div>
         )}
 
