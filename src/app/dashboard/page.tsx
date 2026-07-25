@@ -1315,6 +1315,22 @@ else await fetchOutletReportsByDate(outletEntryDate);
   const canAssign = user?.role === "Owner" || user?.role === "Manager";
   const isFO = user?.role === "Founder's Office";
   const hasReportDuty = user?.role !== "Owner" && user?.role !== "Founder's Office" && user?.role !== "Head Chef";
+  const [kChefs, setKChefs] = useState<any[]>([]);
+  const [kRows, setKRows] = useState<any[]>([]);
+  const [kDate, setKDate] = useState(new Date().toISOString().slice(0, 10));
+  const [kForm, setKForm] = useState({ chef_id: "", flavour: "", qty: "", station: "" });
+  const [kNewChef, setKNewChef] = useState("");
+  const [kBusy, setKBusy] = useState(false);
+  const fetchKChefs = async () => { const { data } = await supabase.from("kitchen_chefs").select("*").eq("active", true).order("name"); setKChefs(data || []); };
+  const fetchKProduction = async (d: string) => { const { data } = await supabase.from("kitchen_production").select("*").eq("prod_date", d).order("created_at"); setKRows(data || []); };
+  useEffect(() => { if (user?.role === "Head Chef" || user?.role === "Owner") { fetchKChefs(); fetchKProduction(kDate); } /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [user]);
+  const addKChef = async () => { if (!kNewChef.trim()) return; const { error } = await supabase.from("kitchen_chefs").insert({ name: kNewChef.trim() }); if (error) { alert("Failed: " + error.message); return; } setKNewChef(""); fetchKChefs(); };
+  const addKProd = async () => { if (!kForm.chef_id || !kForm.qty) { alert("Pick a chef and enter a count."); return; } const chef = kChefs.find((c) => c.id === kForm.chef_id); setKBusy(true); const { error } = await supabase.from("kitchen_production").insert({ prod_date: kDate, chef_id: kForm.chef_id, chef_name: chef?.name || null, flavour: kForm.flavour.trim() || null, qty: Number(kForm.qty) || 0, station: kForm.station.trim() || null, entered_by: user?.id || null }); setKBusy(false); if (error) { alert("Save failed: " + error.message); return; } setKForm({ chef_id: "", flavour: "", qty: "", station: "" }); fetchKProduction(kDate); };
+  const delKProd = async (id: string) => { await supabase.from("kitchen_production").delete().eq("id", id); fetchKProduction(kDate); };
+  const kByChef = kChefs.map((c) => ({ name: c.name, total: kRows.filter((r) => r.chef_id === c.id).reduce((sm, r) => sm + (Number(r.qty) || 0), 0) })).sort((a, b) => b.total - a.total);
+  const kDayTotal = kRows.reduce((sm, r) => sm + (Number(r.qty) || 0), 0);
+  const kMax = Math.max(1, ...kByChef.map((c) => c.total));
+  const kAvg = kByChef.length ? Math.round(kDayTotal / kByChef.length) : 0;
   const reportFields = user ? REPORT_FIELDS[user.id] || [] : [];
   const reportInput = (f: { label: string; key: string }) => {
     if (user && user.id === "arun" && f.key === "achievement") {
@@ -1472,10 +1488,70 @@ else await fetchOutletReportsByDate(outletEntryDate);
 
        {activeTab === "tasks" && user && user.role === "Founder's Office" && <FounderDashboard user={user} />}
       {activeTab === "tasks" && user?.role === "Head Chef" && (
-          <div className="flex flex-col items-center justify-center py-32 text-center">
-            <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-[0.3em] mb-3">{user.role}</p>
-            <h2 className="text-4xl md:text-5xl font-black tracking-tight mb-3">Coming soon</h2>
-            <p className="text-sm text-zinc-500">Your workspace is being set up, {user.name.split(" ")[0]}.</p>
+          <div>
+            <div className="flex justify-between items-end mb-6 pb-5 border-b border-zinc-800">
+              <div>
+                <h2 className="text-2xl font-black tracking-tight">Kitchen Operations</h2>
+                <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mt-1">Daily production & workload · {user.name.split(" ")[0]}</p>
+              </div>
+              <input type="date" value={kDate} onChange={(e) => { setKDate(e.target.value); fetchKProduction(e.target.value); }} className="bg-black border border-zinc-800 text-white px-4 py-2.5 focus:outline-none focus:border-yellow-400 transition-colors font-mono text-sm" />
+            </div>
+
+            <div className="mb-8 border border-zinc-800 p-5 max-w-3xl">
+              <p className="text-sm font-semibold mb-4">Assign production</p>
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                <div><label className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest">Chef</label><select value={kForm.chef_id} onChange={(e) => setKForm(pp => ({ ...pp, chef_id: e.target.value }))} className="w-full bg-black border border-zinc-800 text-white px-3 py-2 focus:outline-none focus:border-yellow-400 transition-colors text-sm mt-1"><option value="">— pick —</option>{kChefs.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></div>
+                <div><label className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest">Flavour / item</label><input type="text" value={kForm.flavour} onChange={(e) => setKForm(pp => ({ ...pp, flavour: e.target.value }))} className="w-full bg-black border border-zinc-800 text-white px-3 py-2 focus:outline-none focus:border-yellow-400 transition-colors text-sm mt-1" placeholder="Choco truffle" /></div>
+                <div><label className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest">Count</label><input type="number" value={kForm.qty} onChange={(e) => setKForm(pp => ({ ...pp, qty: e.target.value }))} className="w-full bg-black border border-zinc-800 text-white px-3 py-2 focus:outline-none focus:border-yellow-400 transition-colors text-sm mt-1" placeholder="30" /></div>
+                <div><label className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest">Station</label><input list="kstations" value={kForm.station} onChange={(e) => setKForm(pp => ({ ...pp, station: e.target.value }))} className="w-full bg-black border border-zinc-800 text-white px-3 py-2 focus:outline-none focus:border-yellow-400 transition-colors text-sm mt-1" placeholder="Icing" /><datalist id="kstations"><option value="Icing" /><option value="Chocolate garnish" /><option value="Whipped cream" /><option value="Baking" /><option value="Decoration" /><option value="Packing" /></datalist></div>
+              </div>
+              <button onClick={addKProd} disabled={kBusy} className="mt-4 bg-yellow-400 text-black px-5 py-2 text-sm font-semibold hover:bg-yellow-300 disabled:opacity-50 transition-colors">{kBusy ? "Adding…" : "Add"}</button>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 max-w-5xl">
+              <div className="border border-zinc-800 p-4">
+                <div className="flex justify-between items-baseline mb-3">
+                  <p className="text-sm font-semibold">Workload balance</p>
+                  <p className="text-[11px] font-mono text-zinc-500">Day total: {kDayTotal} · avg {kAvg}/chef</p>
+                </div>
+                {kByChef.length === 0 ? <p className="text-sm text-zinc-600">No chefs yet.</p> : (
+                  <div className="space-y-2">
+                    {kByChef.map((c) => { const over = kAvg > 0 && c.total > kAvg * 1.5; const under = kAvg > 0 && c.total > 0 && c.total < kAvg * 0.5; const w = Math.round(c.total / kMax * 100); return (
+                      <div key={c.name}>
+                        <div className="flex justify-between text-sm mb-0.5"><span>{c.name}</span><span className={`font-mono ${over ? "text-red-400" : "text-zinc-300"}`}>{c.total}{over ? " ⚠" : ""}</span></div>
+                        <div className="h-2 bg-zinc-800"><div className={`h-full ${over ? "bg-red-500" : under ? "bg-zinc-600" : "bg-yellow-400"}`} style={{ width: `${w}%` }} /></div>
+                      </div>
+                    ); })}
+                  </div>
+                )}
+                <p className="text-[10px] text-zinc-600 mt-3">⚠ = more than 1.5× the day's average — consider rebalancing.</p>
+              </div>
+
+              <div className="border border-zinc-800 p-4">
+                <p className="text-sm font-semibold mb-3">Assignments · {kDate}</p>
+                {kRows.length === 0 ? <p className="text-sm text-zinc-600">Nothing assigned yet.</p> : (
+                  <div className="space-y-1.5">
+                    {kRows.map((r) => (
+                      <div key={r.id} className="flex items-baseline gap-2 text-sm border-b border-zinc-900 pb-1.5">
+                        <span className="font-medium w-28">{r.chef_name}</span>
+                        <span className="flex-1 text-zinc-400">{r.flavour || "—"}{r.station ? ` · ${r.station}` : ""}</span>
+                        <span className="font-mono text-yellow-400">{r.qty}</span>
+                        <button onClick={() => delKProd(r.id)} className="text-[10px] font-mono uppercase px-2 py-0.5 border border-zinc-700 hover:border-red-500 hover:text-red-500 transition-colors">✕</button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="mt-6 border border-zinc-800 p-4 max-w-md">
+              <p className="text-sm font-semibold mb-2">Chefs</p>
+              <p className="text-xs text-zinc-500 mb-3">{kChefs.map((c) => c.name).join(", ") || "None yet"}</p>
+              <div className="flex gap-2">
+                <input type="text" value={kNewChef} onChange={(e) => setKNewChef(e.target.value)} className="w-full bg-black border border-zinc-800 text-white px-3 py-2 focus:outline-none focus:border-yellow-400 transition-colors text-sm mt-1 flex-1" placeholder="Add a chef (e.g. Riyas)" />
+                <button onClick={addKChef} className="bg-zinc-800 text-white px-4 py-2 text-sm font-semibold hover:bg-zinc-700 transition-colors self-end">Add</button>
+              </div>
+            </div>
           </div>
        )}
        {activeTab === "tasks" && user?.role !== "Founder's Office" && user?.role !== "Head Chef" && (
