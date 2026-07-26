@@ -287,7 +287,7 @@ export default function DashboardPage() {
   const downloadRangeExcel = async () => {
     setRepBusy(true);
     try {
-      const rows = await fetchRangeReports(repOutlets);
+      const rows = await fetchRangeReports(repOutlets.length ? repOutlets : (canAssign ? [] : (user?.outlets || [])));
       if (rows.length === 0) { alert("No reports found for that range/outlets."); setRepBusy(false); return; }
       const data = buildRangeRows(rows);
       const wb = XLSX.utils.book_new();
@@ -306,7 +306,7 @@ export default function DashboardPage() {
     setRepBusy(true);
     let h2p: any; try { h2p = await loadH2P(); } catch { alert("Could not load the PDF tool."); setRepBusy(false); return; }
     try {
-      const rows = await fetchRangeReports(repOutlets);
+      const rows = await fetchRangeReports(repOutlets.length ? repOutlets : (canAssign ? [] : (user?.outlets || [])));
       if (rows.length === 0) { alert("No reports found for that range/outlets."); setRepBusy(false); return; }
       const data = buildRangeRows(rows);
       const rs = (n: number) => "₹" + Math.round(n).toLocaleString("en-IN");
@@ -1313,6 +1313,7 @@ else await fetchOutletReportsByDate(outletEntryDate);
   const overdue = tasks.filter(t => t.status !== "completed" && new Date(t.due_at) < new Date()).length;
   const rate = total > 0 ? Math.round(completed / total * 100) : 0;
   const canAssign = user?.role === "Owner" || user?.role === "Manager";
+  const hasOutlets = (user?.outlets?.length || 0) > 0;
   const isFO = user?.role === "Founder's Office";
   const hasReportDuty = user?.role !== "Owner" && user?.role !== "Founder's Office" && user?.role !== "Head Chef";
   const [kChefs, setKChefs] = useState<any[]>([]);
@@ -1462,9 +1463,15 @@ else await fetchOutletReportsByDate(outletEntryDate);
              <div onClick={() => { setActiveTab("all_reports"); setSidebarOpen(false); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "all_reports" ? "text-white bg-zinc-900 border-l-2 border-yellow-400" : "text-zinc-500 hover:text-white"}`}>
                 <span>📋</span> Reports
               </div>
+            </>
+          )}
+          {(canAssign || hasOutlets) && (
               <div onClick={() => { setActiveTab("owner_outlets"); setSidebarOpen(false); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "owner_outlets" ? "text-white bg-zinc-900 border-l-2 border-yellow-400" : "text-zinc-500 hover:text-white"}`}>
               <span>🏪</span> Outlet Reports
               </div>
+          )}
+          {canAssign && (
+            <>
               <div onClick={() => { setActiveTab("history"); setSidebarOpen(false); fetchHistoryReports(historyDate); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "history" ? "text-white bg-zinc-900 border-l-2 border-yellow-400" : "text-zinc-500 hover:text-white"}`}>
              <span>📅</span> History
              </div>
@@ -2147,7 +2154,7 @@ else await fetchOutletReportsByDate(outletEntryDate);
         </div>
       </div>
       <div className="flex flex-wrap gap-2">
-        {OUTLETS.map(o => { const on = repOutlets.includes(o); return (
+        {(canAssign ? OUTLETS : (user.outlets || [])).map(o => { const on = repOutlets.includes(o); return (
           <button key={o} onClick={() => setRepOutlets(on ? repOutlets.filter(x => x !== o) : [...repOutlets, o])} className={`text-[11px] px-3 py-1.5 border font-mono uppercase tracking-wide transition-colors ${on ? "bg-yellow-400 text-black border-yellow-400" : "bg-black text-zinc-400 border-zinc-800 hover:border-zinc-600"}`}>{OUTLET_NAMES[o] || o}</button>
         ); })}
       </div>
