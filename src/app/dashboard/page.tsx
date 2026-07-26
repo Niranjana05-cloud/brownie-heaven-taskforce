@@ -2129,7 +2129,7 @@ else await fetchOutletReportsByDate(outletEntryDate);
    <div className="flex justify-between items-end mb-6 pb-5 border-b border-zinc-800">
   <div>
     <h2 className="text-2xl font-black tracking-tight">Outlet Reports</h2>
-    <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mt-1">All 12 outlets — daily tracker</p>
+    <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mt-1">{canAssign ? "All 12 outlets" : `Your ${(user.outlets || []).length} outlets`} — daily tracker</p>
   </div>
   <input
     type="date"
@@ -2170,8 +2170,8 @@ else await fetchOutletReportsByDate(outletEntryDate);
       return (
         <div className="mb-6">
           <p className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-3">Tap an outlet to open its full report ↓</p>
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-            {OUTLETS.map(o => {
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+            {(canAssign ? OUTLETS : (user.outlets || [])).map(o => {
               const r = allOutletReports.find(x => x.outlet_id === o);
               const shop = r ? Number(r.shop_sales_value) || 0 : 0;
               const sw = r ? Number(r.swiggy_sales_value) || 0 : 0;
