@@ -23,7 +23,7 @@ type OutletReport = {
   swiggy_sales_count: number; swiggy_sales_value: number;
   zomato_sales_count: number; zomato_sales_value: number;
   target: number; swiggy_live: boolean; zomato_live: boolean;
-  discount_running: string; discount_rate_good: boolean;
+  discount_running: string; discount_rate_good: boolean; discount_given?: number;
   unavailable_items: string; expiry_count: number; expiry_items: string;
   complimentary_count: number; complimentary_reason: string;
 issues: string; action_taken: string; submitted_at: string; is_late: boolean; is_edited: boolean;
@@ -282,7 +282,7 @@ export default function DashboardPage() {
   };
   const buildRangeRows = (rows: any[]) => rows.map(r => {
     const shop = Number(r.shop_sales_value) || 0, sw = Number(r.swiggy_sales_value) || 0, zo = Number(r.zomato_sales_value) || 0;
-    return { Date: r.report_date, Outlet: (typeof OUTLET_NAMES !== "undefined" ? (OUTLET_NAMES as any)[r.outlet_id] : r.outlet_id) || r.outlet_id, Shop: shop, Swiggy: sw, Zomato: zo, Total: shop + sw + zo, "Shop Orders": Number(r.shop_sales_count) || 0, "Swiggy Orders": Number(r.swiggy_sales_count) || 0, "Zomato Orders": Number(r.zomato_sales_count) || 0, Target: Number(r.target) || 0, Late: r.is_late ? "Yes" : "No", Issues: r.issues || "" };
+    return { Date: r.report_date, Outlet: (typeof OUTLET_NAMES !== "undefined" ? (OUTLET_NAMES as any)[r.outlet_id] : r.outlet_id) || r.outlet_id, Shop: shop, Swiggy: sw, Zomato: zo, Total: shop + sw + zo, "Shop Orders": Number(r.shop_sales_count) || 0, "Swiggy Orders": Number(r.swiggy_sales_count) || 0, "Zomato Orders": Number(r.zomato_sales_count) || 0, Target: Number(r.target) || 0, Discount: Number(r.discount_given) || 0, Late: r.is_late ? "Yes" : "No", Issues: r.issues || "" };
   });
   const downloadRangeExcel = async () => {
     setRepBusy(true);
@@ -316,7 +316,7 @@ export default function DashboardPage() {
       const dayTgt = (d: any) => (TGT_BY_NAME[d.Outlet] || 0);
       const pctCol = (pc: number) => pc >= 100 ? C.green : (pc >= 60 ? C.gold : C.red);
       const byO: Record<string, any> = {};
-      data.forEach(d => { if (!byO[d.Outlet]) byO[d.Outlet] = { Outlet: d.Outlet, Days: 0, Shop: 0, Swiggy: 0, Zomato: 0, Total: 0, Target: 0 }; const b = byO[d.Outlet]; b.Days++; b.Shop += d.Shop; b.Swiggy += d.Swiggy; b.Zomato += d.Zomato; b.Total += d.Total; });
+      data.forEach(d => { if (!byO[d.Outlet]) byO[d.Outlet] = { Outlet: d.Outlet, Days: 0, Shop: 0, Swiggy: 0, Zomato: 0, Total: 0, Target: 0, Discount: 0 }; const b = byO[d.Outlet]; b.Days++; b.Shop += d.Shop; b.Swiggy += d.Swiggy; b.Zomato += d.Zomato; b.Total += d.Total; b.Discount += (d.Discount || 0); });
       const summ = Object.values(byO) as any[];
       const grand = summ.reduce((s, x) => s + x.Total, 0);
       const C = { bg: "#FAF3E7", card: "#FFFDF8", ink: "#3E2415", soft: "#8A6A4A", gold: "#C8901E", line: "#EADBC2", green: "#2E7D32", red: "#C62828" };
@@ -333,7 +333,7 @@ export default function DashboardPage() {
       const _pm = new Date(repFrom); const daysInMonth = new Date(_pm.getFullYear(), _pm.getMonth() + 1, 0).getDate();
       const gPerDay = days > 0 ? grand / days : 0;
       const gVerdict = gPerDay >= 80000 * summ.length ? "🎉 Money machine go brrr! We're cooking 🧑‍🍳" : gPerDay >= 40000 * Math.max(summ.length, 1) ? "😎 Solid month, brownies are selling 🍫" : "😅 Could be tastier — let's hustle next month 💸";
-      const sumRows = summ.map(s => { const [emo] = comment(avgPerDay(s));const stgt = MTGT_BY_NAME[s.Outlet] || 0; const proj = s.Days > 1 ? Math.round(s.Total / (s.Days - 1) * daysInMonth) : s.Total; return `<tr><td style="padding:7px 10px;border-bottom:1px solid ${C.line};font-weight:600;color:${C.ink};font-size:12px">${emo} ${s.Outlet}</td><td style="padding:7px 10px;border-bottom:1px solid ${C.line};text-align:right;font-size:12px;color:${C.soft}">${s.Days}</td><td style="padding:7px 10px;border-bottom:1px solid ${C.line};text-align:right;font-size:12px;color:${C.soft}">${rs(s.Shop)}</td><td style="padding:7px 10px;border-bottom:1px solid ${C.line};text-align:right;font-size:12px;color:${C.soft}">${rs(s.Swiggy)}</td><td style="padding:7px 10px;border-bottom:1px solid ${C.line};text-align:right;font-size:12px;color:${C.soft}">${rs(s.Zomato)}</td><td style="padding:7px 10px;border-bottom:1px solid ${C.line};text-align:right;font-weight:800;color:${C.ink};font-size:12px">${rs(s.Total)}</td><td style="padding:7px 10px;border-bottom:1px solid ${C.line};text-align:right;font-size:12px;color:${C.soft}">${stgt > 0 ? rs(stgt) : "-"}</td><td style="padding:7px 10px;border-bottom:1px solid ${C.line};text-align:right;font-size:12px;font-weight:800;color:${stgt > 0 ? pctCol((s.Total / stgt) * 100) : C.soft}">${stgt > 0 ? ((s.Total / stgt) * 100).toFixed(0) + "%" : "-"}</td><td style="padding:7px 10px;border-bottom:1px solid ${C.line};text-align:right;font-weight:700;font-size:12px;color:${stgt > 0 ? pctCol((proj / stgt) * 100) : C.ink}">${rs(proj)}</td></tr>`; }).join("");
+      const sumRows = summ.map(s => { const [emo] = comment(avgPerDay(s));const stgt = MTGT_BY_NAME[s.Outlet] || 0; const proj = s.Days > 1 ? Math.round(s.Total / (s.Days - 1) * daysInMonth) : s.Total; const dpc = s.Total > 0 ? (s.Discount / s.Total) * 100 : 0; return `<tr><td style="padding:7px 10px;border-bottom:1px solid ${C.line};font-weight:600;color:${C.ink};font-size:12px">${emo} ${s.Outlet}</td><td style="padding:7px 10px;border-bottom:1px solid ${C.line};text-align:right;font-size:12px;color:${C.soft}">${s.Days}</td><td style="padding:7px 10px;border-bottom:1px solid ${C.line};text-align:right;font-size:12px;color:${C.soft}">${rs(s.Shop)}</td><td style="padding:7px 10px;border-bottom:1px solid ${C.line};text-align:right;font-size:12px;color:${C.soft}">${rs(s.Swiggy)}</td><td style="padding:7px 10px;border-bottom:1px solid ${C.line};text-align:right;font-size:12px;color:${C.soft}">${rs(s.Zomato)}</td><td style="padding:7px 10px;border-bottom:1px solid ${C.line};text-align:right;font-weight:800;color:${C.ink};font-size:12px">${rs(s.Total)}</td><td style="padding:7px 10px;border-bottom:1px solid ${C.line};text-align:right;font-size:12px;color:${C.soft}">${stgt > 0 ? rs(stgt) : "-"}</td><td style="padding:7px 10px;border-bottom:1px solid ${C.line};text-align:right;font-size:12px;font-weight:800;color:${stgt > 0 ? pctCol((s.Total / stgt) * 100) : C.soft}">${stgt > 0 ? ((s.Total / stgt) * 100).toFixed(0) + "%" : "-"}</td><td style="padding:7px 10px;border-bottom:1px solid ${C.line};text-align:right;font-weight:700;font-size:12px;color:${stgt > 0 ? pctCol((proj / stgt) * 100) : C.ink}">${rs(proj)}</td><td style="padding:7px 10px;border-bottom:1px solid ${C.line};text-align:right;font-size:12px;font-weight:700;color:${dpc >= 15 ? C.red : dpc >= 8 ? C.gold : C.ink}">${s.Discount > 0 ? dpc.toFixed(1) + "%" : "-"}</td></tr>`; }).join("");
       const noteCards = summ.map(s => { const [emo, msg, col] = comment(avgPerDay(s)); return `<div style="display:flex;align-items:center;gap:8px;background:${C.card};border:1px solid ${C.line};border-left:4px solid ${col};border-radius:8px;padding:8px 12px;margin-bottom:7px"><span style="font-size:18px">${emo}</span><span style="font-size:12px;color:${C.ink};font-weight:600;min-width:120px">${s.Outlet}</span><span style="font-size:12px;color:${col};font-style:italic">${msg}</span></div>`; }).join("");
       const dayRows = [...data].sort((a: any, b: any) => (a.Outlet as string).localeCompare(b.Outlet) || (a.Date as string).localeCompare(b.Date)).map((d: any) => `<tr><td style="padding:5px 8px;border-bottom:1px solid ${C.line};font-size:10px;color:${C.soft}">${d.Date}</td><td style="padding:5px 8px;border-bottom:1px solid ${C.line};font-size:10px;color:${C.ink}">${d.Outlet}</td><td style="padding:5px 8px;border-bottom:1px solid ${C.line};text-align:right;font-size:10px;color:${C.soft}">${rs(d.Shop)}</td><td style="padding:5px 8px;border-bottom:1px solid ${C.line};text-align:right;font-size:10px;color:${C.soft}">${rs(d.Swiggy)}</td><td style="padding:5px 8px;border-bottom:1px solid ${C.line};text-align:right;font-size:10px;color:${C.soft}">${rs(d.Zomato)}</td><td style="padding:5px 8px;border-bottom:1px solid ${C.line};text-align:right;font-weight:700;color:${C.ink};font-size:10px">${rs(d.Total)}</td><td style="padding:5px 8px;border-bottom:1px solid ${C.line};text-align:right;font-size:10px;color:${C.soft}">${dayTgt(d) > 0 ? rs(dayTgt(d)) : "-"}</td><td style="padding:5px 8px;border-bottom:1px solid ${C.line};text-align:right;font-size:10px;font-weight:700;color:${dayTgt(d) > 0 ? pctCol((d.Total / dayTgt(d)) * 100) : C.soft}">${dayTgt(d) > 0 ? ((d.Total / dayTgt(d)) * 100).toFixed(0) + "%" : "-"}</td></tr>`).join("");
       const html = `<div style="width:794px;background:${C.bg};font-family:'Segoe UI',Arial,sans-serif;color:${C.ink}">
@@ -350,7 +350,7 @@ export default function DashboardPage() {
           </div>
           <div style="font-size:15px;font-weight:800;margin:6px 0 10px">📊 Summary by outlet — with the honest verdict 👀</div>
         <table style="width:100%;border-collapse:collapse;background:${C.card};border:1px solid ${C.line};border-radius:12px;overflow:hidden;margin-bottom:14px">
-            <thead><tr style="background:${C.ink}"><th style="padding:8px 10px;text-align:left;color:#FFF6E5;font-size:10px">OUTLET</th><th style="padding:8px 10px;text-align:right;color:#FFF6E5;font-size:10px">DAYS</th><th style="padding:8px 10px;text-align:right;color:#FFF6E5;font-size:10px">SHOP</th><th style="padding:8px 10px;text-align:right;color:#FFF6E5;font-size:10px">SWIGGY</th><th style="padding:8px 10px;text-align:right;color:#FFF6E5;font-size:10px">ZOMATO</th><th style="padding:8px 10px;text-align:right;color:#FFF6E5;font-size:10px">TOTAL</th><th style="padding:8px 10px;text-align:right;color:#FFF6E5;font-size:10px">TARGET</th><th style="padding:8px 10px;text-align:right;color:#FFF6E5;font-size:10px">%</th><th style="padding:8px 10px;text-align:right;color:#FFF6E5;font-size:10px">PROJECTION</th></tr></thead>
+            <thead><tr style="background:${C.ink}"><th style="padding:8px 10px;text-align:left;color:#FFF6E5;font-size:10px">OUTLET</th><th style="padding:8px 10px;text-align:right;color:#FFF6E5;font-size:10px">DAYS</th><th style="padding:8px 10px;text-align:right;color:#FFF6E5;font-size:10px">SHOP</th><th style="padding:8px 10px;text-align:right;color:#FFF6E5;font-size:10px">SWIGGY</th><th style="padding:8px 10px;text-align:right;color:#FFF6E5;font-size:10px">ZOMATO</th><th style="padding:8px 10px;text-align:right;color:#FFF6E5;font-size:10px">TOTAL</th><th style="padding:8px 10px;text-align:right;color:#FFF6E5;font-size:10px">TARGET</th><th style="padding:8px 10px;text-align:right;color:#FFF6E5;font-size:10px">%</th><th style="padding:8px 10px;text-align:right;color:#FFF6E5;font-size:10px">PROJECTION</th><th style="padding:8px 10px;text-align:right;color:#FFF6E5;font-size:10px">DISC %</th></tr></thead>
        <tbody>${sumRows}</tbody>
           </table>
          ${(() => {
@@ -1022,6 +1022,7 @@ const runTargetCheck = async (u: Staff) => {
     shop_sales_value: String(r.shop_sales_value),
     swiggy_sales_count: String(r.swiggy_sales_count),
     swiggy_sales_value: String(r.swiggy_sales_value),
+    discount_given: String(r.discount_given || ""),
     zomato_sales_count: String(r.zomato_sales_count),
     zomato_sales_value: String(r.zomato_sales_value),
     swiggy_live: r.swiggy_live ? "yes" : "no",
@@ -1215,6 +1216,7 @@ const _clean = (v: any) => String(v ?? "").replace(/[^0-9.]/g, "");
     shop_sales_value: parseFloat(_clean(d.shop_sales_value)) || 0,
     swiggy_sales_count: parseInt(_clean(d.swiggy_sales_count)) || 0,
     swiggy_sales_value: parseFloat(_clean(d.swiggy_sales_value)) || 0,
+    discount_given: parseFloat(_clean(d.discount_given)) || 0,
     zomato_sales_count: parseInt(_clean(d.zomato_sales_count)) || 0,
     zomato_sales_value: parseFloat(_clean(d.zomato_sales_value)) || 0,
     target: parseFloat(_clean(d.target)) || 0,
@@ -2360,6 +2362,7 @@ else await fetchOutletReportsByDate(outletEntryDate);
   { label: "Zomato Orders Count", key: "zomato_sales_count" },
   { label: "Zomato Sales Value (Rs)", key: "zomato_sales_value" },
   { label: "Discount/Offer Running", key: "discount_running" },
+  { label: "Discount Given (Rs)", key: "discount_given" },
   { label: "Unavailable Items", key: "unavailable_items" },
   { label: "Expiry Items Count", key: "expiry_count" },
   { label: "Expiry Items (list)", key: "expiry_items" },
