@@ -87,6 +87,25 @@ const BRAND_TARGETS: Record<string, { bh: number; cbh: number; icbh: number; tot
   pallavaram:  { bh: 350000,  cbh: 250000, icbh: 100000, total: 700000 },
   velachery:   { bh: 350000,  cbh: 250000, icbh: 100000, total: 700000 },
 };
+
+// Base monthly totals (current, in effect through July 2026).
+const MONTHLY_BASE: Record<string, number> = {
+  royapettah: 2400000, adayar: 550000, bsr_mall: 1050000, velachery: 700000,
+  ra_puram: 650000, anna_nagar: 1550000, pallavaram: 700000, vadapalani: 699990,
+  besant_nagar: 350010, perumbakkam: 400000, tambaram: 600000, porur: 1500000,
+};
+// Scheduled target changes. Each applies from the given month (YYYY-MM) onward. Latest matching wins.
+const TARGET_UPDATES: { from: string; monthly: Record<string, number> }[] = [
+  { from: "2026-08", monthly: { besant_nagar: 500000, perumbakkam: 500000, porur: 1600000, adayar: 600000, vadapalani: 700000 } },
+];
+function monthlyTargetFor(oid: string, ym: string): number {
+  let v = MONTHLY_BASE[oid] || 0;
+  for (const u of TARGET_UPDATES) { if (ym >= u.from && u.monthly[oid] != null) v = u.monthly[oid]; }
+  return v;
+}
+function dailyTargetFor(oid: string, ym: string): number {
+  return Math.round(monthlyTargetFor(oid, ym) / 30);
+}
 const REPORT_FIELDS: Record<string, { label: string; key: string; type?: string }[]> = {
   arun: [
     { label: "Total Sales (Rs)", key: "total_sales" },
@@ -310,9 +329,10 @@ export default function DashboardPage() {
       if (rows.length === 0) { alert("No reports found for that range/outlets."); setRepBusy(false); return; }
       const data = buildRangeRows(rows);
       const rs = (n: number) => "₹" + Math.round(n).toLocaleString("en-IN");
+      const _ym = repFrom.slice(0, 7);
       const TGT_BY_NAME: Record<string, number> = {};
       const MTGT_BY_NAME: Record<string, number> = {};
-      Object.keys(OUTLET_TARGETS).forEach(oid => { const nm = (OUTLET_NAMES as any)[oid] || oid; const dly = parseFloat(OUTLET_TARGETS[oid] || "0") || 0; TGT_BY_NAME[nm] = dly; const bt = (BRAND_TARGETS as any)[oid]; MTGT_BY_NAME[nm] = bt ? bt.total : dly * 30; });
+      Object.keys(MONTHLY_BASE).forEach(oid => { const nm = (OUTLET_NAMES as any)[oid] || oid; MTGT_BY_NAME[nm] = monthlyTargetFor(oid, _ym); TGT_BY_NAME[nm] = dailyTargetFor(oid, _ym); });
       const dayTgt = (d: any) => (TGT_BY_NAME[d.Outlet] || 0);
       const pctCol = (pc: number) => pc >= 100 ? C.green : (pc >= 60 ? C.gold : C.red);
       const byO: Record<string, any> = {};
@@ -2280,7 +2300,7 @@ else await fetchOutletReportsByDate(outletEntryDate);
      {(canAssign ? OUTLETS : (user.outlets || [])).map(o => {
         const submitted = !!outletReports[o];
         return (
-         <button key={o} onClick={() => { setActiveOutlet(o); const lastRatings = lastOutletRatings[o]; setOutletReportData({ target: OUTLET_TARGETS[o] || "", bh_google_rating: lastRatings ? String(lastRatings.bh_google_rating || "") : "", bh_swiggy_rating: lastRatings ? String(lastRatings.bh_swiggy_rating || "") : "", bh_zomato_rating: lastRatings ? String(lastRatings.bh_zomato_rating || "") : "", cbh_google_rating: lastRatings ? String(lastRatings.cbh_google_rating || "") : "", cbh_swiggy_rating: lastRatings ? String(lastRatings.cbh_swiggy_rating || "") : "", cbh_zomato_rating: lastRatings ? String(lastRatings.cbh_zomato_rating || "") : "", icbh_google_rating: lastRatings ? String(lastRatings.icbh_google_rating || "") : "", icbh_swiggy_rating: lastRatings ? String(lastRatings.icbh_swiggy_rating || "") : "", icbh_zomato_rating: lastRatings ? String(lastRatings.icbh_zomato_rating || "") : "" }); }}
+         <button key={o} onClick={() => { setActiveOutlet(o); const lastRatings = lastOutletRatings[o]; setOutletReportData({ target: String(dailyTargetFor(o, new Date().toISOString().slice(0, 7))), bh_google_rating: lastRatings ? String(lastRatings.bh_google_rating || "") : "", bh_swiggy_rating: lastRatings ? String(lastRatings.bh_swiggy_rating || "") : "", bh_zomato_rating: lastRatings ? String(lastRatings.bh_zomato_rating || "") : "", cbh_google_rating: lastRatings ? String(lastRatings.cbh_google_rating || "") : "", cbh_swiggy_rating: lastRatings ? String(lastRatings.cbh_swiggy_rating || "") : "", cbh_zomato_rating: lastRatings ? String(lastRatings.cbh_zomato_rating || "") : "", icbh_google_rating: lastRatings ? String(lastRatings.icbh_google_rating || "") : "", icbh_swiggy_rating: lastRatings ? String(lastRatings.icbh_swiggy_rating || "") : "", icbh_zomato_rating: lastRatings ? String(lastRatings.icbh_zomato_rating || "") : "" }); }}
             className={`font-mono text-[10px] uppercase tracking-widest px-4 py-2 border transition-colors relative ${activeOutlet === o ? "border-yellow-400 text-yellow-400" : "border-zinc-700 text-zinc-500 hover:border-zinc-500"}`}>
            {OUTLET_NAMES[o] || o.replace(/_/g, " ")}
             {submitted && <span className="ml-2 text-green-400">✓</span>}
