@@ -1349,6 +1349,11 @@ else await fetchOutletReportsByDate(outletEntryDate);
   const [kProducts, setKProducts] = useState<any[]>([]);
   const [kTgtEdits, setKTgtEdits] = useState<Record<string, string>>({});
   const [kShowTargets, setKShowTargets] = useState(false);
+  const [kcType, setKcType] = useState<"Sangam" | "Hotel" | "Customised cake">("Sangam");
+  const [kcHotel, setKcHotel] = useState("");
+  const [kcItem, setKcItem] = useState("");
+  const [kcQty, setKcQty] = useState("");
+  const [kcChef, setKcChef] = useState("");
   const fetchKProducts = async () => { const { data } = await supabase.from("kitchen_products").select("*").eq("active", true).order("sort_order"); setKProducts(data || []); };
   const saveKTargets = async () => { for (const pr of kProducts) { const v = kTgtEdits[pr.id]; if (v !== undefined && v !== String(pr.target_qty ?? "")) { await supabase.from("kitchen_products").update({ target_qty: Number(v) || 0 }).eq("id", pr.id); } } setKTgtEdits({}); fetchKProducts(); };
   const kProdVsTarget = kProducts.map((pr) => { const made = kRows.filter((r) => (r.flavour || "").trim().toLowerCase() === (pr.name || "").trim().toLowerCase()).reduce((sm, r) => sm + (Number(r.qty) || 0), 0); return { name: pr.name as string, category: (pr.category || "Other") as string, made, target: (pr.target_qty || 0) as number }; });
@@ -1360,6 +1365,16 @@ else await fetchOutletReportsByDate(outletEntryDate);
   useEffect(() => { if (user?.role === "Head Chef" || user?.role === "Owner") { fetchKChefs(); fetchKProduction(kDate); fetchKProducts(); } /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [user]);
   const addKChef = async () => { if (!kNewChef.trim()) return; const { error } = await supabase.from("kitchen_chefs").insert({ name: kNewChef.trim() }); if (error) { alert("Failed: " + error.message); return; } setKNewChef(""); fetchKChefs(); };
   const addKProd = async () => { if (!kForm.chef_id || !kForm.qty) { alert("Pick a chef and enter a count."); return; } const chef = kChefs.find((c) => c.id === kForm.chef_id); setKBusy(true); const { error } = await supabase.from("kitchen_production").insert({ prod_date: kDate, chef_id: kForm.chef_id, chef_name: chef?.name || null, flavour: kForm.flavour.trim() || null, qty: Number(kForm.qty) || 0, station: kForm.station.trim() || null, entered_by: user?.id || null }); setKBusy(false); if (error) { alert("Save failed: " + error.message); return; } setKForm({ chef_id: "", flavour: "", qty: "", station: "" }); fetchKProduction(kDate); };
+  const addKCustom = async () => {
+    if (!kcQty) { alert("Enter a count."); return; }
+    if (kcType === "Hotel" && !kcHotel.trim()) { alert("Enter the hotel name."); return; }
+    const label = kcType === "Hotel" ? `Hotel: ${kcHotel.trim()}${kcItem.trim() ? " · " + kcItem.trim() : ""}` : `${kcType}${kcItem.trim() ? " · " + kcItem.trim() : ""}`;
+    const chef = kChefs.find((c) => c.id === kcChef);
+    const { error } = await supabase.from("kitchen_production").insert({ prod_date: kDate, flavour: label, qty: Number(kcQty) || 0, chef_id: kcChef || null, chef_name: chef?.name || null, station: "Customised", entered_by: user?.id || null });
+    if (error) { alert("Save failed: " + error.message); return; }
+    setKcHotel(""); setKcItem(""); setKcQty(""); setKcChef("");
+    fetchKProduction(kDate);
+  };
   const delKProd = async (id: string) => { await supabase.from("kitchen_production").delete().eq("id", id); fetchKProduction(kDate); };
   const kByChef = kChefs.map((c) => ({ name: c.name, total: kRows.filter((r) => r.chef_id === c.id).reduce((sm, r) => sm + (Number(r.qty) || 0), 0) })).sort((a, b) => b.total - a.total);
   const kDayTotal = kRows.reduce((sm, r) => sm + (Number(r.qty) || 0), 0);
@@ -1546,6 +1561,23 @@ else await fetchOutletReportsByDate(outletEntryDate);
                 <div><label className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest">Station</label><input list="kstations" value={kForm.station} onChange={(e) => setKForm(pp => ({ ...pp, station: e.target.value }))} className="w-full bg-black border border-zinc-800 text-white px-3 py-2 focus:outline-none focus:border-yellow-400 transition-colors text-sm mt-1" placeholder="Icing" /><datalist id="kstations"><option value="Icing" /><option value="Chocolate garnish" /><option value="Whipped cream" /><option value="Baking" /><option value="Decoration" /><option value="Packing" /></datalist></div>
               </div>
               <button onClick={addKProd} disabled={kBusy} className="mt-4 bg-yellow-400 text-black px-5 py-2 text-sm font-semibold hover:bg-yellow-300 disabled:opacity-50 transition-colors">{kBusy ? "Adding…" : "Add"}</button>
+            </div>
+
+            <div className="mb-8 border border-zinc-800 p-5 max-w-3xl">
+              <p className="text-sm font-semibold mb-1">Customised order</p>
+              <p className="text-xs text-zinc-500 mb-4">Hotel / Sangam / one-off custom cakes. These land under &quot;Customised&quot; in the production list.</p>
+              <div className="flex gap-2 mb-3">
+                {(["Sangam", "Hotel", "Customised cake"] as const).map((t) => (
+                  <button key={t} onClick={() => setKcType(t)} className={`px-3 py-1.5 text-sm font-semibold transition-colors ${kcType === t ? "bg-orange-500 text-black" : "bg-zinc-900 text-zinc-400 hover:text-white"}`}>{t}</button>
+                ))}
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                {kcType === "Hotel" && <div><label className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest">Hotel name</label><input type="text" value={kcHotel} onChange={(e) => setKcHotel(e.target.value)} className="w-full bg-black border border-zinc-800 text-white px-3 py-2 focus:outline-none focus:border-yellow-400 transition-colors text-sm mt-1" placeholder="Taj" /></div>}
+                <div><label className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest">Item / description</label><input type="text" value={kcItem} onChange={(e) => setKcItem(e.target.value)} className="w-full bg-black border border-zinc-800 text-white px-3 py-2 focus:outline-none focus:border-yellow-400 transition-colors text-sm mt-1" placeholder="Choco truffle 1kg" /></div>
+                <div><label className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest">Count</label><input type="number" value={kcQty} onChange={(e) => setKcQty(e.target.value)} className="w-full bg-black border border-zinc-800 text-white px-3 py-2 focus:outline-none focus:border-yellow-400 transition-colors text-sm mt-1" placeholder="10" /></div>
+                <div><label className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest">Chef (optional)</label><select value={kcChef} onChange={(e) => setKcChef(e.target.value)} className="w-full bg-black border border-zinc-800 text-white px-3 py-2 focus:outline-none focus:border-yellow-400 transition-colors text-sm mt-1"><option value="">—</option>{kChefs.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></div>
+              </div>
+              <button onClick={addKCustom} className="mt-4 bg-yellow-400 text-black px-5 py-2 text-sm font-semibold hover:bg-yellow-300 transition-colors">Add order</button>
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 max-w-5xl">
