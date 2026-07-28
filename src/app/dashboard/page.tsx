@@ -1346,9 +1346,15 @@ else await fetchOutletReportsByDate(outletEntryDate);
   const [kForm, setKForm] = useState({ chef_id: "", flavour: "", qty: "", station: "" });
   const [kNewChef, setKNewChef] = useState("");
   const [kBusy, setKBusy] = useState(false);
+  const [kProducts, setKProducts] = useState<any[]>([]);
+  const [kTgtEdits, setKTgtEdits] = useState<Record<string, string>>({});
+  const [kShowTargets, setKShowTargets] = useState(false);
+  const fetchKProducts = async () => { const { data } = await supabase.from("kitchen_products").select("*").eq("active", true).order("sort_order"); setKProducts(data || []); };
+  const saveKTargets = async () => { for (const pr of kProducts) { const v = kTgtEdits[pr.id]; if (v !== undefined && v !== String(pr.target_qty ?? "")) { await supabase.from("kitchen_products").update({ target_qty: Number(v) || 0 }).eq("id", pr.id); } } setKTgtEdits({}); fetchKProducts(); };
+  const kProdVsTarget = kProducts.map((pr) => { const made = kRows.filter((r) => (r.flavour || "").trim().toLowerCase() === (pr.name || "").trim().toLowerCase()).reduce((sm, r) => sm + (Number(r.qty) || 0), 0); return { name: pr.name as string, made, target: (pr.target_qty || 0) as number }; });
   const fetchKChefs = async () => { const { data } = await supabase.from("kitchen_chefs").select("*").eq("active", true).order("name"); setKChefs(data || []); };
   const fetchKProduction = async (d: string) => { const { data } = await supabase.from("kitchen_production").select("*").eq("prod_date", d).order("created_at"); setKRows(data || []); };
-  useEffect(() => { if (user?.role === "Head Chef" || user?.role === "Owner") { fetchKChefs(); fetchKProduction(kDate); } /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [user]);
+  useEffect(() => { if (user?.role === "Head Chef" || user?.role === "Owner") { fetchKChefs(); fetchKProduction(kDate); fetchKProducts(); } /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [user]);
   const addKChef = async () => { if (!kNewChef.trim()) return; const { error } = await supabase.from("kitchen_chefs").insert({ name: kNewChef.trim() }); if (error) { alert("Failed: " + error.message); return; } setKNewChef(""); fetchKChefs(); };
   const addKProd = async () => { if (!kForm.chef_id || !kForm.qty) { alert("Pick a chef and enter a count."); return; } const chef = kChefs.find((c) => c.id === kForm.chef_id); setKBusy(true); const { error } = await supabase.from("kitchen_production").insert({ prod_date: kDate, chef_id: kForm.chef_id, chef_name: chef?.name || null, flavour: kForm.flavour.trim() || null, qty: Number(kForm.qty) || 0, station: kForm.station.trim() || null, entered_by: user?.id || null }); setKBusy(false); if (error) { alert("Save failed: " + error.message); return; } setKForm({ chef_id: "", flavour: "", qty: "", station: "" }); fetchKProduction(kDate); };
   const delKProd = async (id: string) => { await supabase.from("kitchen_production").delete().eq("id", id); fetchKProduction(kDate); };
@@ -1532,7 +1538,7 @@ else await fetchOutletReportsByDate(outletEntryDate);
               <p className="text-sm font-semibold mb-4">Assign production</p>
               <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
                 <div><label className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest">Chef</label><select value={kForm.chef_id} onChange={(e) => setKForm(pp => ({ ...pp, chef_id: e.target.value }))} className="w-full bg-black border border-zinc-800 text-white px-3 py-2 focus:outline-none focus:border-yellow-400 transition-colors text-sm mt-1"><option value="">— pick —</option>{kChefs.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></div>
-                <div><label className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest">Flavour / item</label><input type="text" value={kForm.flavour} onChange={(e) => setKForm(pp => ({ ...pp, flavour: e.target.value }))} className="w-full bg-black border border-zinc-800 text-white px-3 py-2 focus:outline-none focus:border-yellow-400 transition-colors text-sm mt-1" placeholder="Choco truffle" /></div>
+                <div><label className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest">Flavour / item</label><input type="text" value={kForm.flavour} onChange={(e) => setKForm(pp => ({ ...pp, flavour: e.target.value }))} className="w-full bg-black border border-zinc-800 text-white px-3 py-2 focus:outline-none focus:border-yellow-400 transition-colors text-sm mt-1" placeholder="Choco truffle" list="kproducts" /><datalist id="kproducts">{kProducts.map((pr) => <option key={pr.id} value={pr.name} />)}</datalist></div>
                 <div><label className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest">Count</label><input type="number" value={kForm.qty} onChange={(e) => setKForm(pp => ({ ...pp, qty: e.target.value }))} className="w-full bg-black border border-zinc-800 text-white px-3 py-2 focus:outline-none focus:border-yellow-400 transition-colors text-sm mt-1" placeholder="30" /></div>
                 <div><label className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest">Station</label><input list="kstations" value={kForm.station} onChange={(e) => setKForm(pp => ({ ...pp, station: e.target.value }))} className="w-full bg-black border border-zinc-800 text-white px-3 py-2 focus:outline-none focus:border-yellow-400 transition-colors text-sm mt-1" placeholder="Icing" /><datalist id="kstations"><option value="Icing" /><option value="Chocolate garnish" /><option value="Whipped cream" /><option value="Baking" /><option value="Decoration" /><option value="Packing" /></datalist></div>
               </div>
@@ -1573,6 +1579,37 @@ else await fetchOutletReportsByDate(outletEntryDate);
                   </div>
                 )}
               </div>
+            </div>
+
+            <div className="mt-6 border border-zinc-800 p-4 max-w-3xl">
+              <div className="flex justify-between items-baseline mb-3">
+                <p className="text-sm font-semibold">Production vs target · {kDate}</p>
+                <button onClick={() => setKShowTargets(v => !v)} className="text-[11px] font-mono uppercase text-zinc-400 hover:text-white">{kShowTargets ? "Done" : "Set targets"}</button>
+              </div>
+              {kProducts.length === 0 ? <p className="text-sm text-zinc-600">No products yet.</p> : (
+                <div className="space-y-2">
+                  {kProdVsTarget.map((pr) => { const pct = pr.target > 0 ? Math.round(pr.made / pr.target * 100) : 0; const col = pr.target === 0 ? "bg-zinc-600" : pct >= 100 ? "bg-green-500" : pct >= 60 ? "bg-yellow-400" : "bg-red-500"; return (
+                    <div key={pr.name}>
+                      <div className="flex justify-between text-sm mb-0.5"><span>{pr.name}</span><span className="font-mono text-zinc-300">{pr.made}{pr.target > 0 ? ` / ${pr.target} · ${pct}%` : ""}</span></div>
+                      <div className="h-2 bg-zinc-800"><div className={`h-full ${col}`} style={{ width: `${pr.target > 0 ? Math.min(100, pct) : (pr.made > 0 ? 100 : 0)}%` }} /></div>
+                    </div>
+                  ); })}
+                </div>
+              )}
+              {kShowTargets && (
+                <div className="mt-4 pt-4 border-t border-zinc-800">
+                  <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mb-2">Daily target per product</p>
+                  <div className="space-y-2">
+                    {kProducts.map((pr) => (
+                      <div key={pr.id} className="flex items-center gap-2 text-sm">
+                        <span className="flex-1">{pr.name}</span>
+                        <input type="number" value={kTgtEdits[pr.id] ?? String(pr.target_qty ?? 0)} onChange={(e) => setKTgtEdits(m => ({ ...m, [pr.id]: e.target.value }))} className="w-24 bg-black border border-zinc-800 text-white px-2 py-1 focus:outline-none focus:border-yellow-400 text-sm" />
+                      </div>
+                    ))}
+                  </div>
+                  <button onClick={saveKTargets} className="mt-3 bg-yellow-400 text-black px-4 py-1.5 text-sm font-semibold hover:bg-yellow-300 transition-colors">Save targets</button>
+                </div>
+              )}
             </div>
 
             <div className="mt-6 border border-zinc-800 p-4 max-w-md">
