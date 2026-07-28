@@ -1351,7 +1351,10 @@ else await fetchOutletReportsByDate(outletEntryDate);
   const [kShowTargets, setKShowTargets] = useState(false);
   const fetchKProducts = async () => { const { data } = await supabase.from("kitchen_products").select("*").eq("active", true).order("sort_order"); setKProducts(data || []); };
   const saveKTargets = async () => { for (const pr of kProducts) { const v = kTgtEdits[pr.id]; if (v !== undefined && v !== String(pr.target_qty ?? "")) { await supabase.from("kitchen_products").update({ target_qty: Number(v) || 0 }).eq("id", pr.id); } } setKTgtEdits({}); fetchKProducts(); };
-  const kProdVsTarget = kProducts.map((pr) => { const made = kRows.filter((r) => (r.flavour || "").trim().toLowerCase() === (pr.name || "").trim().toLowerCase()).reduce((sm, r) => sm + (Number(r.qty) || 0), 0); return { name: pr.name as string, made, target: (pr.target_qty || 0) as number }; });
+  const kProdVsTarget = kProducts.map((pr) => { const made = kRows.filter((r) => (r.flavour || "").trim().toLowerCase() === (pr.name || "").trim().toLowerCase()).reduce((sm, r) => sm + (Number(r.qty) || 0), 0); return { name: pr.name as string, category: (pr.category || "Other") as string, made, target: (pr.target_qty || 0) as number }; });
+  const kCats = Array.from(new Set(kProducts.map((pr) => pr.category || "Other")));
+  const kMasterNames = new Set(kProducts.map((pr) => (pr.name || "").trim().toLowerCase()));
+  const kCustom = kRows.filter((r) => !kMasterNames.has((r.flavour || "").trim().toLowerCase()));
   const fetchKChefs = async () => { const { data } = await supabase.from("kitchen_chefs").select("*").eq("active", true).order("name"); setKChefs(data || []); };
   const fetchKProduction = async (d: string) => { const { data } = await supabase.from("kitchen_production").select("*").eq("prod_date", d).order("created_at"); setKRows(data || []); };
   useEffect(() => { if (user?.role === "Head Chef" || user?.role === "Owner") { fetchKChefs(); fetchKProduction(kDate); fetchKProducts(); } /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [user]);
@@ -1587,13 +1590,30 @@ else await fetchOutletReportsByDate(outletEntryDate);
                 <button onClick={() => setKShowTargets(v => !v)} className="text-[11px] font-mono uppercase text-zinc-400 hover:text-white">{kShowTargets ? "Done" : "Set targets"}</button>
               </div>
               {kProducts.length === 0 ? <p className="text-sm text-zinc-600">No products yet.</p> : (
-                <div className="space-y-2">
-                  {kProdVsTarget.map((pr) => { const pct = pr.target > 0 ? Math.round(pr.made / pr.target * 100) : 0; const col = pr.target === 0 ? "bg-zinc-600" : pct >= 100 ? "bg-green-500" : pct >= 60 ? "bg-yellow-400" : "bg-red-500"; return (
-                    <div key={pr.name}>
-                      <div className="flex justify-between text-sm mb-0.5"><span>{pr.name}</span><span className="font-mono text-zinc-300">{pr.made}{pr.target > 0 ? ` / ${pr.target} · ${pct}%` : ""}</span></div>
-                      <div className="h-2 bg-zinc-800"><div className={`h-full ${col}`} style={{ width: `${pr.target > 0 ? Math.min(100, pct) : (pr.made > 0 ? 100 : 0)}%` }} /></div>
+                <div className="space-y-4">
+                  {kCats.map((cat) => { const items = kProdVsTarget.filter((pr) => pr.category === cat); const catMade = items.reduce((sm, pr) => sm + pr.made, 0); const catTgt = items.reduce((sm, pr) => sm + pr.target, 0); return (
+                    <div key={cat}>
+                      <div className="flex justify-between items-baseline mb-1.5"><p className="text-[11px] font-mono text-zinc-400 uppercase tracking-widest">{cat}</p><span className="font-mono text-xs text-zinc-500">{catMade}{catTgt > 0 ? ` / ${catTgt}` : ""}</span></div>
+                      <div className="space-y-1.5">
+                        {items.map((pr) => { const pct = pr.target > 0 ? Math.round(pr.made / pr.target * 100) : 0; const col = pr.target === 0 ? "bg-zinc-600" : pct >= 100 ? "bg-green-500" : pct >= 60 ? "bg-yellow-400" : "bg-red-500"; return (
+                          <div key={pr.name}>
+                            <div className="flex justify-between text-sm mb-0.5"><span>{pr.name}</span><span className="font-mono text-zinc-300">{pr.made}{pr.target > 0 ? ` / ${pr.target} · ${pct}%` : ""}</span></div>
+                            <div className="h-2 bg-zinc-800"><div className={`h-full ${col}`} style={{ width: `${pr.target > 0 ? Math.min(100, pct) : (pr.made > 0 ? 100 : 0)}%` }} /></div>
+                          </div>
+                        ); })}
+                      </div>
                     </div>
                   ); })}
+                  {kCustom.length > 0 && (
+                    <div>
+                      <p className="text-[11px] font-mono text-orange-400 uppercase tracking-widest mb-1.5">Customised / special orders</p>
+                      <div className="space-y-1">
+                        {kCustom.map((r) => (
+                          <div key={r.id} className="flex justify-between text-sm"><span>{r.flavour || "—"}{r.chef_name ? ` · ${r.chef_name}` : ""}</span><span className="font-mono text-orange-300">{r.qty}</span></div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
               {kShowTargets && (
