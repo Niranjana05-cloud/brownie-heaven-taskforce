@@ -292,7 +292,7 @@ export default function DashboardPage() {
   const [reports, setReports] = useState<Report[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
-  const [activeTab, setActiveTab] = useState<"tasks" | "my_report" | "all_reports" | "analytics" | "outlet_reports" | "owner_outlets" | "history" | "attendance" | "sales_target" | "payout" | "reconciliation" | "competition">("tasks");
+  const [activeTab, setActiveTab] = useState<"tasks" | "my_report" | "all_reports" | "analytics" | "outlet_reports" | "owner_outlets" | "history" | "attendance" | "sales_target" | "payout" | "reconciliation" | "competition" | "item_perf">("tasks");
   const fetchRangeReports = async (outlets: string[]) => {
     let q = supabase.from("outlet_reports").select("*").gte("report_date", repFrom).lte("report_date", repTo).order("report_date", { ascending: true });
     if (outlets.length > 0) q = q.in("outlet_id", outlets);
@@ -555,6 +555,13 @@ export default function DashboardPage() {
   const [prodParsed, setProdParsed] = useState<{ product: string; gmv: number | null; orders: number | null; units: number | null; areas: number | null }[] | null>(null);
   const [prodSaving, setProdSaving] = useState(false);
   const [compProducts, setCompProducts] = useState<any[]>([]);
+  const [ipUploads, setIpUploads] = useState<any[]>([]);
+  const [ipSel, setIpSel] = useState<string>("");
+  const [ipRows, setIpRows] = useState<any[]>([]);
+  const [ipParsed, setIpParsed] = useState<any[] | null>(null);
+  const [ipLabel, setIpLabel] = useState("");
+  const [ipDays, setIpDays] = useState("30");
+  const [ipBusy, setIpBusy] = useState(false);
   const [compPeriod, setCompPeriod] = useState("");
   const fetchCompRows = async () => {
     const { data } = await supabase.from("competitor_sales").select("*").order("period_date", { ascending: false }).order("created_at", { ascending: false });
@@ -637,6 +644,35 @@ export default function DashboardPage() {
   };
   useEffect(() => { if (activeTab === "competition") { fetchCompRows(); fetchCompProducts(); } /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [activeTab]);
   useEffect(() => { if (user) { fetchCompRows(); fetchCompProducts(); } /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [user]);
+  const fetchIpRows = async (uploadId: string) => { const { data } = await supabase.from("item_perf_rows").select("*").eq("upload_id", uploadId).order("net_revenue", { ascending: false, nullsFirst: false }); setIpRows(data || []); };
+  const fetchIpUploads = async () => { const { data } = await supabase.from("item_perf_uploads").select("*").order("created_at", { ascending: false }); setIpUploads(data || []); if (data && data.length) { setIpSel((cur) => cur || data[0].id); if (!ipSel) fetchIpRows(data[0].id); } };
+  useEffect(() => { if (activeTab === "item_perf") fetchIpUploads(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [activeTab]);
+  const parseItemFile = async (file: File) => {
+    const buf = await file.arrayBuffer();
+    const wb = XLSX.read(buf, { type: "array" });
+    const ws = wb.Sheets[wb.SheetNames[0]];
+    const json: any[] = XLSX.utils.sheet_to_json(ws, { defval: "" });
+    const num = (v: any) => { const n = parseFloat(String(v).replace(/[^0-9.\-]/g, "")); return isNaN(n) ? null : n; };
+    const pick = (r: any, keys: string[]) => { for (const k of Object.keys(r)) { const nk = k.replace(/^\ufeff/, "").trim().toLowerCase(); if (keys.some((x) => nk === x || nk.includes(x))) return r[k]; } return ""; };
+    return json.map((r) => ({ name: String(pick(r, ["name"])).trim(), category: String(pick(r, ["category"])).trim(), net_revenue: num(pick(r, ["net revenue", "revenue"])), units_sold: num(pick(r, ["units sold", "units"])), avg_price: num(pick(r, ["avg price", "average price"])), lost_orders: num(pick(r, ["lost orders"])), avg_orders_day: num(pick(r, ["avg orders", "orders / day", "orders/day"])) })).filter((r) => r.name);
+  };
+  const onIpFile = async (e: any) => {
+    const f = e.target.files?.[0]; if (!f) return;
+    try { const rows = await parseItemFile(f); if (!rows.length) { alert("No item rows found. Check the export format."); return; } setIpParsed(rows); } catch (err: any) { alert("Couldn't read the file: " + (err?.message || "")); }
+    e.target.value = "";
+  };
+  const saveIp = async () => {
+    if (!ipParsed || !ipParsed.length) return;
+    setIpBusy(true);
+    const { data: up, error: e1 } = await supabase.from("item_perf_uploads").insert({ label: ipLabel.trim() || `Last ${ipDays} days`, period_days: Number(ipDays) || null, uploaded_by: user?.id || null, row_count: ipParsed.length }).select().single();
+    if (e1 || !up) { setIpBusy(false); alert("Save failed: " + (e1?.message || "")); return; }
+    const payload = ipParsed.map((r) => ({ upload_id: up.id, ...r }));
+    const { error: e2 } = await supabase.from("item_perf_rows").insert(payload);
+    setIpBusy(false);
+    if (e2) { alert("Rows save failed: " + e2.message); return; }
+    setIpParsed(null); setIpLabel("");
+    await fetchIpUploads(); setIpSel(up.id); fetchIpRows(up.id);
+  };
 
   useEffect(() => {
     if (activeTab !== "analytics") return;
@@ -1339,6 +1375,8 @@ else await fetchOutletReportsByDate(outletEntryDate);
   const canAssign = user?.role === "Owner" || user?.role === "Manager";
   const hasOutlets = (user?.outlets?.length || 0) > 0;
   const isFO = user?.role === "Founder's Office";
+  const canUploadItemPerf = user?.id === "ahila" || user?.id === "vishnu";
+  const canViewItemPerf = canAssign || canUploadItemPerf;
   const hasReportDuty = user?.role !== "Owner" && user?.role !== "Founder's Office" && user?.role !== "Head Chef";
   const [kChefs, setKChefs] = useState<any[]>([]);
   const [kRows, setKRows] = useState<any[]>([]);
@@ -1504,6 +1542,11 @@ else await fetchOutletReportsByDate(outletEntryDate);
           {(canAssign || isFO) && (
             <div onClick={() => { setActiveTab("competition"); setSidebarOpen(false); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "competition" ? "text-white bg-zinc-900 border-l-2 border-yellow-400" : "text-zinc-500 hover:text-white"}`}>
               <span>🥊</span> Competition
+            </div>
+          )}
+          {canViewItemPerf && (
+            <div onClick={() => { setActiveTab("item_perf"); setSidebarOpen(false); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "item_perf" ? "text-white bg-zinc-900 border-l-2 border-yellow-400" : "text-zinc-500 hover:text-white"}`}>
+              <span>📈</span> Item Performance
             </div>
           )}
           {canAssign && (
@@ -2685,6 +2728,56 @@ else await fetchOutletReportsByDate(outletEntryDate);
     </div>
   </div>
 )}
+        {activeTab === "item_perf" && (
+          <div>
+            <div className="mb-8 pb-5 border-b border-zinc-800">
+              <h2 className="text-2xl font-black tracking-tight">Item Performance</h2>
+              <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mt-1">UrbanPiper item export · price vs demand</p>
+            </div>
+
+            {canUploadItemPerf && (
+              <div className="mb-8 border border-zinc-800 p-5 max-w-3xl">
+                <p className="text-sm font-semibold mb-1">Upload item export</p>
+                <p className="text-xs text-zinc-500 mb-4">CSV or Excel from UrbanPiper Prime (revenue by item). Pick the window it covers.</p>
+                <div className="flex flex-wrap gap-3 items-end">
+                  <div><label className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest">Window</label><select value={ipDays} onChange={(e) => setIpDays(e.target.value)} className="bg-black border border-zinc-800 text-white px-3 py-2 focus:outline-none focus:border-yellow-400 transition-colors text-sm mt-1 w-36"><option value="7">Last 7 days</option><option value="10">Last 10 days</option><option value="30">Last 30 days</option></select></div>
+                  <div><label className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest">Label (optional)</label><input type="text" value={ipLabel} onChange={(e) => setIpLabel(e.target.value)} className="bg-black border border-zinc-800 text-white px-3 py-2 focus:outline-none focus:border-yellow-400 transition-colors text-sm mt-1 w-44" placeholder="1–30 Jul" /></div>
+                  <label className="bg-zinc-800 text-white px-4 py-2 text-sm font-semibold hover:bg-zinc-700 cursor-pointer transition-colors">Choose file<input type="file" accept=".csv,.xlsx,.xls" onChange={onIpFile} className="hidden" /></label>
+                </div>
+                {ipParsed && (
+                  <div className="mt-5">
+                    <p className="text-xs text-zinc-500 mb-2">Parsed {ipParsed.length} items · preview (top 8 by revenue):</p>
+                    <table className="w-full text-sm">
+                      <thead><tr className="text-left text-[11px] font-mono text-zinc-500 uppercase"><th className="py-1">Item</th><th className="py-1 text-right">Revenue</th><th className="py-1 text-right">Units</th><th className="py-1 text-right">Avg ₹</th><th className="py-1 text-right">Lost</th></tr></thead>
+                      <tbody>{[...ipParsed].sort((a, b) => (b.net_revenue || 0) - (a.net_revenue || 0)).slice(0, 8).map((r, i) => (
+                        <tr key={i} className="border-t border-zinc-800"><td className="py-1.5">{r.name}</td><td className="py-1.5 text-right font-mono">{r.net_revenue != null ? "₹" + Number(r.net_revenue).toLocaleString("en-IN") : "—"}</td><td className="py-1.5 text-right font-mono text-zinc-400">{r.units_sold ?? "—"}</td><td className="py-1.5 text-right font-mono text-zinc-400">{r.avg_price != null ? "₹" + r.avg_price : "—"}</td><td className="py-1.5 text-right font-mono text-zinc-400">{r.lost_orders ?? "—"}</td></tr>
+                      ))}</tbody>
+                    </table>
+                    <button onClick={saveIp} disabled={ipBusy} className="mt-4 bg-yellow-400 text-black px-5 py-2 text-sm font-semibold hover:bg-yellow-300 disabled:opacity-50 transition-colors">{ipBusy ? "Saving…" : `Save ${ipParsed.length} items`}</button>
+                  </div>
+                )}
+              </div>
+            )}
+
+            <div className="mb-4 flex items-center gap-3 flex-wrap">
+              <label className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest">Upload</label>
+              <select value={ipSel} onChange={(e) => { setIpSel(e.target.value); fetchIpRows(e.target.value); }} className="bg-black border border-zinc-800 text-white px-3 py-2 focus:outline-none focus:border-yellow-400 text-sm">
+                {ipUploads.length === 0 ? <option value="">No uploads yet</option> : ipUploads.map((u) => <option key={u.id} value={u.id}>{u.label} · {new Date(u.created_at).toLocaleDateString("en-IN")} · {u.row_count} items</option>)}
+              </select>
+            </div>
+            {ipRows.length === 0 ? <p className="text-sm text-zinc-500">No data yet. {canUploadItemPerf ? "Upload an export above." : "Waiting for an upload."}</p> : (
+              <div className="overflow-x-auto max-w-5xl border border-zinc-800">
+                <table className="w-full text-sm">
+                  <thead><tr className="text-left text-[11px] font-mono text-zinc-500 uppercase bg-zinc-900"><th className="py-2 px-3">Item</th><th className="py-2 px-3">Category</th><th className="py-2 px-3 text-right">Revenue</th><th className="py-2 px-3 text-right">Units</th><th className="py-2 px-3 text-right">Avg ₹</th><th className="py-2 px-3 text-right">Lost</th><th className="py-2 px-3 text-right">Orders/day</th></tr></thead>
+                  <tbody>{ipRows.map((r) => (
+                    <tr key={r.id} className="border-t border-zinc-800"><td className="py-1.5 px-3">{r.name}</td><td className="py-1.5 px-3 text-zinc-500 text-xs">{r.category}</td><td className="py-1.5 px-3 text-right font-mono">{r.net_revenue != null ? "₹" + Number(r.net_revenue).toLocaleString("en-IN") : "—"}</td><td className="py-1.5 px-3 text-right font-mono text-zinc-400">{r.units_sold ?? "—"}</td><td className="py-1.5 px-3 text-right font-mono text-zinc-400">{r.avg_price != null ? "₹" + r.avg_price : "—"}</td><td className="py-1.5 px-3 text-right font-mono text-zinc-400">{r.lost_orders ?? "—"}</td><td className="py-1.5 px-3 text-right font-mono text-zinc-400">{r.avg_orders_day ?? "—"}</td></tr>
+                  ))}</tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
+
         {activeTab === "competition" && (
           <div>
             <div className="mb-8 pb-5 border-b border-zinc-800">
