@@ -562,6 +562,7 @@ export default function DashboardPage() {
   const [ipLabel, setIpLabel] = useState("");
   const [ipDays, setIpDays] = useState("30");
   const [ipBusy, setIpBusy] = useState(false);
+  const [ipView, setIpView] = useState<"insights" | "data">("insights");
   const [compPeriod, setCompPeriod] = useState("");
   const fetchCompRows = async () => {
     const { data } = await supabase.from("competitor_sales").select("*").order("period_date", { ascending: false }).order("created_at", { ascending: false });
@@ -672,6 +673,42 @@ export default function DashboardPage() {
     if (e2) { alert("Rows save failed: " + e2.message); return; }
     setIpParsed(null); setIpLabel("");
     await fetchIpUploads(); setIpSel(up.id); fetchIpRows(up.id);
+  };
+  const ipStats = (() => {
+    const rows = ipRows.map((r: any) => ({ name: r.name as string, category: r.category as string, rev: Number(r.net_revenue) || 0, units: Number(r.units_sold) || 0, price: Number(r.avg_price) || 0, lost: Number(r.lost_orders) || 0, opd: Number(r.avg_orders_day) || 0 }));
+    if (!rows.length) return null;
+    const med = (arr: number[]) => { const a = [...arr].sort((x, y) => x - y); return a.length ? a[Math.floor(a.length / 2)] : 0; };
+    const mU = med(rows.map((r) => r.units)), mP = med(rows.map((r) => r.price)), mR = med(rows.map((r) => r.rev));
+    const stars = [...rows].filter((r) => r.units >= mU).sort((a, b) => b.rev - a.rev).slice(0, 5);
+    const moneyLeft = [...rows].filter((r) => r.lost > 0).sort((a, b) => b.lost - a.lost).slice(0, 5);
+    const byCat: Record<string, typeof rows> = {};
+    rows.forEach((r) => { (byCat[r.category] = byCat[r.category] || []).push(r); });
+    let suspects: typeof rows = [];
+    Object.values(byCat).forEach((items) => { if (items.length < 3) return; const cP = med(items.map((r) => r.price)), cU = med(items.map((r) => r.units)); items.forEach((r) => { if (r.units >= 10 && r.price > cP && r.units < cU) suspects.push(r); }); });
+    suspects = suspects.sort((a, b) => (b.lost - a.lost) || (b.price - a.price)).slice(0, 5);
+    const sweet = [...rows].filter((r) => r.price <= mP && r.units >= mU).sort((a, b) => b.units - a.units).slice(0, 5);
+    const dead = [...rows].filter((r) => r.units >= 3 && r.units < mU && r.rev < mR).sort((a, b) => a.units - b.units).slice(0, 5);
+    const inr = (n: number) => "₹" + Math.round(n).toLocaleString("en-IN");
+    const top = stars[0], s0 = suspects[0], w0 = sweet[0], d0 = dead[0];
+    const funny = {
+      headline: top ? `${top.name} at ${inr(top.price)} is your golden child — ${top.units.toLocaleString("en-IN")} sold. Don't you dare touch that price 😤🍫` : "",
+      suspect: s0 ? `${s0.name} at ${inr(s0.price)}? People peeked, gasped, and scrolled on — ${s0.lost} lost orders. Maybe ease off the price 💸` : "",
+      sweet: w0 ? `${w0.name} at ${inr(w0.price)} is quietly crushing it — ${w0.units.toLocaleString("en-IN")} sold. The people's champion 👏` : "",
+      dead: d0 ? `${d0.name}? ${d0.units} whole units this window. It's giving "forgotten leftover" 💀` : "",
+    };
+    return { rows, stars, moneyLeft, suspects, sweet, dead, funny, inr };
+  })();
+  const downloadIpPDF = async () => {
+    if (!ipStats) { alert("No data to report."); return; }
+    const up = ipUploads.find((u) => u.id === ipSel);
+    const C = { bg: "#FAF3E7", card: "#FFFDF8", ink: "#3E2415", soft: "#8A6A4A", line: "#EADBC2", green: "#2E7D32", red: "#C62828", orange: "#C2410C", gold: "#C8901E" };
+    const inr = ipStats.inr;
+    const tbl = (title: string, sub: string, rows: any[], color: string) => rows.length ? `<div style="margin-top:18px"><div style="font-size:14px;font-weight:800;color:${color}">${title}</div><div style="font-size:10px;color:${C.soft};margin-bottom:6px">${sub}</div><table style="width:100%;border-collapse:collapse;background:${C.card};border:1px solid ${C.line};border-radius:10px;overflow:hidden"><thead><tr style="background:${C.ink}"><th style="padding:6px 8px;text-align:left;color:#FFF6E5;font-size:9px">ITEM</th><th style="padding:6px 8px;text-align:right;color:#FFF6E5;font-size:9px">AVG</th><th style="padding:6px 8px;text-align:right;color:#FFF6E5;font-size:9px">UNITS</th><th style="padding:6px 8px;text-align:right;color:#FFF6E5;font-size:9px">LOST</th></tr></thead><tbody>${rows.map((r) => `<tr><td style="padding:5px 8px;border-bottom:1px solid ${C.line};font-size:10px;color:${C.ink}">${r.name}</td><td style="padding:5px 8px;border-bottom:1px solid ${C.line};text-align:right;font-size:10px">${inr(r.price)}</td><td style="padding:5px 8px;border-bottom:1px solid ${C.line};text-align:right;font-size:10px">${r.units.toLocaleString("en-IN")}</td><td style="padding:5px 8px;border-bottom:1px solid ${C.line};text-align:right;font-size:10px;color:${C.soft}">${r.lost}</td></tr>`).join("")}</tbody></table></div>` : "";
+    const html = `<div style="width:794px;background:${C.bg};font-family:'Segoe UI',Arial,sans-serif;color:${C.ink};padding:34px"><div style="font-size:22px;font-weight:900">Brownie Heaven — Item Performance</div><div style="font-size:11px;color:${C.soft};margin-bottom:14px">${up?.label || ""} · ${ipStats.rows.length} items</div><div style="background:${C.card};border:1px solid ${C.line};border-radius:12px;padding:16px;font-size:16px;font-weight:700;line-height:1.5">${ipStats.funny.headline}</div>${ipStats.funny.suspect ? `<div style="margin-top:8px;font-size:13px;color:${C.orange}">${ipStats.funny.suspect}</div>` : ""}${ipStats.funny.sweet ? `<div style="margin-top:4px;font-size:13px;color:${C.green}">${ipStats.funny.sweet}</div>` : ""}${ipStats.funny.dead ? `<div style="margin-top:4px;font-size:13px;color:${C.red}">${ipStats.funny.dead}</div>` : ""}${tbl("Stars", "The workhorses — protect these", ipStats.stars, C.green)}${tbl("Priced-too-high suspects", "High price, shy demand — worth a rethink", ipStats.suspects, C.orange)}${tbl("Sweet-spot winners", "Great price, flying off shelves", ipStats.sweet, C.green)}${tbl("Money left on the table", "People wanted it, didn't get it", ipStats.moneyLeft, C.gold)}${tbl("Dead weight", "Barely moving — rework or retire?", ipStats.dead, C.red)}<div style="font-size:9px;color:${C.soft};margin-top:16px">Directional signals from one export, not final verdicts. Confirm price effects across two windows before changing prices.</div></div>`;
+    const lib = await loadH2P();
+    const holder = document.createElement("div"); holder.style.position = "fixed"; holder.style.left = "-9999px"; holder.innerHTML = html; document.body.appendChild(holder);
+    try { await lib().set({ margin: 0, filename: `ItemPerformance_${(up?.label || "report").replace(/[^a-z0-9]+/gi, "_")}.pdf`, image: { type: "jpeg", quality: 0.97 }, html2canvas: { scale: 2, backgroundColor: C.bg }, jsPDF: { unit: "pt", format: "a4", orientation: "portrait" }, pagebreak: { mode: ["css", "legacy"] } }).from(holder.firstElementChild).save(); }
+    finally { document.body.removeChild(holder); }
   };
 
   useEffect(() => {
@@ -2765,7 +2802,51 @@ else await fetchOutletReportsByDate(outletEntryDate);
                 {ipUploads.length === 0 ? <option value="">No uploads yet</option> : ipUploads.map((u) => <option key={u.id} value={u.id}>{u.label} · {new Date(u.created_at).toLocaleDateString("en-IN")} · {u.row_count} items</option>)}
               </select>
             </div>
-            {ipRows.length === 0 ? <p className="text-sm text-zinc-500">No data yet. {canUploadItemPerf ? "Upload an export above." : "Waiting for an upload."}</p> : (
+            <div className="flex gap-2 mb-6">
+              <button onClick={() => setIpView("insights")} className={`px-4 py-2 text-sm font-semibold transition-colors ${ipView === "insights" ? "bg-yellow-400 text-black" : "bg-zinc-900 text-zinc-400 hover:text-white"}`}>Insights</button>
+              <button onClick={() => setIpView("data")} className={`px-4 py-2 text-sm font-semibold transition-colors ${ipView === "data" ? "bg-yellow-400 text-black" : "bg-zinc-900 text-zinc-400 hover:text-white"}`}>Data</button>
+            </div>
+            {ipRows.length === 0 ? <p className="text-sm text-zinc-500">No data yet. {canUploadItemPerf ? "Upload an export above." : "Waiting for an upload."}</p> : ipView === "insights" ? (
+              <div>
+                {ipStats && (<>
+                  <div className="flex items-center justify-between mb-4 max-w-3xl gap-3 flex-wrap">
+                    <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest">{(ipUploads.find((u) => u.id === ipSel)?.label) || ""}</p>
+                    <button onClick={downloadIpPDF} className="bg-zinc-800 text-white px-4 py-2 text-sm font-semibold hover:bg-zinc-700 transition-colors">Download report (PDF)</button>
+                  </div>
+                  <div className="mb-6 border border-zinc-800 p-5 max-w-3xl">
+                    <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mb-2">Headline</p>
+                    <p className="text-lg md:text-xl mb-3">{ipStats.funny.headline}</p>
+                    {ipStats.funny.suspect && <p className="text-sm text-orange-400 mb-1">{ipStats.funny.suspect}</p>}
+                    {ipStats.funny.sweet && <p className="text-sm text-green-400 mb-1">{ipStats.funny.sweet}</p>}
+                    {ipStats.funny.dead && <p className="text-sm text-red-400">{ipStats.funny.dead}</p>}
+                  </div>
+                  {[
+                    { title: "🏆 Stars", sub: "The workhorses — protect these", rows: ipStats.stars, border: "border-green-500/30" },
+                    { title: "👀 Priced-too-high suspects", sub: "High price, shy demand — worth a rethink", rows: ipStats.suspects, border: "border-orange-500/30" },
+                    { title: "💚 Sweet-spot winners", sub: "Great price, flying off shelves", rows: ipStats.sweet, border: "border-green-500/30" },
+                    { title: "💸 Money left on the table", sub: "People wanted it, didn't get it", rows: ipStats.moneyLeft, border: "border-yellow-500/30" },
+                    { title: "💀 Dead weight", sub: "Barely moving — rework or retire?", rows: ipStats.dead, border: "border-red-500/30" },
+                  ].map((b) => (
+                    <div key={b.title} className={`mb-4 border ${b.border} p-4 max-w-3xl`}>
+                      <p className="text-sm font-semibold">{b.title}</p>
+                      <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mb-2">{b.sub}</p>
+                      {b.rows.length === 0 ? <p className="text-sm text-zinc-600">None.</p> : (
+                        <div className="space-y-1">
+                          {b.rows.map((r, i) => (
+                            <div key={i} className="flex items-baseline gap-3 text-sm">
+                              <span className="flex-1">{r.name}</span>
+                              <span className="font-mono text-zinc-400">{ipStats!.inr(r.price)}</span>
+                              <span className="font-mono text-zinc-300 w-16 text-right">{r.units.toLocaleString("en-IN")}u</span>
+                              <span className="font-mono text-zinc-500 w-16 text-right">{r.lost} lost</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </>)}
+              </div>
+            ) : (
               <div className="overflow-x-auto max-w-5xl border border-zinc-800">
                 <table className="w-full text-sm">
                   <thead><tr className="text-left text-[11px] font-mono text-zinc-500 uppercase bg-zinc-900"><th className="py-2 px-3">Item</th><th className="py-2 px-3">Category</th><th className="py-2 px-3 text-right">Revenue</th><th className="py-2 px-3 text-right">Units</th><th className="py-2 px-3 text-right">Avg ₹</th><th className="py-2 px-3 text-right">Lost</th><th className="py-2 px-3 text-right">Orders/day</th></tr></thead>
