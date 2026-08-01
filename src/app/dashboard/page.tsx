@@ -41,6 +41,7 @@ const ALL_STAFF = [
   { id: "ahila", name: "Ahila", role: "Custom Cakes & Asst Ops", report_time: "22:00", outlets: ["royapettah","adayar","bsr_mall","besant_nagar","pallavaram","ra_puram"] },
   { id: "niranjana", name: "Niranjana", role: "Founder's Office", report_time: null, outlets: [] },
   { id: "rafiq", name: "Rafiq", role: "Head Chef", report_time: null, outlets: [] },
+  { id: "bharani", name: "Bharani", role: "Auditor", report_time: null, outlets: ["besant_nagar"] },
 ];
 
 const OUTLETS = ["royapettah","adayar","bsr_mall","velachery","ra_puram","anna_nagar","pallavaram","vadapalani","besant_nagar","perumbakkam","tambaram","porur"];
