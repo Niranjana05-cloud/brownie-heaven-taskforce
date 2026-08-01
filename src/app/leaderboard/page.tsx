@@ -337,7 +337,7 @@ export default function LeaderboardPage() {
          <div style={{ color: C.muted, marginBottom: "10px" }}>Rank #{myRank} of {rows.length}</div>
           <div style={{ marginBottom: "16px", fontSize: "15px" }}>{isCurrentMonth ? "This month's cash: " : "Cash: "}<span style={{ color: cashColor(me.points, me.id), fontWeight: "bold" }}>{cashLabel(me.points, me.id)}</span></div>
           <div style={{ fontSize: "13px", lineHeight: 1.9 }}>
-            {(STARTING_POINTS[me.id] || 0) > 0 && <div>Starting credit: {STARTING_POINTS[me.id]}</div>}
+            {((viewYear * 12 + viewMonth) <= (2026 * 12 + 6)) && (STARTING_POINTS[me.id] || 0) > 0 && <div>Starting credit: {STARTING_POINTS[me.id]}</div>}
             <div>Daily reports: {me.myReports} filed → {me.dailyPoints >= 0 ? "+" : ""}{me.dailyPoints} (on-time +{PTS_DAILY}, late/back-dated -{PTS_DAILY_PENALTY})</div>
             {me.myLate > 0 && <div>Daily after cut-off: {me.myLate} × 0 = 0</div>}
             <div>Outlet reports (on time): {me.outlets - me.outletLate} × {PTS_REPORT} = {(me.outlets - me.outletLate) * PTS_REPORT}</div>
