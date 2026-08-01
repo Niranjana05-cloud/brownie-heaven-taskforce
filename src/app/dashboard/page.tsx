@@ -700,6 +700,8 @@ export default function DashboardPage() {
   })();
   const downloadIpPDF = async () => {
     if (!ipStats) { alert("No data to report."); return; }
+    window.scrollTo(0, 0);
+    await new Promise((r) => setTimeout(r, 50));
     const up = ipUploads.find((u) => u.id === ipSel);
     const C = { bg: "#FAF3E7", card: "#FFFDF8", ink: "#3E2415", soft: "#8A6A4A", line: "#EADBC2", green: "#2E7D32", red: "#C62828", orange: "#C2410C", gold: "#C8901E" };
     const inr = ipStats.inr;
@@ -707,7 +709,7 @@ export default function DashboardPage() {
     const html = `<div style="width:794px;background:${C.bg};font-family:'Segoe UI',Arial,sans-serif;color:${C.ink};padding:34px"><div style="font-size:22px;font-weight:900">Brownie Heaven — Item Performance</div><div style="font-size:11px;color:${C.soft};margin-bottom:14px">${up?.label || ""} · ${ipStats.rows.length} items</div><div style="background:${C.card};border:1px solid ${C.line};border-radius:12px;padding:16px;font-size:16px;font-weight:700;line-height:1.5">${ipStats.funny.headline}</div>${ipStats.funny.suspect ? `<div style="margin-top:8px;font-size:13px;color:${C.orange}">${ipStats.funny.suspect}</div>` : ""}${ipStats.funny.sweet ? `<div style="margin-top:4px;font-size:13px;color:${C.green}">${ipStats.funny.sweet}</div>` : ""}${ipStats.funny.dead ? `<div style="margin-top:4px;font-size:13px;color:${C.red}">${ipStats.funny.dead}</div>` : ""}${tbl("Stars", "The workhorses — protect these", ipStats.stars, C.green)}${tbl("Priced-too-high suspects", "High price, shy demand — worth a rethink", ipStats.suspects, C.orange)}${tbl("Sweet-spot winners", "Great price, flying off shelves", ipStats.sweet, C.green)}${tbl("Money left on the table", "People wanted it, didn't get it", ipStats.moneyLeft, C.gold)}${tbl("Dead weight", "Barely moving — rework or retire?", ipStats.dead, C.red)}<div style="font-size:9px;color:${C.soft};margin-top:16px">Directional signals from one export, not final verdicts. Confirm price effects across two windows before changing prices.</div></div>`;
     const lib = await loadH2P();
     const holder = document.createElement("div"); holder.style.position = "fixed"; holder.style.left = "-9999px"; holder.style.top = "0"; holder.innerHTML = html; document.body.appendChild(holder);
-    try { await lib().set({ margin: 0, filename: `ItemPerformance_${(up?.label || "report").replace(/[^a-z0-9]+/gi, "_")}.pdf`, image: { type: "jpeg", quality: 0.97 }, html2canvas: { scale: 2, backgroundColor: C.bg, scrollY: -window.scrollY, scrollX: 0, windowWidth: 900 }, jsPDF: { unit: "pt", format: "a4", orientation: "portrait" }, pagebreak: { mode: ["css", "legacy"] } }).from(holder.firstElementChild).save(); }
+    try { await lib().set({ margin: 0, filename: `ItemPerformance_${(up?.label || "report").replace(/[^a-z0-9]+/gi, "_")}.pdf`, image: { type: "jpeg", quality: 0.97 }, html2canvas: { scale: 2, backgroundColor: C.bg }, jsPDF: { unit: "pt", format: "a4", orientation: "portrait" }, pagebreak: { mode: ["css", "legacy"] } }).from(holder.firstElementChild).save(); }
     finally { document.body.removeChild(holder); }
   };
 
