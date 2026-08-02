@@ -97,7 +97,7 @@ const MONTHLY_BASE: Record<string, number> = {
 };
 // Scheduled target changes. Each applies from the given month (YYYY-MM) onward. Latest matching wins.
 const TARGET_UPDATES: { from: string; monthly: Record<string, number> }[] = [
-  { from: "2026-08", monthly: { besant_nagar: 500000, perumbakkam: 500000, porur: 1600000, adayar: 600000, vadapalani: 700000 } },
+ { from: "2026-08", monthly: { royapettah: 2400000, adayar: 600000, bsr_mall: 1050000, velachery: 700000, ra_puram: 650000, anna_nagar: 1800000, pallavaram: 700000, vadapalani: 700000, besant_nagar: 500000, perumbakkam: 550000, tambaram: 650000, porur: 1600000 } },
 ];
 function monthlyTargetFor(oid: string, ym: string): number {
   let v = MONTHLY_BASE[oid] || 0;
