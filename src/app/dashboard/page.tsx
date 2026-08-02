@@ -322,8 +322,9 @@ export default function DashboardPage() {
     setRepBusy(false);
   };
   const loadH2P = (): Promise<any> => new Promise((res, rej) => { const w = window as any; if (w.html2pdf) return res(w.html2pdf); const s = document.createElement("script"); s.src = "https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"; s.onload = () => res((window as any).html2pdf); s.onerror = () => rej(new Error("pdf lib failed")); document.body.appendChild(s); });
-  const downloadRangePDF = async () => {
+ const downloadRangePDF = async () => {
     setRepBusy(true);
+    window.scrollTo(0, 0); await new Promise((r) => setTimeout(r, 50));
     let h2p: any; try { h2p = await loadH2P(); } catch { alert("Could not load the PDF tool."); setRepBusy(false); return; }
     try {
       const rows = await fetchRangeReports(repOutlets.length ? repOutlets : (canAssign ? [] : (user?.outlets || [])));
@@ -409,7 +410,7 @@ export default function DashboardPage() {
                 ${card("🛵", "Delivery sales", star.Outlet, rs(star.Swiggy + star.Zomato), "Swiggy + Zomato combined 📦", "#FB923C")}
               </div>`;
             return `
-          <div style="display:flex;gap:18px;align-items:flex-start;margin:18px 0">
+            <div style="display:flex;gap:18px;align-items:flex-start;margin:18px 0;page-break-inside:avoid">
             <div style="text-align:center">
               <div style="font-size:13px;font-weight:800;color:${C.ink};margin-bottom:6px">📱 Channel mix</div>
               <svg width="150" height="150" viewBox="0 0 150 150">
@@ -445,7 +446,7 @@ export default function DashboardPage() {
             const quip = (bestI === 0 || bestI === 6) ? "Weekends are the goldmine 🤑 — staff up Fri–Sun!" : "Midweek is quietly carrying the month 💪 — most people bet on weekends.";
             return `
           <div style="font-size:15px;font-weight:800;margin:18px 0 10px;color:${C.ink}">📅 Which day sells best? <span style="font-size:11px;font-weight:400;color:${C.soft}">(avg sales per weekday)</span></div>
-          <div style="background:${C.card};border:1px solid ${C.line};border-radius:12px;padding:16px 18px;margin-bottom:18px">
+          <div style="background:${C.card};border:1px solid ${C.line};border-radius:12px;padding:16px 18px;margin-bottom:18px;page-break-inside:avoid">
             ${bars}
             <div style="margin-top:10px;font-size:12px;color:${C.ink};font-weight:700">🏆 Best: ${full[DOW[bestI]]} (${rs(avg[bestI])}/day) &nbsp;·&nbsp; 😴 Slowest: ${full[DOW[worstI]]} (${rs(avg[worstI])}/day)</div>
             <div style="font-size:11px;color:${C.soft};font-style:italic;margin-top:4px">${quip}</div>
