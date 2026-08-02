@@ -557,6 +557,7 @@ export default function DashboardPage() {
   const [prodParsed, setProdParsed] = useState<{ product: string; gmv: number | null; orders: number | null; units: number | null; areas: number | null }[] | null>(null);
   const [prodSaving, setProdSaving] = useState(false);
   const [compProducts, setCompProducts] = useState<any[]>([]);
+  const [compHeadlineOn, setCompHeadlineOn] = useState(true);
   const [ipUploads, setIpUploads] = useState<any[]>([]);
   const [ipSel, setIpSel] = useState<string>("");
   const [ipRows, setIpRows] = useState<any[]>([]);
@@ -594,6 +595,8 @@ export default function DashboardPage() {
     setCompPaste(""); setCompParsed(null);
     fetchCompRows();
   };
+  const fetchCompHeadline = async () => { const { data } = await supabase.from("app_settings").select("value").eq("key", "comp_headline_on").maybeSingle(); setCompHeadlineOn(data ? data.value !== "false" : true); };
+  const toggleCompHeadline = async () => { const nv = !compHeadlineOn; setCompHeadlineOn(nv); await supabase.from("app_settings").upsert({ key: "comp_headline_on", value: nv ? "true" : "false", updated_at: new Date().toISOString() }, { onConflict: "key" }); };
   const fetchCompProducts = async () => {
     const { data } = await supabase.from("competitor_products").select("*").order("gmv", { ascending: false, nullsFirst: false });
     setCompProducts(data || []);
@@ -646,7 +649,7 @@ export default function DashboardPage() {
     finally { document.body.removeChild(holder); }
   };
   useEffect(() => { if (activeTab === "competition") { fetchCompRows(); fetchCompProducts(); } /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [activeTab]);
-  useEffect(() => { if (user) { fetchCompRows(); fetchCompProducts(); } /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [user]);
+  useEffect(() => { if (user) { fetchCompRows(); fetchCompProducts(); fetchCompHeadline(); } /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [user]);
   const fetchIpRows = async (uploadId: string) => { const { data } = await supabase.from("item_perf_rows").select("*").eq("upload_id", uploadId).order("net_revenue", { ascending: false, nullsFirst: false }); setIpRows(data || []); };
   const fetchIpUploads = async () => { const { data } = await supabase.from("item_perf_uploads").select("*").order("created_at", { ascending: false }); setIpUploads(data || []); if (data && data.length) { setIpSel((cur) => cur || data[0].id); if (!ipSel) fetchIpRows(data[0].id); } };
   useEffect(() => { if (activeTab === "item_perf") fetchIpUploads(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [activeTab]);
@@ -1760,10 +1763,23 @@ else await fetchOutletReportsByDate(outletEntryDate);
        )}
        {activeTab === "tasks" && user?.role !== "Founder's Office" && user?.role !== "Head Chef" && (
          <div>
-            {canAssign && compTop && (
+            {canAssign && compTop && (compHeadlineOn || user?.role === "Owner") && (
               <div className="mb-6 border border-zinc-800 bg-zinc-900/40 px-5 py-4">
-                <p className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-1">Competition watch · {compActivePeriod}</p>
-                <p className="text-base md:text-lg">{compFunny.playful}</p>
+                <div className="flex justify-between items-start gap-4">
+                  <div className="flex-1">
+                    {compHeadlineOn ? (
+                      <>
+                        <p className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-1">Competition watch · {compActivePeriod}</p>
+                        <p className="text-base md:text-lg">{compFunny.playful}</p>
+                      </>
+                    ) : (
+                      <p className="text-[11px] font-mono text-zinc-600 uppercase tracking-widest">Competition headline is hidden for everyone</p>
+                    )}
+                  </div>
+                  {user?.role === "Owner" && (
+                    <button onClick={toggleCompHeadline} className="shrink-0 text-[10px] font-mono uppercase px-3 py-1.5 border border-zinc-700 hover:border-yellow-400 hover:text-yellow-400 transition-colors">{compHeadlineOn ? "Hide for all" : "Show for all"}</button>
+                  )}
+                </div>
               </div>
             )}
             <div className="flex justify-between items-start mb-6 pb-5 border-b border-zinc-800">
