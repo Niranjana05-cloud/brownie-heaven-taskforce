@@ -107,6 +107,48 @@ function monthlyTargetFor(oid: string, ym: string): number {
 function dailyTargetFor(oid: string, ym: string): number {
   return Math.round(monthlyTargetFor(oid, ym) / 30);
 }
+
+function computeCeoData(repRows: any[], monthRep: any[], win: string) {
+  const winDays = win === "1" ? 1 : win === "30" ? 30 : 7;
+  const duty = (ALL_STAFF as any[]).filter((s) => s.report_time);
+  const acct = duty.map((s) => {
+    const mine = repRows.filter((r) => r.staff_id === s.id);
+    const filed = mine.length, late = mine.filter((r) => r.is_late).length, onTime = filed - late, missed = Math.max(0, winDays - filed);
+    let tag = "", tone = "gray";
+    if (filed === 0) { tag = "nothing filed 👀 hello?"; tone = "red"; }
+    else if (missed === 0 && late === 0) { tag = `${filed}/${winDays} on time 🌟 the reliable one`; tone = "green"; }
+    else if (missed >= Math.ceil(winDays * 0.5)) { tag = `skipped ${missed}/${winDays} days 👻 ghost mode`; tone = "red"; }
+    else if (late >= Math.ceil(filed * 0.4)) { tag = `late ${late}/${filed} times 😴 loves the snooze button`; tone = "amber"; }
+    else { tag = `${onTime} on time · ${late} late · ${missed} missed`; tone = "gray"; }
+    return { id: s.id, name: s.name.split(" ")[0], filed, late, missed, tag, tone, score: missed * 2 + late };
+  }).sort((a, b) => a.score - b.score);
+  const ym = new Date().toISOString().slice(0, 7);
+  const _d = new Date();
+  const daysInMonth = new Date(_d.getFullYear(), _d.getMonth() + 1, 0).getDate();
+  const daysElapsed = Math.max(1, _d.getDate() - 1);
+  const perOutlet = OUTLETS.map((o) => {
+    const sales = monthRep.filter((r) => r.outlet_id === o).reduce((a, r) => a + (Number(r.shop_sales_value) || 0) + (Number(r.swiggy_sales_value) || 0) + (Number(r.zomato_sales_value) || 0), 0);
+    const tgt = monthlyTargetFor(o, ym);
+    return { o, name: OUTLET_NAMES[o] || o, sales, tgt, pace: tgt > 0 ? (sales / tgt) / (daysElapsed / daysInMonth) : 0, pct: tgt > 0 ? sales / tgt * 100 : 0 };
+  });
+  const monthSales = perOutlet.reduce((a, r) => a + r.sales, 0), monthTgt = perOutlet.reduce((a, r) => a + r.tgt, 0);
+  const salesPct = monthTgt > 0 ? monthSales / monthTgt * 100 : 0, timePct = daysInMonth > 0 ? daysElapsed / daysInMonth * 100 : 0, onTrack = salesPct >= timePct;
+  const sorted = [...perOutlet].filter((r) => r.tgt > 0 && r.sales > 0).sort((a, b) => a.pace - b.pace);
+  const drag = sorted[0], hero = sorted[sorted.length - 1];
+  const ideas: string[] = [];
+  const notFiling = acct.filter((a) => a.filed === 0);
+  const lateOnes = acct.filter((a) => a.filed > 0 && a.late >= Math.ceil(a.filed * 0.4));
+  const missingOnes = acct.filter((a) => a.filed > 0 && a.missed >= Math.ceil(winDays * 0.5));
+  if (notFiling.length >= 2) ideas.push(`${notFiling.length} people filed nothing this period — reporting discipline is slipping. A group reminder or a quick accountability chat would help.`);
+  else if (notFiling.length === 1) ideas.push(`${notFiling[0].name} filed nothing — follow up directly; could be a real issue or just slacking.`);
+  lateOnes.forEach((a) => ideas.push(`${a.name} is chronically late (${a.late}/${a.filed}). A fixed reminder time or a word in person usually fixes it.`));
+  missingOnes.forEach((a) => ideas.push(`${a.name} keeps skipping reports — worth understanding why before it becomes a habit.`));
+  if (!onTrack) ideas.push(`Month is behind pace (${salesPct.toFixed(0)}% sales vs ${timePct.toFixed(0)}% of the month gone). A weekend push, a combo offer, or leaning on the strong outlets could close the gap.`);
+  if (drag && drag.pct < 15) ideas.push(`${drag.name} is badly behind (${drag.pct.toFixed(0)}% of target). A direct call to the manager or a local promo could lift it.`);
+  if (hero && hero.pct >= 90) ideas.push(`${hero.name} is doing great (${hero.pct.toFixed(0)}%). Find out what's working there and copy it to weaker outlets.`);
+  if (ideas.length === 0) ideas.push(`Everything looks healthy — team is filing and the month's on pace. Keep the momentum. 🎉`);
+  return { winDays, acct, perOutlet, monthSales, monthTgt, salesPct, timePct, onTrack, drag, hero, ideas, ym, daysElapsed, daysInMonth };
+}
 const REPORT_FIELDS: Record<string, { label: string; key: string; type?: string }[]> = {
   arun: [
     { label: "Total Sales (Rs)", key: "total_sales" },
@@ -610,6 +652,22 @@ export default function DashboardPage() {
     const ym = new Date().toISOString().slice(0, 7);
     const { data: mrep } = await supabase.from("outlet_reports").select("outlet_id, shop_sales_value, swiggy_sales_value, zomato_sales_value, report_date").gte("report_date", `${ym}-01`).lte("report_date", eISO);
     setCeoMonthRep(mrep || []);
+  };
+
+  const downloadCeoPDF = async () => {
+    const ceo = computeCeoData(ceoRepRows, ceoMonthRep, ceoWin);
+    const C = { bg: "#FAF3E7", card: "#FFFDF8", ink: "#3E2415", soft: "#8A6A4A", line: "#EADBC2", green: "#2E7D32", red: "#C62828", amber: "#C8901E" };
+    const inr = (n: number) => "₹" + Math.round(n).toLocaleString("en-IN");
+    const hh = new Date().getHours();
+    const greet = hh < 12 ? "Good morning" : hh < 17 ? "Good afternoon" : "Good evening";
+    const acctRows = ceo.acct.map((a) => `<div style="margin:3px 0;font-size:12px"><b>${a.name}</b> — ${a.tag}</div>`).join("") + `<div style="margin:3px 0;font-size:12px;color:${C.soft}"><b>Niranjana</b> — Founder's Office, MIA from daily reports (but she built this thing)</div>`;
+    const ideaRows = ceo.ideas.map((i) => `<li style="margin:5px 0;font-size:12px">${i}</li>`).join("");
+    const html = `<div style="width:794px;background:${C.bg};font-family:'Segoe UI',Arial,sans-serif;color:${C.ink};padding:34px"><div style="font-size:21px;font-weight:900">${greet} — Brownie Heaven CEO Ops Brief</div><div style="font-size:11px;color:${C.soft};margin-bottom:16px">${ceo.ym} · day ${ceo.daysElapsed} of ${ceo.daysInMonth} · window: ${ceoWin === "1" ? "yesterday" : "last " + ceo.winDays + " days"}</div><div style="background:${C.card};border:1px solid ${C.line};border-radius:12px;padding:16px;margin-bottom:14px"><div style="font-size:14px;font-weight:800;margin-bottom:8px">Who's on top of it — and who's slipping</div>${acctRows}</div><div style="background:${C.card};border:1px solid ${C.line};border-radius:12px;padding:16px;margin-bottom:14px"><div style="font-size:14px;font-weight:800;margin-bottom:8px">Are we going to make the month?</div><div style="font-size:20px;font-weight:900">${inr(ceo.monthSales)}</div><div style="font-size:12px;color:${ceo.onTrack ? C.green : C.amber}">${ceo.salesPct.toFixed(0)}% of ${inr(ceo.monthTgt)} target · ${ceo.onTrack ? "on pace" : "behind pace"} (time elapsed ${ceo.timePct.toFixed(0)}%)</div>${ceo.drag ? `<div style="font-size:12px;color:${C.red};margin-top:6px">Dragging: ${ceo.drag.name} — ${ceo.drag.pct.toFixed(0)}% of target</div>` : ""}${ceo.hero ? `<div style="font-size:12px;color:${C.green}">Carrying: ${ceo.hero.name} — ${ceo.hero.pct.toFixed(0)}% of target</div>` : ""}</div><div style="background:${C.card};border:2px solid ${C.amber};border-radius:12px;padding:16px"><div style="font-size:14px;font-weight:800;margin-bottom:8px;color:${C.amber}">Ideas to act on</div><ul style="margin:0;padding-left:18px">${ideaRows}</ul></div></div>`;
+    const lib = await loadH2P();
+    window.scrollTo(0, 0); await new Promise((r) => setTimeout(r, 50));
+    const holder = document.createElement("div"); holder.style.position = "fixed"; holder.style.left = "-9999px"; holder.style.top = "0"; holder.innerHTML = html; document.body.appendChild(holder);
+    try { await lib().set({ margin: 0, filename: `CEO_Brief_${new Date().toISOString().split("T")[0]}.pdf`, image: { type: "jpeg", quality: 0.97 }, html2canvas: { scale: 2, backgroundColor: C.bg }, jsPDF: { unit: "pt", format: "a4", orientation: "portrait" }, pagebreak: { mode: ["css", "legacy"] } }).from(holder.firstElementChild).save(); }
+    finally { document.body.removeChild(holder); }
   };
   useEffect(() => {
     if (user && (user.role === "Owner" || user.role === "Founder's Office")) {
@@ -2838,43 +2896,22 @@ else await fetchOutletReportsByDate(outletEntryDate);
               ))}
             </div>
             {(() => {
-              const winDays = ceoWin === "1" ? 1 : ceoWin === "30" ? 30 : 7;
-              const duty = ALL_STAFF.filter((s) => (s as any).report_time);
-              const acct = duty.map((s) => {
-                const mine = ceoRepRows.filter((r) => r.staff_id === s.id);
-                const filed = mine.length, late = mine.filter((r) => r.is_late).length, onTime = filed - late, missed = Math.max(0, winDays - filed);
-                let tag = "", tone = "text-zinc-300";
-                if (filed === 0) { tag = "nothing filed 👀 hello?"; tone = "text-red-400"; }
-                else if (missed === 0 && late === 0) { tag = `${filed}/${winDays} on time 🌟 the reliable one`; tone = "text-green-400"; }
-                else if (missed >= Math.ceil(winDays * 0.5)) { tag = `skipped ${missed}/${winDays} days 👻 ghost mode`; tone = "text-red-400"; }
-                else if (late >= Math.ceil(filed * 0.4)) { tag = `late ${late}/${filed} times 😴 loves the snooze button`; tone = "text-yellow-400"; }
-                else { tag = `${onTime} on time · ${late} late · ${missed} missed`; tone = "text-zinc-300"; }
-                return { name: s.name.split(" ")[0], tag, tone, score: missed * 2 + late };
-              }).sort((a, b) => a.score - b.score);
-              const ym = new Date().toISOString().slice(0, 7);
-              const _d = new Date();
-              const daysInMonth = new Date(_d.getFullYear(), _d.getMonth() + 1, 0).getDate();
-              const daysElapsed = Math.max(1, _d.getDate() - 1);
-              const perOutlet = OUTLETS.map((o) => {
-                const sales = ceoMonthRep.filter((r) => r.outlet_id === o).reduce((a, r) => a + (Number(r.shop_sales_value) || 0) + (Number(r.swiggy_sales_value) || 0) + (Number(r.zomato_sales_value) || 0), 0);
-                const tgt = monthlyTargetFor(o, ym);
-                return { o, name: OUTLET_NAMES[o] || o, sales, tgt, pace: tgt > 0 ? (sales / tgt) / (daysElapsed / daysInMonth) : 0, pct: tgt > 0 ? sales / tgt * 100 : 0 };
-              });
-              const monthSales = perOutlet.reduce((a, r) => a + r.sales, 0), monthTgt = perOutlet.reduce((a, r) => a + r.tgt, 0);
-              const salesPct = monthTgt > 0 ? monthSales / monthTgt * 100 : 0, timePct = daysInMonth > 0 ? daysElapsed / daysInMonth * 100 : 0, onTrack = salesPct >= timePct;
-              const sorted = [...perOutlet].filter((r) => r.tgt > 0 && r.sales > 0).sort((a, b) => a.pace - b.pace);
-              const drag = sorted[0], hero = sorted[sorted.length - 1];
+              const ceo = computeCeoData(ceoRepRows, ceoMonthRep, ceoWin);
               const inr = (n: number) => "₹" + Math.round(n).toLocaleString("en-IN");
+              const toneC: Record<string, string> = { red: "text-red-400", green: "text-green-400", amber: "text-yellow-400", gray: "text-zinc-300" };
               return (
                 <>
+                  <div className="flex justify-end mb-4 max-w-3xl">
+                    <button onClick={downloadCeoPDF} className="bg-zinc-800 text-white px-4 py-2 text-sm font-semibold hover:bg-zinc-700 transition-colors">Download report (PDF)</button>
+                  </div>
                   <div className="mb-6 border border-zinc-800 p-5 max-w-3xl">
                     <p className="text-sm font-bold mb-1">👀 Who's on top of it — and who's slipping</p>
-                    <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mb-4">Report filing · {ceoWin === "1" ? "yesterday" : `last ${winDays} days`}</p>
+                    <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mb-4">Report filing · {ceoWin === "1" ? "yesterday" : `last ${ceo.winDays} days`}</p>
                     <div className="space-y-2">
-                      {acct.map((a) => (
+                      {ceo.acct.map((a) => (
                         <div key={a.name} className="flex items-baseline gap-2 text-sm">
                           <span className="font-medium w-24">{a.name}</span>
-                          <span className={`flex-1 ${a.tone}`}>{a.tag}</span>
+                          <span className={`flex-1 ${toneC[a.tone]}`}>{a.tag}</span>
                         </div>
                       ))}
                       <div className="flex items-baseline gap-2 text-sm pt-2 border-t border-zinc-900">
@@ -2885,22 +2922,28 @@ else await fetchOutletReportsByDate(outletEntryDate);
                   </div>
                   <div className="mb-6 border border-zinc-800 p-5 max-w-3xl">
                     <p className="text-sm font-bold mb-1">📈 Are we going to make the month?</p>
-                    <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mb-4">{ym} · day {daysElapsed} of {daysInMonth}</p>
+                    <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mb-4">{ceo.ym} · day {ceo.daysElapsed} of {ceo.daysInMonth}</p>
                     <div className="flex items-end justify-between mb-3 flex-wrap gap-3">
                       <div>
-                        <p className="text-3xl font-black">{inr(monthSales)}</p>
-                        <p className={`text-sm font-mono ${onTrack ? "text-green-400" : "text-yellow-400"}`}>{salesPct.toFixed(0)}% of {inr(monthTgt)} target · {onTrack ? "on pace ✅" : "behind pace ⚠️"}</p>
+                        <p className="text-3xl font-black">{inr(ceo.monthSales)}</p>
+                        <p className={`text-sm font-mono ${ceo.onTrack ? "text-green-400" : "text-yellow-400"}`}>{ceo.salesPct.toFixed(0)}% of {inr(ceo.monthTgt)} target · {ceo.onTrack ? "on pace ✅" : "behind pace ⚠️"}</p>
                       </div>
                       <div className="text-right text-xs text-zinc-500 font-mono">
-                        <p>Time elapsed: {timePct.toFixed(0)}%</p>
-                        <p>Sales so far: {salesPct.toFixed(0)}%</p>
+                        <p>Time elapsed: {ceo.timePct.toFixed(0)}%</p>
+                        <p>Sales so far: {ceo.salesPct.toFixed(0)}%</p>
                       </div>
                     </div>
-                    {drag && <p className="text-sm text-red-400">🔻 Dragging: <span className="font-medium">{drag.name}</span> — {drag.pct.toFixed(0)}% of target</p>}
-                    {hero && <p className="text-sm text-green-400 mt-0.5">🔺 Carrying: <span className="font-medium">{hero.name}</span> — {hero.pct.toFixed(0)}% of target</p>}
+                    {ceo.drag && <p className="text-sm text-red-400">🔻 Dragging: <span className="font-medium">{ceo.drag.name}</span> — {ceo.drag.pct.toFixed(0)}% of target</p>}
+                    {ceo.hero && <p className="text-sm text-green-400 mt-0.5">🔺 Carrying: <span className="font-medium">{ceo.hero.name}</span> — {ceo.hero.pct.toFixed(0)}% of target</p>}
                     <button onClick={() => setActiveTab("owner_outlets")} className="mt-4 text-xs font-mono uppercase text-zinc-400 hover:text-yellow-400 transition-colors">See full sales →</button>
                   </div>
-                  <p className="text-[10px] text-zinc-600 max-w-3xl">Accountability is based on daily report filing. Purchases, stock and wastage aren't tracked in TASKFORCE yet.</p>
+                  <div className="mb-6 border-2 border-yellow-500/30 bg-yellow-500/5 p-5 max-w-3xl">
+                    <p className="text-sm font-bold mb-3 text-yellow-400">💡 Ideas to act on</p>
+                    <ul className="space-y-2 list-disc list-inside">
+                      {ceo.ideas.map((idea, i) => <li key={i} className="text-sm text-white">{idea}</li>)}
+                    </ul>
+                  </div>
+                  <p className="text-[10px] text-zinc-600 max-w-3xl">Ideas are rule-based for now — the smarter AI-written version is the next phase. Purchases, stock and wastage aren't tracked yet.</p>
                 </>
               );
             })()}
