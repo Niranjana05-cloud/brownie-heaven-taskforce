@@ -293,7 +293,7 @@ export default function DashboardPage() {
   const [reports, setReports] = useState<Report[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
-  const [activeTab, setActiveTab] = useState<"tasks" | "my_report" | "all_reports" | "analytics" | "outlet_reports" | "owner_outlets" | "history" | "attendance" | "sales_target" | "payout" | "reconciliation" | "competition" | "item_perf">("tasks");
+  const [activeTab, setActiveTab] = useState<"tasks" | "my_report" | "all_reports" | "analytics" | "outlet_reports" | "owner_outlets" | "history" | "attendance" | "sales_target" | "payout" | "reconciliation" | "competition" | "item_perf" | "ceo_report">("tasks");
   const fetchRangeReports = async (outlets: string[]) => {
     let q = supabase.from("outlet_reports").select("*").gte("report_date", repFrom).lte("report_date", repTo).order("report_date", { ascending: true });
     if (outlets.length > 0) q = q.in("outlet_id", outlets);
@@ -558,6 +558,10 @@ export default function DashboardPage() {
   const [prodSaving, setProdSaving] = useState(false);
   const [compProducts, setCompProducts] = useState<any[]>([]);
   const [compHeadlineOn, setCompHeadlineOn] = useState(true);
+  const [ceoWin, setCeoWin] = useState("7");
+  const [ceoRepRows, setCeoRepRows] = useState<any[]>([]);
+  const [ceoMonthRep, setCeoMonthRep] = useState<any[]>([]);
+  const [ceoPopupOpen, setCeoPopupOpen] = useState(false);
   const [ipUploads, setIpUploads] = useState<any[]>([]);
   const [ipSel, setIpSel] = useState<string>("");
   const [ipRows, setIpRows] = useState<any[]>([]);
@@ -596,6 +600,25 @@ export default function DashboardPage() {
     fetchCompRows();
   };
   const fetchCompHeadline = async () => { const { data } = await supabase.from("app_settings").select("value").eq("key", "comp_headline_on").maybeSingle(); setCompHeadlineOn(data ? data.value !== "false" : true); };
+  const fetchCeoData = async (win: string) => {
+    const winDays = win === "1" ? 1 : win === "30" ? 30 : 7;
+    const end = new Date(Date.now() - 86400000);
+    const start = new Date(end.getTime() - (winDays - 1) * 86400000);
+    const sISO = start.toISOString().split("T")[0], eISO = end.toISOString().split("T")[0];
+    const { data: reps } = await supabase.from("reports").select("staff_id, is_late, submitted_at").gte("submitted_at", sISO).lte("submitted_at", eISO + "T23:59:59");
+    setCeoRepRows(reps || []);
+    const ym = new Date().toISOString().slice(0, 7);
+    const { data: mrep } = await supabase.from("outlet_reports").select("outlet_id, shop_sales_value, swiggy_sales_value, zomato_sales_value, report_date").gte("report_date", `${ym}-01`).lte("report_date", eISO);
+    setCeoMonthRep(mrep || []);
+  };
+  useEffect(() => {
+    if (user && (user.role === "Owner" || user.role === "Founder's Office")) {
+      fetchCeoData(ceoWin);
+      const today = new Date().toISOString().split("T")[0];
+      if (localStorage.getItem("ceo_popup_seen") !== today) { setCeoPopupOpen(true); localStorage.setItem("ceo_popup_seen", today); }
+    }
+    /* eslint-disable-next-line react-hooks/exhaustive-deps */
+  }, [user]);
   const toggleCompHeadline = async () => { const nv = !compHeadlineOn; setCompHeadlineOn(nv); await supabase.from("app_settings").upsert({ key: "comp_headline_on", value: nv ? "true" : "false", updated_at: new Date().toISOString() }, { onConflict: "key" }); };
   const fetchCompProducts = async () => {
     const { data } = await supabase.from("competitor_products").select("*").order("gmv", { ascending: false, nullsFirst: false });
@@ -1419,6 +1442,7 @@ else await fetchOutletReportsByDate(outletEntryDate);
   const canAssign = user?.role === "Owner" || user?.role === "Manager";
   const hasOutlets = (user?.outlets?.length || 0) > 0;
   const isFO = user?.role === "Founder's Office";
+  const isOwner = user?.role === "Owner";
   const canUploadItemPerf = user?.id === "ahila" || user?.id === "vishnu";
   const canViewItemPerf = canAssign || canUploadItemPerf;
   const hasReportDuty = user?.role !== "Owner" && user?.role !== "Founder's Office" && user?.role !== "Head Chef";
@@ -1538,6 +1562,11 @@ else await fetchOutletReportsByDate(outletEntryDate);
           <div onClick={() => { setActiveTab("tasks"); setSidebarOpen(false); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "tasks" ? "text-white bg-zinc-900 border-l-2 border-yellow-400" : "text-zinc-500 hover:text-white"}`}>
             <span>▣</span> Dashboard
           </div>
+          {(isOwner || isFO) && (
+            <div onClick={() => { setActiveTab("ceo_report"); setSidebarOpen(false); fetchCeoData(ceoWin); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "ceo_report" ? "text-white bg-zinc-900 border-l-2 border-yellow-400" : "text-zinc-500 hover:text-white"}`}>
+              <span>📊</span> CEO Report
+            </div>
+          )}
         <div onClick={() => { router.push("/leaderboard"); }} className="flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors text-zinc-500 hover:text-white">
             <span>🏆</span> Leaderboard
           </div>
@@ -1627,6 +1656,18 @@ else await fetchOutletReportsByDate(outletEntryDate);
       </aside>
 
       <main className="flex-1 px-4 py-4 md:px-8 md:py-8 overflow-auto">
+        {ceoPopupOpen && (isOwner || isFO) && (
+          <div style={{ position: "fixed", inset: 0, zIndex: 50, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center", padding: "1rem" }}>
+            <div className="bg-zinc-900 border border-zinc-700 max-w-md w-full p-6 relative">
+              <button onClick={() => setCeoPopupOpen(false)} className="absolute top-3 right-3 text-zinc-500 hover:text-white text-lg">✕</button>
+              <p className="text-2xl font-black mb-1">{(() => { const h = new Date().getHours(); return h < 12 ? "Good morning ☕" : h < 17 ? "Good afternoon 🌤️" : "Good evening 🌙"; })()}</p>
+              <p className="text-sm text-zinc-400 mb-4">{user?.name?.split(" ")[0]}, here's your Brownie Heaven morning brief.</p>
+              <p className="text-sm text-zinc-300 mb-5">A quick look at who's on top of their game, who's slipping, and how the month is tracking.</p>
+              <button onClick={() => { setCeoPopupOpen(false); setActiveTab("ceo_report"); fetchCeoData(ceoWin); }} className="w-full bg-yellow-400 text-black px-4 py-2.5 text-sm font-semibold hover:bg-yellow-300 transition-colors">Wanna go through today's report? →</button>
+              <button onClick={() => setCeoPopupOpen(false)} className="w-full mt-2 text-zinc-500 hover:text-white text-sm py-2">Maybe later — take me to the dashboard</button>
+            </div>
+          </div>
+        )}
 
        {activeTab === "tasks" && user && user.role === "Founder's Office" && <FounderDashboard user={user} />}
       {activeTab === "tasks" && user?.role === "Head Chef" && (
@@ -2785,6 +2826,87 @@ else await fetchOutletReportsByDate(outletEntryDate);
     </div>
   </div>
 )}
+        {activeTab === "ceo_report" && (isOwner || isFO) && (
+          <div>
+            <div className="mb-6">
+              <h2 className="text-3xl font-black tracking-tight">{(() => { const h = new Date().getHours(); return h < 12 ? "Good morning ☕" : h < 17 ? "Good afternoon 🌤️" : "Good evening 🌙"; })()}</h2>
+              <p className="text-sm text-zinc-500 mt-1">{user?.name?.split(" ")[0]} — here's the team and the month at a glance.</p>
+            </div>
+            <div className="flex gap-2 mb-6">
+              {[{ k: "1", l: "Yesterday" }, { k: "7", l: "Last 7 days" }, { k: "30", l: "Last 30 days" }].map((w) => (
+                <button key={w.k} onClick={() => { setCeoWin(w.k); fetchCeoData(w.k); }} className={`px-3 py-1.5 text-sm font-semibold transition-colors ${ceoWin === w.k ? "bg-yellow-400 text-black" : "bg-zinc-900 text-zinc-400 hover:text-white"}`}>{w.l}</button>
+              ))}
+            </div>
+            {(() => {
+              const winDays = ceoWin === "1" ? 1 : ceoWin === "30" ? 30 : 7;
+              const duty = ALL_STAFF.filter((s) => (s as any).report_time);
+              const acct = duty.map((s) => {
+                const mine = ceoRepRows.filter((r) => r.staff_id === s.id);
+                const filed = mine.length, late = mine.filter((r) => r.is_late).length, onTime = filed - late, missed = Math.max(0, winDays - filed);
+                let tag = "", tone = "text-zinc-300";
+                if (filed === 0) { tag = "nothing filed 👀 hello?"; tone = "text-red-400"; }
+                else if (missed === 0 && late === 0) { tag = `${filed}/${winDays} on time 🌟 the reliable one`; tone = "text-green-400"; }
+                else if (missed >= Math.ceil(winDays * 0.5)) { tag = `skipped ${missed}/${winDays} days 👻 ghost mode`; tone = "text-red-400"; }
+                else if (late >= Math.ceil(filed * 0.4)) { tag = `late ${late}/${filed} times 😴 loves the snooze button`; tone = "text-yellow-400"; }
+                else { tag = `${onTime} on time · ${late} late · ${missed} missed`; tone = "text-zinc-300"; }
+                return { name: s.name.split(" ")[0], tag, tone, score: missed * 2 + late };
+              }).sort((a, b) => a.score - b.score);
+              const ym = new Date().toISOString().slice(0, 7);
+              const _d = new Date();
+              const daysInMonth = new Date(_d.getFullYear(), _d.getMonth() + 1, 0).getDate();
+              const daysElapsed = Math.max(1, _d.getDate() - 1);
+              const perOutlet = OUTLETS.map((o) => {
+                const sales = ceoMonthRep.filter((r) => r.outlet_id === o).reduce((a, r) => a + (Number(r.shop_sales_value) || 0) + (Number(r.swiggy_sales_value) || 0) + (Number(r.zomato_sales_value) || 0), 0);
+                const tgt = monthlyTargetFor(o, ym);
+                return { o, name: OUTLET_NAMES[o] || o, sales, tgt, pace: tgt > 0 ? (sales / tgt) / (daysElapsed / daysInMonth) : 0, pct: tgt > 0 ? sales / tgt * 100 : 0 };
+              });
+              const monthSales = perOutlet.reduce((a, r) => a + r.sales, 0), monthTgt = perOutlet.reduce((a, r) => a + r.tgt, 0);
+              const salesPct = monthTgt > 0 ? monthSales / monthTgt * 100 : 0, timePct = daysInMonth > 0 ? daysElapsed / daysInMonth * 100 : 0, onTrack = salesPct >= timePct;
+              const sorted = [...perOutlet].filter((r) => r.tgt > 0 && r.sales > 0).sort((a, b) => a.pace - b.pace);
+              const drag = sorted[0], hero = sorted[sorted.length - 1];
+              const inr = (n: number) => "₹" + Math.round(n).toLocaleString("en-IN");
+              return (
+                <>
+                  <div className="mb-6 border border-zinc-800 p-5 max-w-3xl">
+                    <p className="text-sm font-bold mb-1">👀 Who's on top of it — and who's slipping</p>
+                    <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mb-4">Report filing · {ceoWin === "1" ? "yesterday" : `last ${winDays} days`}</p>
+                    <div className="space-y-2">
+                      {acct.map((a) => (
+                        <div key={a.name} className="flex items-baseline gap-2 text-sm">
+                          <span className="font-medium w-24">{a.name}</span>
+                          <span className={`flex-1 ${a.tone}`}>{a.tag}</span>
+                        </div>
+                      ))}
+                      <div className="flex items-baseline gap-2 text-sm pt-2 border-t border-zinc-900">
+                        <span className="font-medium w-24">Niranjana</span>
+                        <span className="flex-1 text-zinc-500">Founder's Office — MIA from daily reports 😎 but she built this thing, so we'll let it slide</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="mb-6 border border-zinc-800 p-5 max-w-3xl">
+                    <p className="text-sm font-bold mb-1">📈 Are we going to make the month?</p>
+                    <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mb-4">{ym} · day {daysElapsed} of {daysInMonth}</p>
+                    <div className="flex items-end justify-between mb-3 flex-wrap gap-3">
+                      <div>
+                        <p className="text-3xl font-black">{inr(monthSales)}</p>
+                        <p className={`text-sm font-mono ${onTrack ? "text-green-400" : "text-yellow-400"}`}>{salesPct.toFixed(0)}% of {inr(monthTgt)} target · {onTrack ? "on pace ✅" : "behind pace ⚠️"}</p>
+                      </div>
+                      <div className="text-right text-xs text-zinc-500 font-mono">
+                        <p>Time elapsed: {timePct.toFixed(0)}%</p>
+                        <p>Sales so far: {salesPct.toFixed(0)}%</p>
+                      </div>
+                    </div>
+                    {drag && <p className="text-sm text-red-400">🔻 Dragging: <span className="font-medium">{drag.name}</span> — {drag.pct.toFixed(0)}% of target</p>}
+                    {hero && <p className="text-sm text-green-400 mt-0.5">🔺 Carrying: <span className="font-medium">{hero.name}</span> — {hero.pct.toFixed(0)}% of target</p>}
+                    <button onClick={() => setActiveTab("owner_outlets")} className="mt-4 text-xs font-mono uppercase text-zinc-400 hover:text-yellow-400 transition-colors">See full sales →</button>
+                  </div>
+                  <p className="text-[10px] text-zinc-600 max-w-3xl">Accountability is based on daily report filing. Purchases, stock and wastage aren't tracked in TASKFORCE yet.</p>
+                </>
+              );
+            })()}
+          </div>
+        )}
+
         {activeTab === "item_perf" && (
           <div>
             <div className="mb-8 pb-5 border-b border-zinc-800">
