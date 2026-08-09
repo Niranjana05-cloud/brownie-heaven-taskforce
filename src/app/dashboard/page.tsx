@@ -604,6 +604,10 @@ export default function DashboardPage() {
   const [ceoRepRows, setCeoRepRows] = useState<any[]>([]);
   const [ceoMonthRep, setCeoMonthRep] = useState<any[]>([]);
   const [ceoPopupOpen, setCeoPopupOpen] = useState(false);
+  const [marginMonth, setMarginMonth] = useState("");
+  const [marginMonths, setMarginMonths] = useState<string[]>([]);
+  const [marginData, setMarginData] = useState<any[]>([]);
+  const [marginLoading, setMarginLoading] = useState(false);
   const [ipUploads, setIpUploads] = useState<any[]>([]);
   const [ipSel, setIpSel] = useState<string>("");
   const [ipRows, setIpRows] = useState<any[]>([]);
@@ -653,6 +657,20 @@ export default function DashboardPage() {
     const { data: mrep } = await supabase.from("outlet_reports").select("outlet_id, shop_sales_value, swiggy_sales_value, zomato_sales_value, report_date").gte("report_date", `${ym}-01`).lte("report_date", eISO);
     setCeoMonthRep(mrep || []);
   };
+  const fetchMargin = async (month: string) => {
+    setMarginLoading(true);
+    try {
+      const res = await fetch(`/api/margin?month=${month}`);
+      const json = await res.json();
+      setMarginData(json.success ? json.margins : []);
+    } finally { setMarginLoading(false); }
+  };
+  const fetchMarginMonths = async () => {
+    const { data } = await supabase.from("atlas_monthly_results").select("month");
+    const uniq = Array.from(new Set((data || []).map((r: any) => r.month))).sort().reverse() as string[];
+    setMarginMonths(uniq);
+    if (uniq.length) { setMarginMonth(uniq[0]); fetchMargin(uniq[0]); }
+  };
 
   const downloadCeoPDF = async () => {
     const ceo = computeCeoData(ceoRepRows, ceoMonthRep, ceoWin);
@@ -669,6 +687,10 @@ export default function DashboardPage() {
     try { await lib().set({ margin: 0, filename: `CEO_Brief_${new Date().toISOString().split("T")[0]}.pdf`, image: { type: "jpeg", quality: 0.97 }, html2canvas: { scale: 2, backgroundColor: C.bg }, jsPDF: { unit: "pt", format: "a4", orientation: "portrait" }, pagebreak: { mode: ["css", "legacy"] } }).from(holder.firstElementChild).save(); }
     finally { document.body.removeChild(holder); }
   };
+  useEffect(() => {
+    if (activeTab === "ceo_report" && marginMonths.length === 0) { fetchMarginMonths(); }
+    /* eslint-disable-next-line react-hooks/exhaustive-deps */
+  }, [activeTab]);
   useEffect(() => {
     if (user && (user.role === "Owner" || user.role === "Founder's Office")) {
       fetchCeoData(ceoWin);
@@ -2942,6 +2964,48 @@ else await fetchOutletReportsByDate(outletEntryDate);
                     <ul className="space-y-2 list-disc list-inside">
                       {ceo.ideas.map((idea, i) => <li key={i} className="text-sm text-white">{idea}</li>)}
                     </ul>
+                  </div>
+                  <div className="mb-6 border border-zinc-800 p-5 max-w-3xl">
+                    <div className="flex items-center justify-between mb-1">
+                      <p className="text-sm font-bold">💰 Gross margin by outlet</p>
+                      {marginMonths.length > 0 && (
+                        <select value={marginMonth} onChange={(e) => { setMarginMonth(e.target.value); fetchMargin(e.target.value); }} className="bg-black border border-zinc-800 text-white px-2 py-1 text-xs focus:outline-none focus:border-yellow-400">
+                          {marginMonths.map((m) => <option key={m} value={m}>{m}</option>)}
+                        </select>
+                      )}
+                    </div>
+                    <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mb-4">Sales − true food cost · dispatch-based</p>
+                    {marginLoading ? (
+                      <p className="text-sm text-zinc-500">Loading…</p>
+                    ) : marginData.length === 0 ? (
+                      <p className="text-sm text-zinc-500">No data for this month yet.</p>
+                    ) : (
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                          <thead>
+                            <tr className="text-left text-[11px] font-mono text-zinc-500 uppercase">
+                              <th className="py-1">Outlet</th>
+                              <th className="py-1 text-right">Sales</th>
+                              <th className="py-1 text-right">Food cost</th>
+                              <th className="py-1 text-right">Margin</th>
+                              <th className="py-1 text-right">%</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {[...marginData].sort((a: any, b: any) => (a.marginPercent ?? 0) - (b.marginPercent ?? 0)).map((m: any) => (
+                              <tr key={m.outletId} className="border-t border-zinc-800">
+                                <td className="py-1.5">{m.outletName}</td>
+                                <td className="py-1.5 text-right font-mono">{inr(m.salesNet)}</td>
+                                <td className="py-1.5 text-right font-mono text-zinc-400">{inr(m.cogs)}</td>
+                                <td className={`py-1.5 text-right font-mono ${m.grossMargin < 0 ? "text-red-400" : "text-zinc-300"}`}>{inr(m.grossMargin)}</td>
+                                <td className={`py-1.5 text-right font-mono ${m.marginPercent == null ? "text-zinc-600" : m.marginPercent < 40 ? "text-red-400" : m.marginPercent < 60 ? "text-yellow-400" : "text-green-400"}`}>{m.marginPercent == null ? "—" : m.marginPercent.toFixed(1) + "%"}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                        <p className="text-[10px] text-zinc-600 mt-3">A few products (combo boxes, some newer items) don't have a confirmed recipe cost yet, so their cost is left out — true margin is a little lower than shown. Franchise outlets aren't included.</p>
+                      </div>
+                    )}
                   </div>
                   <p className="text-[10px] text-zinc-600 max-w-3xl">Ideas are rule-based for now — the smarter AI-written version is the next phase. Purchases, stock and wastage aren't tracked yet.</p>
                 </>
