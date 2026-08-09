@@ -608,6 +608,7 @@ export default function DashboardPage() {
   const [marginMonths, setMarginMonths] = useState<string[]>([]);
   const [marginData, setMarginData] = useState<any[]>([]);
   const [marginLoading, setMarginLoading] = useState(false);
+  const [ceoPushSending, setCeoPushSending] = useState(false);
   const [ipUploads, setIpUploads] = useState<any[]>([]);
   const [ipSel, setIpSel] = useState<string>("");
   const [ipRows, setIpRows] = useState<any[]>([]);
@@ -680,7 +681,9 @@ export default function DashboardPage() {
     const greet = hh < 12 ? "Good morning" : hh < 17 ? "Good afternoon" : "Good evening";
     const acctRows = ceo.acct.map((a) => `<div style="margin:3px 0;font-size:12px"><b>${a.name}</b> — ${a.tag}</div>`).join("") + `<div style="margin:3px 0;font-size:12px;color:${C.soft}"><b>Niranjana</b> — Founder's Office, MIA from daily reports (but she built this thing)</div>`;
     const ideaRows = ceo.ideas.map((i) => `<li style="margin:5px 0;font-size:12px">${i}</li>`).join("");
-    const html = `<div style="width:794px;background:${C.bg};font-family:'Segoe UI',Arial,sans-serif;color:${C.ink};padding:34px"><div style="font-size:21px;font-weight:900">${greet} — Brownie Heaven CEO Ops Brief</div><div style="font-size:11px;color:${C.soft};margin-bottom:16px">${ceo.ym} · day ${ceo.daysElapsed} of ${ceo.daysInMonth} · window: ${ceoWin === "1" ? "yesterday" : "last " + ceo.winDays + " days"}</div><div style="background:${C.card};border:1px solid ${C.line};border-radius:12px;padding:16px;margin-bottom:14px"><div style="font-size:14px;font-weight:800;margin-bottom:8px">Who's on top of it — and who's slipping</div>${acctRows}</div><div style="background:${C.card};border:1px solid ${C.line};border-radius:12px;padding:16px;margin-bottom:14px"><div style="font-size:14px;font-weight:800;margin-bottom:8px">Are we going to make the month?</div><div style="font-size:20px;font-weight:900">${inr(ceo.monthSales)}</div><div style="font-size:12px;color:${ceo.onTrack ? C.green : C.amber}">${ceo.salesPct.toFixed(0)}% of ${inr(ceo.monthTgt)} target · ${ceo.onTrack ? "on pace" : "behind pace"} (time elapsed ${ceo.timePct.toFixed(0)}%)</div>${ceo.drag ? `<div style="font-size:12px;color:${C.red};margin-top:6px">Dragging: ${ceo.drag.name} — ${ceo.drag.pct.toFixed(0)}% of target</div>` : ""}${ceo.hero ? `<div style="font-size:12px;color:${C.green}">Carrying: ${ceo.hero.name} — ${ceo.hero.pct.toFixed(0)}% of target</div>` : ""}</div><div style="background:${C.card};border:2px solid ${C.amber};border-radius:12px;padding:16px"><div style="font-size:14px;font-weight:800;margin-bottom:8px;color:${C.amber}">Ideas to act on</div><ul style="margin:0;padding-left:18px">${ideaRows}</ul></div></div>`;
+    const marginRows = marginData.map((m: any) => `<tr><td style="padding:4px 6px;font-size:11px">${m.outletName}</td><td style="padding:4px 6px;font-size:11px;text-align:right">${inr(m.salesNet)}</td><td style="padding:4px 6px;font-size:11px;text-align:right;color:${C.soft}">${inr(m.cogs)}</td><td style="padding:4px 6px;font-size:11px;text-align:right;font-weight:700;color:${m.marginPercent == null ? C.soft : m.marginPercent < 40 ? C.red : m.marginPercent < 60 ? C.amber : C.green}">${m.marginPercent == null ? "—" : m.marginPercent.toFixed(1) + "%"}</td></tr>`).join("");
+    const marginCard = marginData.length > 0 ? `<div style="background:${C.card};border:1px solid ${C.line};border-radius:12px;padding:16px;margin-bottom:14px"><div style="font-size:14px;font-weight:800;margin-bottom:8px">💰 Gross margin by outlet — ${marginMonth}</div><table style="width:100%;border-collapse:collapse"><thead><tr style="text-align:left"><th style="font-size:10px;color:${C.soft};padding:4px 6px">OUTLET</th><th style="font-size:10px;color:${C.soft};padding:4px 6px;text-align:right">SALES</th><th style="font-size:10px;color:${C.soft};padding:4px 6px;text-align:right">COST</th><th style="font-size:10px;color:${C.soft};padding:4px 6px;text-align:right">MARGIN %</th></tr></thead><tbody>${marginRows}</tbody></table></div>` : "";
+    const html = `<div style="width:794px;background:${C.bg};font-family:'Segoe UI',Arial,sans-serif;color:${C.ink};padding:34px"><div style="font-size:21px;font-weight:900">${greet} — Brownie Heaven CEO Ops Brief</div><div style="font-size:11px;color:${C.soft};margin-bottom:16px">${ceo.ym} · day ${ceo.daysElapsed} of ${ceo.daysInMonth} · window: ${ceoWin === "1" ? "yesterday" : "last " + ceo.winDays + " days"}</div><div style="background:${C.card};border:1px solid ${C.line};border-radius:12px;padding:16px;margin-bottom:14px"><div style="font-size:14px;font-weight:800;margin-bottom:8px">Who's on top of it — and who's slipping</div>${acctRows}</div><div style="background:${C.card};border:1px solid ${C.line};border-radius:12px;padding:16px;margin-bottom:14px"><div style="font-size:14px;font-weight:800;margin-bottom:8px">Are we going to make the month?</div><div style="font-size:20px;font-weight:900">${inr(ceo.monthSales)}</div><div style="font-size:12px;color:${ceo.onTrack ? C.green : C.amber}">${ceo.salesPct.toFixed(0)}% of ${inr(ceo.monthTgt)} target · ${ceo.onTrack ? "on pace" : "behind pace"} (time elapsed ${ceo.timePct.toFixed(0)}%)</div>${ceo.drag ? `<div style="font-size:12px;color:${C.red};margin-top:6px">Dragging: ${ceo.drag.name} — ${ceo.drag.pct.toFixed(0)}% of target</div>` : ""}${ceo.hero ? `<div style="font-size:12px;color:${C.green}">Carrying: ${ceo.hero.name} — ${ceo.hero.pct.toFixed(0)}% of target</div>` : ""}</div>${marginCard}<div style="background:${C.card};border:2px solid ${C.amber};border-radius:12px;padding:16px"><div style="font-size:14px;font-weight:800;margin-bottom:8px;color:${C.amber}">Ideas to act on</div><ul style="margin:0;padding-left:18px">${ideaRows}</ul></div></div>`;
     const lib = await loadH2P();
     window.scrollTo(0, 0); await new Promise((r) => setTimeout(r, 50));
     const holder = document.createElement("div"); holder.style.position = "fixed"; holder.style.left = "-9999px"; holder.style.top = "0"; holder.innerHTML = html; document.body.appendChild(holder);
@@ -695,11 +698,27 @@ export default function DashboardPage() {
     if (user && (user.role === "Owner" || user.role === "Founder's Office")) {
       fetchCeoData(ceoWin);
       const today = new Date().toISOString().split("T")[0];
-      if (localStorage.getItem("ceo_popup_seen") !== today) { setCeoPopupOpen(true); localStorage.setItem("ceo_popup_seen", today); }
+      let showPopup = localStorage.getItem("ceo_popup_seen") !== today;
+      (async () => {
+        const { data: pushRow } = await supabase.from("app_settings").select("value").eq("key", "ceo_push_ts").maybeSingle();
+        const pushTs = pushRow?.value;
+        if (pushTs && pushTs !== localStorage.getItem("ceo_push_seen_ts")) {
+          showPopup = true;
+          localStorage.setItem("ceo_push_seen_ts", pushTs);
+        }
+        if (showPopup) { setCeoPopupOpen(true); localStorage.setItem("ceo_popup_seen", today); }
+      })();
     }
     /* eslint-disable-next-line react-hooks/exhaustive-deps */
   }, [user]);
   const toggleCompHeadline = async () => { const nv = !compHeadlineOn; setCompHeadlineOn(nv); await supabase.from("app_settings").upsert({ key: "comp_headline_on", value: nv ? "true" : "false", updated_at: new Date().toISOString() }, { onConflict: "key" }); };
+  const pushCeoPopupToNishant = async () => {
+    setCeoPushSending(true);
+    try {
+      await supabase.from("app_settings").upsert({ key: "ceo_push_ts", value: new Date().toISOString(), updated_at: new Date().toISOString() }, { onConflict: "key" });
+      alert("Pushed — Nishant will see the popup next time he opens TASKFORCE (or right away if he already has it open).");
+    } finally { setCeoPushSending(false); }
+  };
   const fetchCompProducts = async () => {
     const { data } = await supabase.from("competitor_products").select("*").order("gmv", { ascending: false, nullsFirst: false });
     setCompProducts(data || []);
@@ -2924,6 +2943,7 @@ else await fetchOutletReportsByDate(outletEntryDate);
               return (
                 <>
                   <div className="flex justify-end mb-4 max-w-3xl">
+                    {isFO && <button onClick={pushCeoPopupToNishant} disabled={ceoPushSending} className="bg-yellow-400 text-black px-4 py-2 text-sm font-semibold hover:bg-yellow-300 disabled:opacity-50 transition-colors">{ceoPushSending ? "Pushing…" : "📣 Push to Nishant"}</button>}
                     <button onClick={downloadCeoPDF} className="bg-zinc-800 text-white px-4 py-2 text-sm font-semibold hover:bg-zinc-700 transition-colors">Download report (PDF)</button>
                   </div>
                   <div className="mb-6 border border-zinc-800 p-5 max-w-3xl">
