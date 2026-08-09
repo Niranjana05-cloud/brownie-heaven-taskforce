@@ -28,13 +28,27 @@ export async function getOutletMargins(month: string): Promise<OutletMargin[]> {
   const [year, mon] = month.split('-').map(Number);
   const nextMonth = mon === 12 ? `${year + 1}-01-01` : `${year}-${String(mon + 1).padStart(2, '0')}-01`;
 
-  const { data: dispatchRows, error: dispatchError } = await supabaseStock
-    .from('outlet_supply_ledger')
-    .select('outlet, product, qty')
-    .gte('date', startDate)
-    .lt('date', nextMonth);
+  // Supabase caps a single query at 1000 rows by default — page through
+  // in batches until a page comes back with fewer than pageSize rows.
+  const pageSize = 1000;
+  let dispatchRows: { outlet: string; product: string; qty: number }[] = [];
+  let page = 0;
+  while (true) {
+    const from = page * pageSize;
+    const to = from + pageSize - 1;
+    const { data: pageRows, error: dispatchError } = await supabaseStock
+      .from('outlet_supply_ledger')
+      .select('outlet, product, qty')
+      .gte('date', startDate)
+      .lt('date', nextMonth)
+      .range(from, to);
 
-  if (dispatchError) throw new Error(`Dispatch query failed: ${dispatchError.message}`);
+    if (dispatchError) throw new Error(`Dispatch query failed: ${dispatchError.message}`);
+
+    dispatchRows = dispatchRows.concat(pageRows ?? []);
+    if (!pageRows || pageRows.length < pageSize) break;
+    page += 1;
+  }
 
   // 3. Aggregate cost per outlet (by Stock outlet name)
   const cogsByOutletName: Record<string, number> = {};
