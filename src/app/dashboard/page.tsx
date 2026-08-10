@@ -149,6 +149,42 @@ function computeCeoData(repRows: any[], monthRep: any[], win: string) {
   if (ideas.length === 0) ideas.push(`Everything looks healthy — team is filing and the month's on pace. Keep the momentum. 🎉`);
   return { winDays, acct, perOutlet, monthSales, monthTgt, salesPct, timePct, onTrack, drag, hero, ideas, ym, daysElapsed, daysInMonth };
 }
+function computeCeoCustom(rows: any[], from: string, to: string, outletsSel: string[]) {
+  const days = Math.max(1, Math.round((new Date(to).getTime() - new Date(from).getTime()) / 86400000) + 1);
+  const duty = (ALL_STAFF as any[]).filter((s) => s.report_time);
+  const acct = duty.map((s) => {
+    const mine = rows.filter((r) => r.staff_id === s.id);
+    const filed = mine.length, late = mine.filter((r) => r.is_late).length, onTime = filed - late, missed = Math.max(0, days - filed);
+    let tag = "";
+    if (filed === 0) tag = "nothing filed 👀 hello?";
+    else if (missed === 0 && late === 0) tag = `${filed}/${days} on time 🌟 the reliable one`;
+    else if (missed >= Math.ceil(days * 0.5)) tag = `skipped ${missed}/${days} days 👻 ghost mode`;
+    else if (late >= Math.ceil(filed * 0.4)) tag = `late ${late}/${filed} times 😴 loves the snooze button`;
+    else tag = `${onTime} on time · ${late} late · ${missed} missed`;
+    return { id: s.id, name: s.name.split(" ")[0], filed, late, missed, tag };
+  });
+  const activeOutlets = outletsSel.length ? outletsSel : OUTLETS;
+  const ymFrom = from.slice(0, 7);
+  const perOutlet = activeOutlets.map((o) => {
+    const oRows = rows.filter((r) => r.outlet_id === o);
+    const sales = oRows.reduce((a, r) => a + (Number(r.shop_sales_value) || 0) + (Number(r.swiggy_sales_value) || 0) + (Number(r.zomato_sales_value) || 0), 0);
+    const tgt = dailyTargetFor(o, ymFrom) * days;
+    return { o, name: OUTLET_NAMES[o] || o, sales, tgt, pct: tgt > 0 ? (sales / tgt) * 100 : 0 };
+  });
+  const periodSales = perOutlet.reduce((a, r) => a + r.sales, 0), periodTgt = perOutlet.reduce((a, r) => a + r.tgt, 0);
+  const salesPct = periodTgt > 0 ? (periodSales / periodTgt) * 100 : 0;
+  const sortedByPct = [...perOutlet].filter((r) => r.tgt > 0 && r.sales > 0).sort((a, b) => a.pct - b.pct);
+  const drag = sortedByPct[0], hero = sortedByPct[sortedByPct.length - 1];
+  const ideas: string[] = [];
+  const notFiling = acct.filter((a) => a.filed === 0);
+  if (notFiling.length >= 2) ideas.push(`${notFiling.length} people filed nothing this period — reporting discipline is slipping.`);
+  else if (notFiling.length === 1) ideas.push(`${notFiling[0].name} filed nothing this period — worth a follow-up.`);
+  if (periodTgt > 0 && salesPct < 90) ideas.push(`Sales are at ${salesPct.toFixed(0)}% of target for this period.`);
+  if (drag && drag.pct < 40) ideas.push(`${drag.name} is badly behind (${drag.pct.toFixed(0)}% of target) for this period.`);
+  if (hero && hero.pct >= 90) ideas.push(`${hero.name} is doing great (${hero.pct.toFixed(0)}%) this period.`);
+  if (ideas.length === 0) ideas.push(`Everything looks healthy for this period. 🎉`);
+  return { days, acct, perOutlet, periodSales, periodTgt, salesPct, drag, hero, ideas };
+}
 const REPORT_FIELDS: Record<string, { label: string; key: string; type?: string }[]> = {
   arun: [
     { label: "Total Sales (Rs)", key: "total_sales" },
@@ -632,6 +668,11 @@ export default function DashboardPage() {
   const [marginData, setMarginData] = useState<any[]>([]);
   const [marginLoading, setMarginLoading] = useState(false);
   const [ceoPushSending, setCeoPushSending] = useState(false);
+  const [ceoCustomOpen, setCeoCustomOpen] = useState(false);
+  const [ceoCustomFrom, setCeoCustomFrom] = useState("");
+  const [ceoCustomTo, setCeoCustomTo] = useState("");
+  const [ceoCustomOutlets, setCeoCustomOutlets] = useState<string[]>([]);
+  const [ceoCustomBusy, setCeoCustomBusy] = useState(false);
   const [ipUploads, setIpUploads] = useState<any[]>([]);
   const [ipSel, setIpSel] = useState<string>("");
   const [ipRows, setIpRows] = useState<any[]>([]);
@@ -712,6 +753,47 @@ export default function DashboardPage() {
     const holder = document.createElement("div"); holder.style.position = "fixed"; holder.style.left = "-9999px"; holder.style.top = "0"; holder.innerHTML = html; document.body.appendChild(holder);
     try { await lib().set({ margin: 0, filename: `CEO_Brief_${new Date().toISOString().split("T")[0]}.pdf`, image: { type: "jpeg", quality: 0.97 }, html2canvas: { scale: 2, backgroundColor: C.bg }, jsPDF: { unit: "pt", format: "a4", orientation: "portrait" }, pagebreak: { mode: ["css", "legacy"] } }).from(holder.firstElementChild).save(); }
     finally { document.body.removeChild(holder); }
+  };
+  const openCeoCustom = () => {
+    const today = new Date().toISOString().slice(0, 10);
+    const weekAgo = new Date(Date.now() - 6 * 86400000).toISOString().slice(0, 10);
+    setCeoCustomFrom(weekAgo); setCeoCustomTo(today); setCeoCustomOutlets([]);
+    setCeoCustomOpen(true);
+  };
+  const downloadCeoPDFCustom = async () => {
+    if (!ceoCustomFrom || !ceoCustomTo) { alert("Pick both a from and to date."); return; }
+    setCeoCustomBusy(true);
+    try {
+      const { data, error } = await supabase.from("outlet_reports").select("*").gte("report_date", ceoCustomFrom).lte("report_date", ceoCustomTo);
+      if (error) throw error;
+      const rows = data || [];
+      const cd = computeCeoCustom(rows, ceoCustomFrom, ceoCustomTo, ceoCustomOutlets);
+      const C = { bg: "#FAF3E7", card: "#FFFDF8", ink: "#3E2415", soft: "#8A6A4A", line: "#EADBC2", green: "#2E7D32", red: "#C62828", amber: "#C8901E" };
+      const inr = (n: number) => "₹" + Math.round(n).toLocaleString("en-IN");
+      const acctRows = cd.acct.map((a) => `<div style="margin:3px 0;font-size:12px"><b>${a.name}</b> — ${a.tag}</div>`).join("");
+      const ideaRows = cd.ideas.map((i) => `<li style="margin:5px 0;font-size:12px">${i}</li>`).join("");
+      const outletRowsHtml = cd.perOutlet.map((o) => `<tr><td style="padding:5px 8px;border-bottom:1px solid ${C.line};font-size:11px">${o.name}</td><td style="padding:5px 8px;border-bottom:1px solid ${C.line};text-align:right;font-size:11px">${inr(o.sales)}</td><td style="padding:5px 8px;border-bottom:1px solid ${C.line};text-align:right;font-size:11px;color:${C.soft}">${o.tgt > 0 ? inr(o.tgt) : "-"}</td><td style="padding:5px 8px;border-bottom:1px solid ${C.line};text-align:right;font-size:11px;font-weight:700;color:${o.tgt > 0 ? (o.pct >= 100 ? C.green : o.pct >= 60 ? C.amber : C.red) : C.soft}">${o.tgt > 0 ? o.pct.toFixed(0) + "%" : "-"}</td></tr>`).join("");
+      // Margin data is monthly-only — pull whichever month the "from" date falls in, labelled clearly since it may not exactly match the custom range.
+      let marginCardCustom = "";
+      try {
+        const ym = ceoCustomFrom.slice(0, 7);
+        const res = await fetch(`/api/margin?month=${ym}`);
+        const json = await res.json();
+        if (json.success && json.margins?.length) {
+          const filtered = ceoCustomOutlets.length ? json.margins.filter((m: any) => ceoCustomOutlets.includes(m.outletId)) : json.margins;
+          const mRows = filtered.map((m: any) => `<tr><td style="padding:4px 6px;font-size:11px">${m.outletName}</td><td style="padding:4px 6px;font-size:11px;text-align:right">${inr(m.salesNet)}</td><td style="padding:4px 6px;font-size:11px;text-align:right;color:${C.soft}">${inr(m.cogs)}</td><td style="padding:4px 6px;font-size:11px;text-align:right;font-weight:700;color:${m.marginPercent == null ? C.soft : m.marginPercent < 40 ? C.red : m.marginPercent < 60 ? C.amber : C.green}">${m.marginPercent == null ? "—" : m.marginPercent.toFixed(1) + "%"}</td></tr>`).join("");
+          marginCardCustom = `<div style="background:${C.card};border:1px solid ${C.line};border-radius:12px;padding:16px;margin-bottom:14px"><div style="font-size:14px;font-weight:800;margin-bottom:8px">💰 Gross margin by outlet — ${ym}</div><div style="font-size:10px;color:${C.soft};margin-bottom:8px">Margin is calculated monthly, so this shows ${ym} regardless of the exact custom range above.</div><table style="width:100%;border-collapse:collapse"><thead><tr style="text-align:left"><th style="font-size:10px;color:${C.soft};padding:4px 6px">OUTLET</th><th style="font-size:10px;color:${C.soft};padding:4px 6px;text-align:right">SALES</th><th style="font-size:10px;color:${C.soft};padding:4px 6px;text-align:right">COST</th><th style="font-size:10px;color:${C.soft};padding:4px 6px;text-align:right">MARGIN %</th></tr></thead><tbody>${mRows}</tbody></table></div>`;
+        }
+      } catch { /* margin optional — skip silently if it fails */ }
+      const html = `<div style="width:794px;background:${C.bg};font-family:'Segoe UI',Arial,sans-serif;color:${C.ink};padding:34px"><div style="font-size:21px;font-weight:900">Brownie Heaven — Custom CEO Report</div><div style="font-size:11px;color:${C.soft};margin-bottom:16px">${ceoCustomFrom} → ${ceoCustomTo} · ${ceoCustomOutlets.length ? ceoCustomOutlets.length + " outlet(s)" : "all outlets"}</div><div style="background:${C.card};border:1px solid ${C.line};border-radius:12px;padding:16px;margin-bottom:14px"><div style="font-size:14px;font-weight:800;margin-bottom:8px">Who's on top of it — and who's slipping</div>${acctRows}</div><div style="background:${C.card};border:1px solid ${C.line};border-radius:12px;padding:16px;margin-bottom:14px"><div style="font-size:14px;font-weight:800;margin-bottom:8px">Sales for this period</div><div style="font-size:20px;font-weight:900">${inr(cd.periodSales)}</div><div style="font-size:12px;color:${cd.salesPct >= 90 ? C.green : C.amber}">${cd.periodTgt > 0 ? cd.salesPct.toFixed(0) + "% of " + inr(cd.periodTgt) + " target" : "No target data for this selection"}</div><table style="width:100%;border-collapse:collapse;margin-top:10px"><thead><tr style="text-align:left"><th style="font-size:10px;color:${C.soft};padding:4px 8px">OUTLET</th><th style="font-size:10px;color:${C.soft};padding:4px 8px;text-align:right">SALES</th><th style="font-size:10px;color:${C.soft};padding:4px 8px;text-align:right">TARGET</th><th style="font-size:10px;color:${C.soft};padding:4px 8px;text-align:right">%</th></tr></thead><tbody>${outletRowsHtml}</tbody></table></div>${marginCardCustom}<div style="background:${C.card};border:2px solid ${C.amber};border-radius:12px;padding:16px"><div style="font-size:14px;font-weight:800;margin-bottom:8px;color:${C.amber}">Ideas to act on</div><ul style="margin:0;padding-left:18px">${ideaRows}</ul></div></div>`;
+      const lib = await loadH2P();
+      window.scrollTo(0, 0); await new Promise((r) => setTimeout(r, 50));
+      const holder = document.createElement("div"); holder.style.position = "fixed"; holder.style.left = "-9999px"; holder.style.top = "0"; holder.innerHTML = html; document.body.appendChild(holder);
+      try { await lib().set({ margin: 0, filename: `CEO_Custom_${ceoCustomFrom}_to_${ceoCustomTo}.pdf`, image: { type: "jpeg", quality: 0.97 }, html2canvas: { scale: 2, backgroundColor: C.bg }, jsPDF: { unit: "pt", format: "a4", orientation: "portrait" }, pagebreak: { mode: ["css", "legacy"] } }).from(holder.firstElementChild).save(); }
+      finally { document.body.removeChild(holder); }
+      setCeoCustomOpen(false);
+    } catch (e: any) { alert("Failed to generate: " + (e?.message || "error")); }
+    setCeoCustomBusy(false);
   };
   useEffect(() => {
     if (activeTab === "ceo_report" && marginMonths.length === 0) { fetchMarginMonths(); }
@@ -2984,10 +3066,34 @@ else await fetchOutletReportsByDate(outletEntryDate);
               const toneC: Record<string, string> = { red: "text-red-400", green: "text-green-400", amber: "text-yellow-400", gray: "text-zinc-300" };
               return (
                 <>
-                  <div className="flex justify-end mb-4 max-w-3xl">
+                  <div className="flex justify-end gap-2 mb-2 max-w-3xl">
                     {isFO && <button onClick={pushCeoPopupToNishant} disabled={ceoPushSending} className="bg-yellow-400 text-black px-4 py-2 text-sm font-semibold hover:bg-yellow-300 disabled:opacity-50 transition-colors">{ceoPushSending ? "Pushing…" : "📣 Push to Nishant"}</button>}
                     <button onClick={downloadCeoPDF} className="bg-zinc-800 text-white px-4 py-2 text-sm font-semibold hover:bg-zinc-700 transition-colors">Download report (PDF)</button>
+                    <button onClick={() => ceoCustomOpen ? setCeoCustomOpen(false) : openCeoCustom()} className="bg-black border border-yellow-400 text-yellow-400 px-4 py-2 text-sm font-semibold hover:bg-yellow-400 hover:text-black transition-colors">🗓️ Custom date &amp; outlets</button>
                   </div>
+                  {ceoCustomOpen && (
+                    <div className="mb-4 max-w-3xl bg-[#131316] border border-zinc-800 p-4">
+                      <div className="flex flex-wrap gap-3 mb-3">
+                        <div><label className="text-[10px] font-mono text-zinc-500 uppercase block mb-1">From</label><input type="date" value={ceoCustomFrom} onChange={e => setCeoCustomFrom(e.target.value)} className="bg-black border border-zinc-800 text-white px-3 py-2 text-sm font-mono focus:outline-none focus:border-yellow-400" /></div>
+                        <div><label className="text-[10px] font-mono text-zinc-500 uppercase block mb-1">To</label><input type="date" value={ceoCustomTo} onChange={e => setCeoCustomTo(e.target.value)} className="bg-black border border-zinc-800 text-white px-3 py-2 text-sm font-mono focus:outline-none focus:border-yellow-400" /></div>
+                      </div>
+                      <div className="mb-3">
+                        <div className="flex items-center justify-between mb-2">
+                          <label className="text-[10px] font-mono text-zinc-500 uppercase">Outlets {ceoCustomOutlets.length === 0 ? "(all)" : `(${ceoCustomOutlets.length})`}</label>
+                          <button onClick={() => setCeoCustomOutlets([])} className="text-[10px] font-mono text-zinc-500 uppercase">Reset to all</button>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          {OUTLETS.map(o => { const on = ceoCustomOutlets.includes(o); return (
+                            <button key={o} onClick={() => setCeoCustomOutlets(on ? ceoCustomOutlets.filter(x => x !== o) : [...ceoCustomOutlets, o])} className={`text-[11px] px-3 py-1.5 border font-mono uppercase tracking-wide transition-colors ${on ? "bg-yellow-400 text-black border-yellow-400" : "bg-black text-zinc-400 border-zinc-800 hover:border-zinc-600"}`}>{OUTLET_NAMES[o] || o}</button>
+                          ); })}
+                        </div>
+                      </div>
+                      <div className="flex gap-2">
+                        <button onClick={downloadCeoPDFCustom} disabled={ceoCustomBusy} className="bg-yellow-400 text-black font-bold text-xs px-5 py-2.5 uppercase tracking-widest disabled:opacity-50 hover:opacity-90">{ceoCustomBusy ? "Generating…" : "Generate PDF"}</button>
+                        <button onClick={() => setCeoCustomOpen(false)} className="text-zinc-500 text-xs font-mono uppercase px-3">Cancel</button>
+                      </div>
+                    </div>
+                  )}
                   <div className="mb-6 border border-zinc-800 p-5 max-w-3xl">
                     <p className="text-sm font-bold mb-1">👀 Who's on top of it — and who's slipping</p>
                     <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mb-4">Report filing · {ceoWin === "1" ? "yesterday" : `last ${ceo.winDays} days`}</p>
