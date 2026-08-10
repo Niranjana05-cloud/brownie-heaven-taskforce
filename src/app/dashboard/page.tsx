@@ -10,6 +10,7 @@ import FounderDashboard from "./FounderDashboard";
 import ReconciliationTab from "./ReconciliationTab";
 import supabaseStock from "@/lib/supabaseStock";
 import { OUTLET_ID_TO_STOCK_NAME } from "@/lib/outletMap";
+import { FOOD_COST_MAP } from "@/lib/foodCosts";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -778,85 +779,46 @@ export default function DashboardPage() {
       const acctRows = cd.acct.map((a) => `<div style="margin:3px 0;font-size:12px"><b>${a.name}</b> — ${a.tag}</div>`).join("");
       const ideaRows = cd.ideas.map((i) => `<li style="margin:5px 0;font-size:12px">${i}</li>`).join("");
       const outletRowsHtml = cd.perOutlet.map((o) => `<tr><td style="padding:5px 8px;border-bottom:1px solid ${C.line};font-size:11px">${o.name}</td><td style="padding:5px 8px;border-bottom:1px solid ${C.line};text-align:right;font-size:11px">${inr(o.sales)}</td><td style="padding:5px 8px;border-bottom:1px solid ${C.line};text-align:right;font-size:11px;color:${C.soft}">${o.tgt > 0 ? inr(o.tgt) : "-"}</td><td style="padding:5px 8px;border-bottom:1px solid ${C.line};text-align:right;font-size:11px;font-weight:700;color:${o.tgt > 0 ? (o.pct >= 100 ? C.green : o.pct >= 60 ? C.amber : C.red) : C.soft}">${o.tgt > 0 ? o.pct.toFixed(0) + "%" : "-"}</td></tr>`).join("");
-      // Margin data is monthly-only — pull whichever month the "from" date falls in, labelled clearly since it may not exactly match the custom range.
-      let marginCardCustom = "";
+      // The real differentiator: true margin for THIS EXACT period, computed live from Stock dispatch
+      // quantities x actual recipe cost — not a monthly snapshot. Works for any date range, any outlets.
+      let stockCard = "";
       try {
-        const ym = ceoCustomFrom.slice(0, 7);
-        const res = await fetch(`/api/margin?month=${ym}`);
-        const json = await res.json();
-        if (json.success && json.margins?.length) {
-          const filtered = ceoCustomOutlets.length ? json.margins.filter((m: any) => ceoCustomOutlets.includes(m.outletId)) : json.margins;
-          const mRows = filtered.map((m: any) => `<tr><td style="padding:4px 6px;font-size:11px">${m.outletName}</td><td style="padding:4px 6px;font-size:11px;text-align:right">${inr(m.salesNet)}</td><td style="padding:4px 6px;font-size:11px;text-align:right;color:${C.soft}">${inr(m.cogs)}</td><td style="padding:4px 6px;font-size:11px;text-align:right;font-weight:700;color:${m.marginPercent == null ? C.soft : m.marginPercent < 40 ? C.red : m.marginPercent < 60 ? C.amber : C.green}">${m.marginPercent == null ? "—" : m.marginPercent.toFixed(1) + "%"}</td></tr>`).join("");
-          marginCardCustom = `<div style="background:${C.card};border:1px solid ${C.line};border-radius:12px;padding:16px;margin-bottom:14px"><div style="font-size:14px;font-weight:800;margin-bottom:8px">💰 Gross margin by outlet — ${ym}</div><div style="font-size:10px;color:${C.soft};margin-bottom:8px">Margin is calculated monthly, so this shows ${ym} regardless of the exact custom range above.</div><table style="width:100%;border-collapse:collapse"><thead><tr style="text-align:left"><th style="font-size:10px;color:${C.soft};padding:4px 6px">OUTLET</th><th style="font-size:10px;color:${C.soft};padding:4px 6px;text-align:right">SALES</th><th style="font-size:10px;color:${C.soft};padding:4px 6px;text-align:right">COST</th><th style="font-size:10px;color:${C.soft};padding:4px 6px;text-align:right">MARGIN %</th></tr></thead><tbody>${mRows}</tbody></table></div>`;
-        }
-      } catch { /* margin optional — skip silently if it fails */ }
-      // Channel-split rows for the selected outlets/range, used for awards + weekday analysis below
-      const filteredOutletRows = ceoCustomOutlets.length ? rows.filter((r: any) => ceoCustomOutlets.includes(r.outlet_id)) : rows;
-      const chData = filteredOutletRows.map((r: any) => {
-        const shop = Number(r.shop_sales_value) || 0, sw = Number(r.swiggy_sales_value) || 0, zo = Number(r.zomato_sales_value) || 0;
-        return { Date: r.report_date, Outlet: OUTLET_NAMES[r.outlet_id] || r.outlet_id, Shop: shop, Swiggy: sw, Zomato: zo, Total: shop + sw + zo };
-      });
-      const byO2: Record<string, any> = {};
-      chData.forEach((d: any) => { if (!byO2[d.Outlet]) byO2[d.Outlet] = { Outlet: d.Outlet, Shop: 0, Swiggy: 0, Zomato: 0, Total: 0 }; const b = byO2[d.Outlet]; b.Shop += d.Shop; b.Swiggy += d.Swiggy; b.Zomato += d.Zomato; b.Total += d.Total; });
-      const chSumm = Object.values(byO2) as any[];
-      let awardsCard = "";
-      if (chSumm.length > 0) {
-        const tShop = chSumm.reduce((a, s) => a + s.Shop, 0), tSw = chSumm.reduce((a, s) => a + s.Swiggy, 0), tZo = chSumm.reduce((a, s) => a + s.Zomato, 0);
-        const tAll = tShop + tSw + tZo || 1;
-        const leg = (c: string, n: string, v: number) => `<div style="display:flex;align-items:center;gap:7px;margin-bottom:5px"><span style="width:11px;height:11px;background:${c};border-radius:2px;display:inline-block"></span><span style="font-size:12px;color:${C.ink};font-weight:600;min-width:62px">${n}</span><span style="font-size:12px;color:${C.soft}">${inr(v)} · ${((v / tAll) * 100).toFixed(0)}%</span></div>`;
-        const CLOUD = ["Pallavaram", "Velachery", "Vadapalani"];
-        const dineIn = chSumm.filter((s) => !CLOUD.includes(s.Outlet));
-        const byTotal = [...chSumm].sort((a, b) => b.Total - a.Total);
-        const star = byTotal[0], slug = byTotal[byTotal.length - 1];
-        const onShare = (s: any) => s.Total > 0 ? ((s.Swiggy + s.Zomato) / s.Total) * 100 : 0;
-        const onlinePool = dineIn.length > 0 ? dineIn : chSumm;
-        const mostOnline = [...onlinePool].sort((a, b) => onShare(b) - onShare(a))[0];
-        const bestShop = [...onlinePool].sort((a, b) => b.Shop - a.Shop)[0];
-        const multi = chSumm.length > 1;
-        const card = (emoji: string, title: string, name: string, val: string, quip: string, accent: string) => `<div style="flex:1;min-width:140px;background:${C.card};border:1px solid ${C.line};border-top:4px solid ${accent};border-radius:12px;padding:12px 14px"><div style="font-size:9px;letter-spacing:1px;text-transform:uppercase;color:${C.soft};margin-bottom:5px">${emoji} ${title}</div><div style="font-size:14px;font-weight:800;color:${C.ink}">${name}</div><div style="font-size:12px;font-weight:700;color:${accent};margin:2px 0 4px">${val}</div><div style="font-size:9px;color:${C.soft};font-style:italic">${quip}</div></div>`;
-        const awards = multi ? `<div style="display:flex;flex-wrap:wrap;gap:10px">${card("🏆", "Star Outlet", star.Outlet, inr(star.Total), "The MVP carrying the team 💪", C.amber)}${card("🐌", "Needs Help", slug.Outlet, inr(slug.Total), "Send backup… and a hug 🫂", C.red)}${card("📱", "Most Online", mostOnline.Outlet, onShare(mostOnline).toFixed(0) + "% online", "Living that delivery life 🛵", "#3B82F6")}${card("🏪", "Best Walk-in", bestShop.Outlet, inr(bestShop.Shop), "People show up here 🚶", C.green)}</div>` : `<div style="display:flex;flex-wrap:wrap;gap:10px">${card("📱", "Online share", star.Outlet, onShare(star).toFixed(0) + "%", "Delivery vs walk-in split", "#3B82F6")}${card("🏪", "Walk-in sales", star.Outlet, inr(star.Shop), "Counter's doing work 💪", C.green)}${card("🛵", "Delivery sales", star.Outlet, inr(star.Swiggy + star.Zomato), "Swiggy + Zomato combined 📦", "#FB923C")}</div>`;
-        awardsCard = `<div style="background:${C.card};border:1px solid ${C.line};border-radius:12px;padding:16px;margin-bottom:14px"><div style="font-size:14px;font-weight:800;margin-bottom:10px">🏅 ${multi ? "Awards — hall of fame &amp; shame" : "Outlet snapshot"}</div><div style="display:flex;gap:10px;margin-bottom:8px">${leg("#FACC15", "Shop", tShop)}${leg("#FB923C", "Swiggy", tSw)}${leg("#EF4444", "Zomato", tZo)}</div>${awards}</div>`;
-      }
-      let weekdayCard = "";
-      if (chData.length > 0) {
-        const DOW = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-        const full: Record<string, string> = { Sun: "Sunday", Mon: "Monday", Tue: "Tuesday", Wed: "Wednesday", Thu: "Thursday", Fri: "Friday", Sat: "Saturday" };
-        const tot = [0, 0, 0, 0, 0, 0, 0], cnt = [0, 0, 0, 0, 0, 0, 0];
-        chData.forEach((d: any) => { const wd = new Date(d.Date + "T00:00:00").getDay(); tot[wd] += d.Total; cnt[wd]++; });
-        const avg = tot.map((t, i) => cnt[i] > 0 ? t / cnt[i] : 0);
-        const maxAvg = Math.max(...avg, 1);
-        const order = [1, 2, 3, 4, 5, 6, 0];
-        const bestI = avg.indexOf(Math.max(...avg));
-        const nz = avg.map((v, i) => ({ v, i })).filter((x) => x.v > 0).sort((a, b) => a.v - b.v);
-        const worstI = nz.length ? nz[0].i : bestI;
-        const bars = order.map((i) => { const pct = Math.max(2, (avg[i] / maxAvg) * 100); const best = i === bestI && avg[i] > 0; return `<div style="margin-bottom:8px"><div style="font-size:10px;font-weight:700;color:${best ? C.amber : C.ink};margin-bottom:3px">${best ? "🏆 " : ""}${full[DOW[i]]} — ${inr(avg[i])}/day</div><div style="height:12px;background:${C.line};border-radius:6px;overflow:hidden"><div style="height:12px;width:${pct}%;background:${best ? C.amber : "#D9C3A0"}"></div></div></div>`; }).join("");
-        weekdayCard = `<div style="background:${C.card};border:1px solid ${C.line};border-radius:12px;padding:16px;margin-bottom:14px"><div style="font-size:14px;font-weight:800;margin-bottom:8px">📅 Which day sells best?</div>${bars}<div style="margin-top:6px;font-size:11px;color:${C.ink};font-weight:700">🏆 Best: ${full[DOW[bestI]]} · 😴 Slowest: ${full[DOW[worstI]]}</div></div>`;
-      }
-      // Dispatch vs sold — leakage check, straight from the Stock DB
-      let leakageCard = "";
-      try {
-        const stockOutlets = (ceoCustomOutlets.length ? ceoCustomOutlets : OUTLETS).map((o) => (OUTLET_ID_TO_STOCK_NAME as any)[o]).filter(Boolean);
-        const { data: dispatchRows } = await supabaseStock.from("outlet_supply_ledger").select("outlet, product, amount").gte("date", ceoCustomFrom).lte("date", ceoCustomTo).in("outlet", stockOutlets);
+        const stockOutletIds = ceoCustomOutlets.length ? ceoCustomOutlets : OUTLETS;
+        const stockOutletNames = stockOutletIds.map((o) => (OUTLET_ID_TO_STOCK_NAME as any)[o]).filter(Boolean);
+        const { data: dispatchRows } = await supabaseStock.from("outlet_supply_ledger").select("outlet, product, qty, amount").gte("date", ceoCustomFrom).lte("date", ceoCustomTo).in("outlet", stockOutletNames);
         if (dispatchRows && dispatchRows.length) {
-          const byOutletDispatch: Record<string, { value: number; products: Record<string, number> }> = {};
+          const byOutlet: Record<string, { cost: number; dispatchValue: number; uncosted: Set<string>; products: Record<string, number> }> = {};
+          const productTotals: Record<string, number> = {};
           dispatchRows.forEach((d: any) => {
-            if (!byOutletDispatch[d.outlet]) byOutletDispatch[d.outlet] = { value: 0, products: {} };
-            byOutletDispatch[d.outlet].value += Number(d.amount) || 0;
-            byOutletDispatch[d.outlet].products[d.product] = (byOutletDispatch[d.outlet].products[d.product] || 0) + (Number(d.amount) || 0);
+            if (!byOutlet[d.outlet]) byOutlet[d.outlet] = { cost: 0, dispatchValue: 0, uncosted: new Set(), products: {} };
+            const b = byOutlet[d.outlet];
+            const unitCost = (FOOD_COST_MAP as any)[d.product];
+            b.dispatchValue += Number(d.amount) || 0;
+            if (unitCost !== undefined) {
+              const c = unitCost * (Number(d.qty) || 0);
+              b.cost += c;
+              b.products[d.product] = (b.products[d.product] || 0) + c;
+              productTotals[d.product] = (productTotals[d.product] || 0) + c;
+            } else {
+              b.uncosted.add(d.product);
+            }
           });
-          const leakRows = cd.perOutlet.map((o: any) => {
+          const marginRowsLive = cd.perOutlet.map((o: any) => {
             const stockName = (OUTLET_ID_TO_STOCK_NAME as any)[o.o];
-            const disp = stockName ? byOutletDispatch[stockName] : undefined;
-            if (!disp) return null;
-            const ratio = o.sales > 0 ? disp.value / o.sales : 0;
-            const flag = ratio > 1.5;
-            const topProducts = Object.entries(disp.products).sort((a: any, b: any) => b[1] - a[1]).slice(0, 3).map(([pn]) => pn).join(", ");
-            return { name: o.name, dispatchValue: disp.value, sales: o.sales, ratio, flag, topProducts };
+            const b = stockName ? byOutlet[stockName] : undefined;
+            if (!b) return null;
+            const margin = o.sales - b.cost;
+            const marginPct = o.sales > 0 ? (margin / o.sales) * 100 : null;
+            const ratio = o.sales > 0 ? b.dispatchValue / o.sales : 0;
+            return { name: o.name, sales: o.sales, cost: b.cost, margin, marginPct, flag: ratio > 1.5, uncostedCount: b.uncosted.size };
           }).filter(Boolean) as any[];
-          if (leakRows.length) {
-            const rowsHtml = leakRows.map((l: any) => `<tr><td style="padding:5px 8px;border-bottom:1px solid ${C.line};font-size:11px">${l.flag ? "🚩 " : ""}${l.name}</td><td style="padding:5px 8px;border-bottom:1px solid ${C.line};text-align:right;font-size:11px">${inr(l.dispatchValue)}</td><td style="padding:5px 8px;border-bottom:1px solid ${C.line};text-align:right;font-size:11px">${inr(l.sales)}</td><td style="padding:5px 8px;border-bottom:1px solid ${C.line};text-align:right;font-size:11px;font-weight:700;color:${l.flag ? C.red : C.ink}">${l.ratio.toFixed(1)}x</td><td style="padding:5px 8px;border-bottom:1px solid ${C.line};font-size:9px;color:${C.soft}">${l.topProducts}</td></tr>`).join("");
-            leakageCard = `<div style="background:${C.card};border:1px solid ${C.line};border-radius:12px;padding:16px;margin-bottom:14px"><div style="font-size:14px;font-weight:800;margin-bottom:4px">📦 Stock dispatched vs sold — leakage check</div><div style="font-size:9px;color:${C.soft};margin-bottom:8px">Dispatch value (internal transfer price) vs actual sales, same period. Well above 1x can mean wastage, overstocking, or unrecorded sales.</div><table style="width:100%;border-collapse:collapse"><thead><tr style="text-align:left"><th style="font-size:9px;color:${C.soft};padding:4px 8px">OUTLET</th><th style="font-size:9px;color:${C.soft};padding:4px 8px;text-align:right">DISPATCHED</th><th style="font-size:9px;color:${C.soft};padding:4px 8px;text-align:right">SOLD</th><th style="font-size:9px;color:${C.soft};padding:4px 8px;text-align:right">RATIO</th><th style="font-size:9px;color:${C.soft};padding:4px 8px">TOP ITEMS</th></tr></thead><tbody>${rowsHtml}</tbody></table></div>`;
-          }
+          const totalSales = marginRowsLive.reduce((a, r) => a + r.sales, 0);
+          const totalCost = marginRowsLive.reduce((a, r) => a + r.cost, 0);
+          const totalMarginPct = totalSales > 0 ? ((totalSales - totalCost) / totalSales) * 100 : 0;
+          const mRows = marginRowsLive.map((r: any) => `<tr><td style="padding:5px 8px;border-bottom:1px solid ${C.line};font-size:11px">${r.flag ? "🚩 " : ""}${r.name}</td><td style="padding:5px 8px;border-bottom:1px solid ${C.line};text-align:right;font-size:11px">${inr(r.sales)}</td><td style="padding:5px 8px;border-bottom:1px solid ${C.line};text-align:right;font-size:11px;color:${C.soft}">${inr(r.cost)}</td><td style="padding:5px 8px;border-bottom:1px solid ${C.line};text-align:right;font-size:11px;font-weight:700;color:${r.marginPct == null ? C.soft : r.marginPct < 40 ? C.red : r.marginPct < 60 ? C.amber : C.green}">${r.marginPct == null ? "—" : r.marginPct.toFixed(1) + "%"}</td></tr>`).join("");
+          const topProductsHtml = Object.entries(productTotals).sort((a: any, b: any) => b[1] - a[1]).slice(0, 5).map(([pname, val]: any) => `<tr><td style="padding:4px 8px;border-bottom:1px solid ${C.line};font-size:10px">${pname}</td><td style="padding:4px 8px;border-bottom:1px solid ${C.line};text-align:right;font-size:10px;color:${C.soft}">${inr(val as number)}</td></tr>`).join("");
+          const uncostedTotal = marginRowsLive.reduce((a, r) => a + r.uncostedCount, 0);
+          stockCard = `<div style="background:${C.card};border:2px solid ${C.amber};border-radius:12px;padding:16px;margin-bottom:14px"><div style="font-size:15px;font-weight:900;margin-bottom:2px">📦 True margin for this exact period — live from Stock</div><div style="font-size:9px;color:${C.soft};margin-bottom:10px">Sales minus actual ingredient cost (dispatch quantity × real recipe cost), computed fresh for ${ceoCustomFrom} → ${ceoCustomTo}. This is not available anywhere else in TASKFORCE.</div><div style="font-size:22px;font-weight:900;color:${totalMarginPct < 40 ? C.red : totalMarginPct < 60 ? C.amber : C.green}">${totalMarginPct.toFixed(1)}% overall margin</div><div style="font-size:11px;color:${C.soft};margin-bottom:10px">${inr(totalSales)} sales − ${inr(totalCost)} true food cost</div><table style="width:100%;border-collapse:collapse;margin-bottom:10px"><thead><tr style="text-align:left"><th style="font-size:9px;color:${C.soft};padding:4px 8px">OUTLET</th><th style="font-size:9px;color:${C.soft};padding:4px 8px;text-align:right">SALES</th><th style="font-size:9px;color:${C.soft};padding:4px 8px;text-align:right">FOOD COST</th><th style="font-size:9px;color:${C.soft};padding:4px 8px;text-align:right">MARGIN %</th></tr></thead><tbody>${mRows}</tbody></table>${topProductsHtml ? `<div style="font-size:11px;font-weight:700;margin-bottom:4px">Top 5 costliest products this period</div><table style="width:100%;border-collapse:collapse">${topProductsHtml}</table>` : ""}${uncostedTotal > 0 ? `<div style="font-size:9px;color:${C.soft};margin-top:8px;font-style:italic">${uncostedTotal} outlet-product combos have no recipe cost yet, so true cost is a touch higher than shown.</div>` : ""}${marginRowsLive.some((r: any) => r.flag) ? `<div style="font-size:9px;color:${C.red};margin-top:4px">🚩 = dispatched stock value is running well above sales for that outlet — worth a look.</div>` : ""}</div>`;
         }
       } catch { /* stock connection optional — skip on failure */ }
       const CEO_QUOTES = [
@@ -869,7 +831,7 @@ export default function DashboardPage() {
       ];
       const quote = CEO_QUOTES[Math.floor(Math.random() * CEO_QUOTES.length)];
       const quoteCard = `<div style="text-align:center;font-size:11px;font-style:italic;color:${C.soft};margin:14px 0;padding:10px;border-top:1px dashed ${C.line};border-bottom:1px dashed ${C.line}">"${quote}"</div>`;
-      const html = `<div style="width:794px;background:${C.bg};font-family:'Segoe UI',Arial,sans-serif;color:${C.ink};padding:34px"><div style="font-size:21px;font-weight:900">Brownie Heaven — Custom CEO Report</div><div style="font-size:11px;color:${C.soft};margin-bottom:16px">${ceoCustomFrom} → ${ceoCustomTo} · ${ceoCustomOutlets.length ? ceoCustomOutlets.length + " outlet(s)" : "all outlets"}</div><div style="background:${C.card};border:1px solid ${C.line};border-radius:12px;padding:16px;margin-bottom:14px"><div style="font-size:14px;font-weight:800;margin-bottom:8px">Who's on top of it — and who's slipping</div>${acctRows}</div><div style="background:${C.card};border:1px solid ${C.line};border-radius:12px;padding:16px;margin-bottom:14px"><div style="font-size:14px;font-weight:800;margin-bottom:8px">Sales for this period</div><div style="font-size:20px;font-weight:900">${inr(cd.periodSales)}</div><div style="font-size:12px;color:${cd.salesPct >= 90 ? C.green : C.amber}">${cd.periodTgt > 0 ? cd.salesPct.toFixed(0) + "% of " + inr(cd.periodTgt) + " target" : "No target data for this selection"}</div><table style="width:100%;border-collapse:collapse;margin-top:10px"><thead><tr style="text-align:left"><th style="font-size:10px;color:${C.soft};padding:4px 8px">OUTLET</th><th style="font-size:10px;color:${C.soft};padding:4px 8px;text-align:right">SALES</th><th style="font-size:10px;color:${C.soft};padding:4px 8px;text-align:right">TARGET</th><th style="font-size:10px;color:${C.soft};padding:4px 8px;text-align:right">%</th></tr></thead><tbody>${outletRowsHtml}</tbody></table></div>${marginCardCustom}${leakageCard}${awardsCard}${weekdayCard}${quoteCard}<div style="background:${C.card};border:2px solid ${C.amber};border-radius:12px;padding:16px"><div style="font-size:14px;font-weight:800;margin-bottom:8px;color:${C.amber}">Ideas to act on</div><ul style="margin:0;padding-left:18px">${ideaRows}</ul></div></div>`;
+      const html = `<div style="width:794px;background:${C.bg};font-family:'Segoe UI',Arial,sans-serif;color:${C.ink};padding:34px"><div style="font-size:21px;font-weight:900">Brownie Heaven — Custom CEO Report</div><div style="font-size:11px;color:${C.soft};margin-bottom:16px">${ceoCustomFrom} → ${ceoCustomTo} · ${ceoCustomOutlets.length ? ceoCustomOutlets.length + " outlet(s)" : "all outlets"}</div><div style="background:${C.card};border:1px solid ${C.line};border-radius:12px;padding:16px;margin-bottom:14px"><div style="font-size:14px;font-weight:800;margin-bottom:8px">Who's on top of it — and who's slipping</div>${acctRows}</div><div style="background:${C.card};border:1px solid ${C.line};border-radius:12px;padding:16px;margin-bottom:14px"><div style="font-size:14px;font-weight:800;margin-bottom:8px">Sales for this period</div><div style="font-size:20px;font-weight:900">${inr(cd.periodSales)}</div><div style="font-size:12px;color:${cd.salesPct >= 90 ? C.green : C.amber}">${cd.periodTgt > 0 ? cd.salesPct.toFixed(0) + "% of " + inr(cd.periodTgt) + " target" : "No target data for this selection"}</div><table style="width:100%;border-collapse:collapse;margin-top:10px"><thead><tr style="text-align:left"><th style="font-size:10px;color:${C.soft};padding:4px 8px">OUTLET</th><th style="font-size:10px;color:${C.soft};padding:4px 8px;text-align:right">SALES</th><th style="font-size:10px;color:${C.soft};padding:4px 8px;text-align:right">TARGET</th><th style="font-size:10px;color:${C.soft};padding:4px 8px;text-align:right">%</th></tr></thead><tbody>${outletRowsHtml}</tbody></table></div>${stockCard}${quoteCard}<div style="background:${C.card};border:2px solid ${C.amber};border-radius:12px;padding:16px"><div style="font-size:14px;font-weight:800;margin-bottom:8px;color:${C.amber}">Ideas to act on</div><ul style="margin:0;padding-left:18px">${ideaRows}</ul></div></div>`;
       const lib = await loadH2P();
       window.scrollTo(0, 0); await new Promise((r) => setTimeout(r, 50));
       const holder = document.createElement("div"); holder.style.position = "fixed"; holder.style.left = "-9999px"; holder.style.top = "0"; holder.innerHTML = html; document.body.appendChild(holder);
