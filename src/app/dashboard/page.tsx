@@ -8,6 +8,8 @@ import { computeScores, type ScoreRow } from "@/lib/score";
 import PayoutTab from "./PayoutTab";
 import FounderDashboard from "./FounderDashboard";
 import ReconciliationTab from "./ReconciliationTab";
+import supabaseStock from "@/lib/supabaseStock";
+import { OUTLET_ID_TO_STOCK_NAME } from "@/lib/outletMap";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -149,11 +151,12 @@ function computeCeoData(repRows: any[], monthRep: any[], win: string) {
   if (ideas.length === 0) ideas.push(`Everything looks healthy — team is filing and the month's on pace. Keep the momentum. 🎉`);
   return { winDays, acct, perOutlet, monthSales, monthTgt, salesPct, timePct, onTrack, drag, hero, ideas, ym, daysElapsed, daysInMonth };
 }
-function computeCeoCustom(rows: any[], from: string, to: string, outletsSel: string[]) {
+function computeCeoCustom(staffRows: any[], outletRows: any[], from: string, to: string, outletsSel: string[]) {
+  const rows = outletRows;
   const days = Math.max(1, Math.round((new Date(to).getTime() - new Date(from).getTime()) / 86400000) + 1);
   const duty = (ALL_STAFF as any[]).filter((s) => s.report_time);
   const acct = duty.map((s) => {
-    const mine = rows.filter((r) => r.staff_id === s.id);
+    const mine = staffRows.filter((r) => r.staff_id === s.id);
     const filed = mine.length, late = mine.filter((r) => r.is_late).length, onTime = filed - late, missed = Math.max(0, days - filed);
     let tag = "";
     if (filed === 0) tag = "nothing filed 👀 hello?";
@@ -764,10 +767,12 @@ export default function DashboardPage() {
     if (!ceoCustomFrom || !ceoCustomTo) { alert("Pick both a from and to date."); return; }
     setCeoCustomBusy(true);
     try {
-      const { data, error } = await supabase.from("outlet_reports").select("*").gte("report_date", ceoCustomFrom).lte("report_date", ceoCustomTo);
-      if (error) throw error;
-      const rows = data || [];
-      const cd = computeCeoCustom(rows, ceoCustomFrom, ceoCustomTo, ceoCustomOutlets);
+      const { data: staffRows, error: staffErr } = await supabase.from("reports").select("staff_id, is_late, submitted_at").gte("submitted_at", ceoCustomFrom).lte("submitted_at", ceoCustomTo + "T23:59:59");
+      if (staffErr) throw staffErr;
+      const { data: outletRows, error: outletErr } = await supabase.from("outlet_reports").select("*").gte("report_date", ceoCustomFrom).lte("report_date", ceoCustomTo);
+      if (outletErr) throw outletErr;
+      const rows = outletRows || [];
+      const cd = computeCeoCustom(staffRows || [], rows, ceoCustomFrom, ceoCustomTo, ceoCustomOutlets);
       const C = { bg: "#FAF3E7", card: "#FFFDF8", ink: "#3E2415", soft: "#8A6A4A", line: "#EADBC2", green: "#2E7D32", red: "#C62828", amber: "#C8901E" };
       const inr = (n: number) => "₹" + Math.round(n).toLocaleString("en-IN");
       const acctRows = cd.acct.map((a) => `<div style="margin:3px 0;font-size:12px"><b>${a.name}</b> — ${a.tag}</div>`).join("");
@@ -785,7 +790,86 @@ export default function DashboardPage() {
           marginCardCustom = `<div style="background:${C.card};border:1px solid ${C.line};border-radius:12px;padding:16px;margin-bottom:14px"><div style="font-size:14px;font-weight:800;margin-bottom:8px">💰 Gross margin by outlet — ${ym}</div><div style="font-size:10px;color:${C.soft};margin-bottom:8px">Margin is calculated monthly, so this shows ${ym} regardless of the exact custom range above.</div><table style="width:100%;border-collapse:collapse"><thead><tr style="text-align:left"><th style="font-size:10px;color:${C.soft};padding:4px 6px">OUTLET</th><th style="font-size:10px;color:${C.soft};padding:4px 6px;text-align:right">SALES</th><th style="font-size:10px;color:${C.soft};padding:4px 6px;text-align:right">COST</th><th style="font-size:10px;color:${C.soft};padding:4px 6px;text-align:right">MARGIN %</th></tr></thead><tbody>${mRows}</tbody></table></div>`;
         }
       } catch { /* margin optional — skip silently if it fails */ }
-      const html = `<div style="width:794px;background:${C.bg};font-family:'Segoe UI',Arial,sans-serif;color:${C.ink};padding:34px"><div style="font-size:21px;font-weight:900">Brownie Heaven — Custom CEO Report</div><div style="font-size:11px;color:${C.soft};margin-bottom:16px">${ceoCustomFrom} → ${ceoCustomTo} · ${ceoCustomOutlets.length ? ceoCustomOutlets.length + " outlet(s)" : "all outlets"}</div><div style="background:${C.card};border:1px solid ${C.line};border-radius:12px;padding:16px;margin-bottom:14px"><div style="font-size:14px;font-weight:800;margin-bottom:8px">Who's on top of it — and who's slipping</div>${acctRows}</div><div style="background:${C.card};border:1px solid ${C.line};border-radius:12px;padding:16px;margin-bottom:14px"><div style="font-size:14px;font-weight:800;margin-bottom:8px">Sales for this period</div><div style="font-size:20px;font-weight:900">${inr(cd.periodSales)}</div><div style="font-size:12px;color:${cd.salesPct >= 90 ? C.green : C.amber}">${cd.periodTgt > 0 ? cd.salesPct.toFixed(0) + "% of " + inr(cd.periodTgt) + " target" : "No target data for this selection"}</div><table style="width:100%;border-collapse:collapse;margin-top:10px"><thead><tr style="text-align:left"><th style="font-size:10px;color:${C.soft};padding:4px 8px">OUTLET</th><th style="font-size:10px;color:${C.soft};padding:4px 8px;text-align:right">SALES</th><th style="font-size:10px;color:${C.soft};padding:4px 8px;text-align:right">TARGET</th><th style="font-size:10px;color:${C.soft};padding:4px 8px;text-align:right">%</th></tr></thead><tbody>${outletRowsHtml}</tbody></table></div>${marginCardCustom}<div style="background:${C.card};border:2px solid ${C.amber};border-radius:12px;padding:16px"><div style="font-size:14px;font-weight:800;margin-bottom:8px;color:${C.amber}">Ideas to act on</div><ul style="margin:0;padding-left:18px">${ideaRows}</ul></div></div>`;
+      // Channel-split rows for the selected outlets/range, used for awards + weekday analysis below
+      const filteredOutletRows = ceoCustomOutlets.length ? rows.filter((r: any) => ceoCustomOutlets.includes(r.outlet_id)) : rows;
+      const chData = filteredOutletRows.map((r: any) => {
+        const shop = Number(r.shop_sales_value) || 0, sw = Number(r.swiggy_sales_value) || 0, zo = Number(r.zomato_sales_value) || 0;
+        return { Date: r.report_date, Outlet: OUTLET_NAMES[r.outlet_id] || r.outlet_id, Shop: shop, Swiggy: sw, Zomato: zo, Total: shop + sw + zo };
+      });
+      const byO2: Record<string, any> = {};
+      chData.forEach((d: any) => { if (!byO2[d.Outlet]) byO2[d.Outlet] = { Outlet: d.Outlet, Shop: 0, Swiggy: 0, Zomato: 0, Total: 0 }; const b = byO2[d.Outlet]; b.Shop += d.Shop; b.Swiggy += d.Swiggy; b.Zomato += d.Zomato; b.Total += d.Total; });
+      const chSumm = Object.values(byO2) as any[];
+      let awardsCard = "";
+      if (chSumm.length > 0) {
+        const tShop = chSumm.reduce((a, s) => a + s.Shop, 0), tSw = chSumm.reduce((a, s) => a + s.Swiggy, 0), tZo = chSumm.reduce((a, s) => a + s.Zomato, 0);
+        const tAll = tShop + tSw + tZo || 1;
+        const leg = (c: string, n: string, v: number) => `<div style="display:flex;align-items:center;gap:7px;margin-bottom:5px"><span style="width:11px;height:11px;background:${c};border-radius:2px;display:inline-block"></span><span style="font-size:12px;color:${C.ink};font-weight:600;min-width:62px">${n}</span><span style="font-size:12px;color:${C.soft}">${inr(v)} · ${((v / tAll) * 100).toFixed(0)}%</span></div>`;
+        const CLOUD = ["Pallavaram", "Velachery", "Vadapalani"];
+        const dineIn = chSumm.filter((s) => !CLOUD.includes(s.Outlet));
+        const byTotal = [...chSumm].sort((a, b) => b.Total - a.Total);
+        const star = byTotal[0], slug = byTotal[byTotal.length - 1];
+        const onShare = (s: any) => s.Total > 0 ? ((s.Swiggy + s.Zomato) / s.Total) * 100 : 0;
+        const onlinePool = dineIn.length > 0 ? dineIn : chSumm;
+        const mostOnline = [...onlinePool].sort((a, b) => onShare(b) - onShare(a))[0];
+        const bestShop = [...onlinePool].sort((a, b) => b.Shop - a.Shop)[0];
+        const multi = chSumm.length > 1;
+        const card = (emoji: string, title: string, name: string, val: string, quip: string, accent: string) => `<div style="flex:1;min-width:140px;background:${C.card};border:1px solid ${C.line};border-top:4px solid ${accent};border-radius:12px;padding:12px 14px"><div style="font-size:9px;letter-spacing:1px;text-transform:uppercase;color:${C.soft};margin-bottom:5px">${emoji} ${title}</div><div style="font-size:14px;font-weight:800;color:${C.ink}">${name}</div><div style="font-size:12px;font-weight:700;color:${accent};margin:2px 0 4px">${val}</div><div style="font-size:9px;color:${C.soft};font-style:italic">${quip}</div></div>`;
+        const awards = multi ? `<div style="display:flex;flex-wrap:wrap;gap:10px">${card("🏆", "Star Outlet", star.Outlet, inr(star.Total), "The MVP carrying the team 💪", C.amber)}${card("🐌", "Needs Help", slug.Outlet, inr(slug.Total), "Send backup… and a hug 🫂", C.red)}${card("📱", "Most Online", mostOnline.Outlet, onShare(mostOnline).toFixed(0) + "% online", "Living that delivery life 🛵", "#3B82F6")}${card("🏪", "Best Walk-in", bestShop.Outlet, inr(bestShop.Shop), "People show up here 🚶", C.green)}</div>` : `<div style="display:flex;flex-wrap:wrap;gap:10px">${card("📱", "Online share", star.Outlet, onShare(star).toFixed(0) + "%", "Delivery vs walk-in split", "#3B82F6")}${card("🏪", "Walk-in sales", star.Outlet, inr(star.Shop), "Counter's doing work 💪", C.green)}${card("🛵", "Delivery sales", star.Outlet, inr(star.Swiggy + star.Zomato), "Swiggy + Zomato combined 📦", "#FB923C")}</div>`;
+        awardsCard = `<div style="background:${C.card};border:1px solid ${C.line};border-radius:12px;padding:16px;margin-bottom:14px"><div style="font-size:14px;font-weight:800;margin-bottom:10px">🏅 ${multi ? "Awards — hall of fame &amp; shame" : "Outlet snapshot"}</div><div style="display:flex;gap:10px;margin-bottom:8px">${leg("#FACC15", "Shop", tShop)}${leg("#FB923C", "Swiggy", tSw)}${leg("#EF4444", "Zomato", tZo)}</div>${awards}</div>`;
+      }
+      let weekdayCard = "";
+      if (chData.length > 0) {
+        const DOW = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+        const full: Record<string, string> = { Sun: "Sunday", Mon: "Monday", Tue: "Tuesday", Wed: "Wednesday", Thu: "Thursday", Fri: "Friday", Sat: "Saturday" };
+        const tot = [0, 0, 0, 0, 0, 0, 0], cnt = [0, 0, 0, 0, 0, 0, 0];
+        chData.forEach((d: any) => { const wd = new Date(d.Date + "T00:00:00").getDay(); tot[wd] += d.Total; cnt[wd]++; });
+        const avg = tot.map((t, i) => cnt[i] > 0 ? t / cnt[i] : 0);
+        const maxAvg = Math.max(...avg, 1);
+        const order = [1, 2, 3, 4, 5, 6, 0];
+        const bestI = avg.indexOf(Math.max(...avg));
+        const nz = avg.map((v, i) => ({ v, i })).filter((x) => x.v > 0).sort((a, b) => a.v - b.v);
+        const worstI = nz.length ? nz[0].i : bestI;
+        const bars = order.map((i) => { const pct = Math.max(2, (avg[i] / maxAvg) * 100); const best = i === bestI && avg[i] > 0; return `<div style="margin-bottom:8px"><div style="font-size:10px;font-weight:700;color:${best ? C.amber : C.ink};margin-bottom:3px">${best ? "🏆 " : ""}${full[DOW[i]]} — ${inr(avg[i])}/day</div><div style="height:12px;background:${C.line};border-radius:6px;overflow:hidden"><div style="height:12px;width:${pct}%;background:${best ? C.amber : "#D9C3A0"}"></div></div></div>`; }).join("");
+        weekdayCard = `<div style="background:${C.card};border:1px solid ${C.line};border-radius:12px;padding:16px;margin-bottom:14px"><div style="font-size:14px;font-weight:800;margin-bottom:8px">📅 Which day sells best?</div>${bars}<div style="margin-top:6px;font-size:11px;color:${C.ink};font-weight:700">🏆 Best: ${full[DOW[bestI]]} · 😴 Slowest: ${full[DOW[worstI]]}</div></div>`;
+      }
+      // Dispatch vs sold — leakage check, straight from the Stock DB
+      let leakageCard = "";
+      try {
+        const stockOutlets = (ceoCustomOutlets.length ? ceoCustomOutlets : OUTLETS).map((o) => (OUTLET_ID_TO_STOCK_NAME as any)[o]).filter(Boolean);
+        const { data: dispatchRows } = await supabaseStock.from("outlet_supply_ledger").select("outlet, product, amount").gte("date", ceoCustomFrom).lte("date", ceoCustomTo).in("outlet", stockOutlets);
+        if (dispatchRows && dispatchRows.length) {
+          const byOutletDispatch: Record<string, { value: number; products: Record<string, number> }> = {};
+          dispatchRows.forEach((d: any) => {
+            if (!byOutletDispatch[d.outlet]) byOutletDispatch[d.outlet] = { value: 0, products: {} };
+            byOutletDispatch[d.outlet].value += Number(d.amount) || 0;
+            byOutletDispatch[d.outlet].products[d.product] = (byOutletDispatch[d.outlet].products[d.product] || 0) + (Number(d.amount) || 0);
+          });
+          const leakRows = cd.perOutlet.map((o: any) => {
+            const stockName = (OUTLET_ID_TO_STOCK_NAME as any)[o.o];
+            const disp = stockName ? byOutletDispatch[stockName] : undefined;
+            if (!disp) return null;
+            const ratio = o.sales > 0 ? disp.value / o.sales : 0;
+            const flag = ratio > 1.5;
+            const topProducts = Object.entries(disp.products).sort((a: any, b: any) => b[1] - a[1]).slice(0, 3).map(([pn]) => pn).join(", ");
+            return { name: o.name, dispatchValue: disp.value, sales: o.sales, ratio, flag, topProducts };
+          }).filter(Boolean) as any[];
+          if (leakRows.length) {
+            const rowsHtml = leakRows.map((l: any) => `<tr><td style="padding:5px 8px;border-bottom:1px solid ${C.line};font-size:11px">${l.flag ? "🚩 " : ""}${l.name}</td><td style="padding:5px 8px;border-bottom:1px solid ${C.line};text-align:right;font-size:11px">${inr(l.dispatchValue)}</td><td style="padding:5px 8px;border-bottom:1px solid ${C.line};text-align:right;font-size:11px">${inr(l.sales)}</td><td style="padding:5px 8px;border-bottom:1px solid ${C.line};text-align:right;font-size:11px;font-weight:700;color:${l.flag ? C.red : C.ink}">${l.ratio.toFixed(1)}x</td><td style="padding:5px 8px;border-bottom:1px solid ${C.line};font-size:9px;color:${C.soft}">${l.topProducts}</td></tr>`).join("");
+            leakageCard = `<div style="background:${C.card};border:1px solid ${C.line};border-radius:12px;padding:16px;margin-bottom:14px"><div style="font-size:14px;font-weight:800;margin-bottom:4px">📦 Stock dispatched vs sold — leakage check</div><div style="font-size:9px;color:${C.soft};margin-bottom:8px">Dispatch value (internal transfer price) vs actual sales, same period. Well above 1x can mean wastage, overstocking, or unrecorded sales.</div><table style="width:100%;border-collapse:collapse"><thead><tr style="text-align:left"><th style="font-size:9px;color:${C.soft};padding:4px 8px">OUTLET</th><th style="font-size:9px;color:${C.soft};padding:4px 8px;text-align:right">DISPATCHED</th><th style="font-size:9px;color:${C.soft};padding:4px 8px;text-align:right">SOLD</th><th style="font-size:9px;color:${C.soft};padding:4px 8px;text-align:right">RATIO</th><th style="font-size:9px;color:${C.soft};padding:4px 8px">TOP ITEMS</th></tr></thead><tbody>${rowsHtml}</tbody></table></div>`;
+          }
+        }
+      } catch { /* stock connection optional — skip on failure */ }
+      const CEO_QUOTES = [
+        "Revenue is vanity, margin is sanity, cash is reality.",
+        "What gets measured gets managed. — Peter Drucker",
+        "The best time to fix a leak was yesterday. The next best time is today.",
+        "Small daily improvements are the key to staggering long-term results.",
+        "A bakery runs on butter, sugar, and someone actually reading the numbers. 🍫",
+        "Amateurs talk revenue. Professionals talk margin.",
+      ];
+      const quote = CEO_QUOTES[Math.floor(Math.random() * CEO_QUOTES.length)];
+      const quoteCard = `<div style="text-align:center;font-size:11px;font-style:italic;color:${C.soft};margin:14px 0;padding:10px;border-top:1px dashed ${C.line};border-bottom:1px dashed ${C.line}">"${quote}"</div>`;
+      const html = `<div style="width:794px;background:${C.bg};font-family:'Segoe UI',Arial,sans-serif;color:${C.ink};padding:34px"><div style="font-size:21px;font-weight:900">Brownie Heaven — Custom CEO Report</div><div style="font-size:11px;color:${C.soft};margin-bottom:16px">${ceoCustomFrom} → ${ceoCustomTo} · ${ceoCustomOutlets.length ? ceoCustomOutlets.length + " outlet(s)" : "all outlets"}</div><div style="background:${C.card};border:1px solid ${C.line};border-radius:12px;padding:16px;margin-bottom:14px"><div style="font-size:14px;font-weight:800;margin-bottom:8px">Who's on top of it — and who's slipping</div>${acctRows}</div><div style="background:${C.card};border:1px solid ${C.line};border-radius:12px;padding:16px;margin-bottom:14px"><div style="font-size:14px;font-weight:800;margin-bottom:8px">Sales for this period</div><div style="font-size:20px;font-weight:900">${inr(cd.periodSales)}</div><div style="font-size:12px;color:${cd.salesPct >= 90 ? C.green : C.amber}">${cd.periodTgt > 0 ? cd.salesPct.toFixed(0) + "% of " + inr(cd.periodTgt) + " target" : "No target data for this selection"}</div><table style="width:100%;border-collapse:collapse;margin-top:10px"><thead><tr style="text-align:left"><th style="font-size:10px;color:${C.soft};padding:4px 8px">OUTLET</th><th style="font-size:10px;color:${C.soft};padding:4px 8px;text-align:right">SALES</th><th style="font-size:10px;color:${C.soft};padding:4px 8px;text-align:right">TARGET</th><th style="font-size:10px;color:${C.soft};padding:4px 8px;text-align:right">%</th></tr></thead><tbody>${outletRowsHtml}</tbody></table></div>${marginCardCustom}${leakageCard}${awardsCard}${weekdayCard}${quoteCard}<div style="background:${C.card};border:2px solid ${C.amber};border-radius:12px;padding:16px"><div style="font-size:14px;font-weight:800;margin-bottom:8px;color:${C.amber}">Ideas to act on</div><ul style="margin:0;padding-left:18px">${ideaRows}</ul></div></div>`;
       const lib = await loadH2P();
       window.scrollTo(0, 0); await new Promise((r) => setTimeout(r, 50));
       const holder = document.createElement("div"); holder.style.position = "fixed"; holder.style.left = "-9999px"; holder.style.top = "0"; holder.innerHTML = html; document.body.appendChild(holder);
