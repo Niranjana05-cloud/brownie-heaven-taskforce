@@ -584,6 +584,31 @@ export default function DashboardPage() {
   const _today = new Date().toISOString().split("T")[0];
   const _mStart = _today.slice(0, 8) + "01";
   const [repOutlets, setRepOutlets] = useState<string[]>([]);
+  const [repQuickRange, setRepQuickRange] = useState("last30");
+  const [repQuickFrom, setRepQuickFrom] = useState("");
+  const [repQuickTo, setRepQuickTo] = useState("");
+  const [repCustomizePerOutlet, setRepCustomizePerOutlet] = useState(false);
+  const activeRepOutlets = () => repOutlets.length ? repOutlets : (canAssign ? OUTLETS : (user?.outlets || []));
+  const applyQuickRange = (presetId: string) => {
+    setRepQuickRange(presetId);
+    const updated = { ...outletRangeSel };
+    activeRepOutlets().forEach((o) => { updated[o] = presetId === "custom" ? { preset: "custom", from: repQuickFrom, to: repQuickTo } : { preset: presetId }; });
+    setOutletRangeSel(updated);
+  };
+  const applyQuickCustom = (from: string, to: string) => {
+    setRepQuickFrom(from); setRepQuickTo(to);
+    const updated = { ...outletRangeSel };
+    activeRepOutlets().forEach((o) => { updated[o] = { preset: "custom", from, to }; });
+    setOutletRangeSel(updated);
+  };
+  useEffect(() => {
+    if (repCustomizePerOutlet) return;
+    const updated = { ...outletRangeSel };
+    let changed = false;
+    activeRepOutlets().forEach((o) => { if (!updated[o]) { updated[o] = repQuickRange === "custom" ? { preset: "custom", from: repQuickFrom, to: repQuickTo } : { preset: repQuickRange }; changed = true; } });
+    if (changed) setOutletRangeSel(updated);
+    /* eslint-disable-next-line react-hooks/exhaustive-deps */
+  }, [repOutlets]);
   const [repBusy, setRepBusy] = useState(false);
   const [outletFilter, setOutletFilter] = useState("all");
   const [reportData, setReportData] = useState<Record<string, string>>({});
@@ -2660,27 +2685,42 @@ else await fetchOutletReportsByDate(outletEntryDate);
       </div>
     </div>
     <div className="mb-4">
-      <label className="text-[10px] font-mono text-zinc-500 uppercase block mb-2">Range per outlet</label>
-      <div className="space-y-2">
-        {(repOutlets.length ? repOutlets : (canAssign ? OUTLETS : (user.outlets || []))).map(o => {
-          const sel = getOutletSel(o);
-          return (
-            <div key={o} className="flex flex-wrap items-center gap-2">
-              <span className="text-xs font-mono w-28 shrink-0 text-zinc-300">{OUTLET_NAMES[o] || o}</span>
-              <select value={sel.preset} onChange={e => setOutletRangeSel({ ...outletRangeSel, [o]: { ...sel, preset: e.target.value } })} className="bg-black border border-zinc-800 text-white px-2 py-1.5 text-xs font-mono focus:outline-none focus:border-yellow-400">
-                {RANGE_PRESETS.map(p => <option key={p.id} value={p.id}>{p.label}</option>)}
-              </select>
-              {sel.preset === "custom" && (
-                <>
-                  <input type="date" value={sel.from || ""} onChange={e => setOutletRangeSel({ ...outletRangeSel, [o]: { ...sel, from: e.target.value } })} className="bg-black border border-zinc-800 text-white px-2 py-1.5 text-xs font-mono focus:outline-none focus:border-yellow-400" />
-                  <span className="text-zinc-600 text-xs">to</span>
-                  <input type="date" value={sel.to || ""} onChange={e => setOutletRangeSel({ ...outletRangeSel, [o]: { ...sel, to: e.target.value } })} className="bg-black border border-zinc-800 text-white px-2 py-1.5 text-xs font-mono focus:outline-none focus:border-yellow-400" />
-                </>
-              )}
-            </div>
-          );
-        })}
+      <label className="text-[10px] font-mono text-zinc-500 uppercase block mb-2">Range</label>
+      <div className="flex flex-wrap items-center gap-2">
+        <select value={repQuickRange} onChange={e => applyQuickRange(e.target.value)} className="bg-black border border-zinc-800 text-white px-3 py-2 text-sm font-mono focus:outline-none focus:border-yellow-400">
+          {RANGE_PRESETS.map(p => <option key={p.id} value={p.id}>{p.label}</option>)}
+        </select>
+        {repQuickRange === "custom" && !repCustomizePerOutlet && (
+          <>
+            <input type="date" value={repQuickFrom} onChange={e => applyQuickCustom(e.target.value, repQuickTo)} className="bg-black border border-zinc-800 text-white px-2 py-1.5 text-xs font-mono focus:outline-none focus:border-yellow-400" />
+            <span className="text-zinc-600 text-xs">to</span>
+            <input type="date" value={repQuickTo} onChange={e => applyQuickCustom(repQuickFrom, e.target.value)} className="bg-black border border-zinc-800 text-white px-2 py-1.5 text-xs font-mono focus:outline-none focus:border-yellow-400" />
+          </>
+        )}
+        <button onClick={() => setRepCustomizePerOutlet(v => !v)} className="text-[11px] font-mono text-yellow-400 uppercase underline ml-1">{repCustomizePerOutlet ? "Use one range for all" : "Customize per outlet"}</button>
       </div>
+      {repCustomizePerOutlet && (
+        <div className="space-y-2 mt-3">
+          {activeRepOutlets().map(o => {
+            const sel = getOutletSel(o);
+            return (
+              <div key={o} className="flex flex-wrap items-center gap-2">
+                <span className="text-xs font-mono w-28 shrink-0 text-zinc-300">{OUTLET_NAMES[o] || o}</span>
+                <select value={sel.preset} onChange={e => setOutletRangeSel({ ...outletRangeSel, [o]: { ...sel, preset: e.target.value } })} className="bg-black border border-zinc-800 text-white px-2 py-1.5 text-xs font-mono focus:outline-none focus:border-yellow-400">
+                  {RANGE_PRESETS.map(p => <option key={p.id} value={p.id}>{p.label}</option>)}
+                </select>
+                {sel.preset === "custom" && (
+                  <>
+                    <input type="date" value={sel.from || ""} onChange={e => setOutletRangeSel({ ...outletRangeSel, [o]: { ...sel, from: e.target.value } })} className="bg-black border border-zinc-800 text-white px-2 py-1.5 text-xs font-mono focus:outline-none focus:border-yellow-400" />
+                    <span className="text-zinc-600 text-xs">to</span>
+                    <input type="date" value={sel.to || ""} onChange={e => setOutletRangeSel({ ...outletRangeSel, [o]: { ...sel, to: e.target.value } })} className="bg-black border border-zinc-800 text-white px-2 py-1.5 text-xs font-mono focus:outline-none focus:border-yellow-400" />
+                  </>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
     <div className="flex gap-3">
       <button onClick={downloadRangeExcel} disabled={repBusy} className="bg-green-600 text-white font-bold text-xs px-5 py-2.5 uppercase tracking-widest disabled:opacity-50 hover:opacity-90">{repBusy ? "Working…" : "⬇ Excel"}</button>
