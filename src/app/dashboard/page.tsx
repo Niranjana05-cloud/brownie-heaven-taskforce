@@ -714,6 +714,9 @@ export default function DashboardPage() {
   const [ceoRepRows, setCeoRepRows] = useState<any[]>([]);
   const [ceoMonthRep, setCeoMonthRep] = useState<any[]>([]);
   const [ceoPopupOpen, setCeoPopupOpen] = useState(false);
+  const [unackedFines, setUnackedFines] = useState<any[]>([]);
+  const [fineAckOpen, setFineAckOpen] = useState(false);
+  const [fineAckBusy, setFineAckBusy] = useState(false);
   const [marginMonth, setMarginMonth] = useState("");
   const [marginMonths, setMarginMonths] = useState<string[]>([]);
   const [marginData, setMarginData] = useState<any[]>([]);
@@ -909,6 +912,22 @@ export default function DashboardPage() {
     }
     /* eslint-disable-next-line react-hooks/exhaustive-deps */
   }, [user]);
+  useEffect(() => {
+    if (!user) return;
+    (async () => {
+      const { data } = await supabase.from("fines").select("*").eq("staff_id", user.id).eq("acknowledged", false).order("created_at", { ascending: true });
+      if (data && data.length > 0) { setUnackedFines(data); setFineAckOpen(true); }
+    })();
+    /* eslint-disable-next-line react-hooks/exhaustive-deps */
+  }, [user]);
+  const acknowledgeFines = async () => {
+    setFineAckBusy(true);
+    const ids = unackedFines.map((f) => f.id);
+    await supabase.from("fines").update({ acknowledged: true }).in("id", ids);
+    setFineAckBusy(false);
+    setFineAckOpen(false);
+    setUnackedFines([]);
+  };
   const toggleCompHeadline = async () => { const nv = !compHeadlineOn; setCompHeadlineOn(nv); await supabase.from("app_settings").upsert({ key: "comp_headline_on", value: nv ? "true" : "false", updated_at: new Date().toISOString() }, { onConflict: "key" }); };
   const pushCeoPopupToNishant = async () => {
     setCeoPushSending(true);
@@ -1967,6 +1986,27 @@ else await fetchOutletReportsByDate(outletEntryDate);
               <p className="text-sm text-zinc-300 mb-5">A quick look at who's on top of their game, who's slipping, and how the month is tracking.</p>
               <button onClick={() => { setCeoPopupOpen(false); setActiveTab("ceo_report"); fetchCeoData(ceoWin); }} className="w-full bg-yellow-400 text-black px-4 py-2.5 text-sm font-semibold hover:bg-yellow-300 transition-colors">Wanna go through today's report? →</button>
               <button onClick={() => setCeoPopupOpen(false)} className="w-full mt-2 text-zinc-500 hover:text-white text-sm py-2">Maybe later — take me to the dashboard</button>
+            </div>
+          </div>
+        )}
+
+        {fineAckOpen && unackedFines.length > 0 && (
+          <div style={{ position: "fixed", inset: 0, zIndex: 60, background: "rgba(0,0,0,0.75)", display: "flex", alignItems: "center", justifyContent: "center", padding: "1rem" }}>
+            <div className="bg-zinc-900 border border-red-500 max-w-md w-full p-6">
+              <p className="text-2xl font-black mb-1 text-red-400">⚠️ You've been fined</p>
+              <p className="text-sm text-zinc-400 mb-4">{unackedFines.length === 1 ? "This needs your acknowledgment before you continue." : `${unackedFines.length} fines need your acknowledgment before you continue.`}</p>
+              <div className="space-y-2 mb-5 max-h-64 overflow-y-auto">
+                {unackedFines.map((f) => (
+                  <div key={f.id} className="border border-zinc-800 p-3">
+                    <div className="flex justify-between items-baseline">
+                      <span className="text-sm font-semibold">{f.reason || "No reason given"}</span>
+                      <span className="font-mono text-red-400">−₹{Number(f.amount).toLocaleString("en-IN")}</span>
+                    </div>
+                    <div className="text-xs text-zinc-500 mt-1">{f.fine_date}{f.outlet ? ` · ${OUTLET_NAMES[f.outlet] || f.outlet}` : ""}</div>
+                  </div>
+                ))}
+              </div>
+              <button onClick={acknowledgeFines} disabled={fineAckBusy} className="w-full bg-red-500 text-white px-4 py-2.5 text-sm font-semibold hover:bg-red-400 disabled:opacity-50 transition-colors">{fineAckBusy ? "…" : "I understand"}</button>
             </div>
           </div>
         )}
