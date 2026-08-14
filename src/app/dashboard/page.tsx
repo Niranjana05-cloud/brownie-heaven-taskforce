@@ -375,7 +375,7 @@ export default function DashboardPage() {
   const [reports, setReports] = useState<Report[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
-  const [activeTab, setActiveTab] = useState<"tasks" | "my_report" | "all_reports" | "analytics" | "outlet_reports" | "owner_outlets" | "history" | "attendance" | "sales_target" | "payout" | "reconciliation" | "competition" | "item_perf" | "ceo_report">("tasks");
+  const [activeTab, setActiveTab] = useState<"tasks" | "my_report" | "all_reports" | "analytics" | "outlet_reports" | "owner_outlets" | "history" | "attendance" | "sales_target" | "payout" | "reconciliation" | "competition" | "item_perf" | "ceo_report" | "fines">("tasks");
   const RANGE_PRESETS = [
     { id: "yesterday", label: "Yesterday" },
     { id: "last7", label: "Last 7 days" },
@@ -688,6 +688,28 @@ export default function DashboardPage() {
   const [prodSaving, setProdSaving] = useState(false);
   const [compProducts, setCompProducts] = useState<any[]>([]);
   const [compHeadlineOn, setCompHeadlineOn] = useState(true);
+  const [fineStaff, setFineStaff] = useState<string[]>([]);
+  const [fineReason, setFineReason] = useState("1-star review");
+  const [fineAmount, setFineAmount] = useState("50");
+  const [fineDate, setFineDate] = useState(new Date().toISOString().split("T")[0]);
+  const [fineOutlet, setFineOutlet] = useState("");
+  const [fines, setFines] = useState<any[]>([]);
+  const [fineBusy, setFineBusy] = useState(false);
+  const fetchFines = async () => { const { data } = await supabase.from("fines").select("*").order("created_at", { ascending: false }).limit(50); setFines(data || []); };
+  const saveFine = async () => {
+    if (fineStaff.length === 0) { alert("Pick at least one person to fine."); return; }
+    const amt = Number(fineAmount) || 0;
+    setFineBusy(true);
+    for (const sid of fineStaff) {
+      const st = (ALL_STAFF as any[]).find((x) => x.id === sid);
+      await supabase.from("fines").insert({ staff_id: sid, staff_name: st?.name || sid, reason: fineReason.trim() || null, amount: amt, outlet: fineOutlet || null, fine_date: fineDate, entered_by: user?.id || null });
+      await supabase.from("point_adjustments").insert({ staff_id: sid, points: -amt, reason: `Fine: ${fineReason.trim() || "review"}` });
+    }
+    setFineBusy(false);
+    setFineStaff([]);
+    fetchFines();
+  };
+  useEffect(() => { if (user && (user.role === "Owner" || user.role === "Manager" || user.role === "Founder's Office")) fetchFines(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [user]);
   const [ceoWin, setCeoWin] = useState("7");
   const [ceoRepRows, setCeoRepRows] = useState<any[]>([]);
   const [ceoMonthRep, setCeoMonthRep] = useState<any[]>([]);
@@ -1837,6 +1859,11 @@ else await fetchOutletReportsByDate(outletEntryDate);
           <div onClick={() => { setActiveTab("tasks"); setSidebarOpen(false); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "tasks" ? "text-white bg-zinc-900 border-l-2 border-yellow-400" : "text-zinc-500 hover:text-white"}`}>
             <span>▣</span> Dashboard
           </div>
+          {(canAssign || isFO) && (
+            <div onClick={() => { setActiveTab("fines"); setSidebarOpen(false); fetchFines(); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "fines" ? "text-white bg-zinc-900 border-l-2 border-yellow-400" : "text-zinc-500 hover:text-white"}`}>
+              <span>⚖️</span> Fines
+            </div>
+          )}
           {(isOwner || isFO) && (
             <div onClick={() => { setActiveTab("ceo_report"); setSidebarOpen(false); fetchCeoData(ceoWin); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "ceo_report" ? "text-white bg-zinc-900 border-l-2 border-yellow-400" : "text-zinc-500 hover:text-white"}`}>
               <span>📊</span> CEO Report
@@ -3265,6 +3292,47 @@ else await fetchOutletReportsByDate(outletEntryDate);
                 </>
               );
             })()}
+          </div>
+        )}
+
+        {activeTab === "fines" && (canAssign || isFO) && (
+          <div>
+            <div className="mb-6 pb-5 border-b border-zinc-800">
+              <h2 className="text-2xl font-black tracking-tight">Fines</h2>
+              <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mt-1">Log a fine · it also hits their leaderboard score</p>
+            </div>
+            <div className="mb-8 border border-zinc-800 p-5 max-w-3xl">
+              <p className="text-sm font-semibold mb-1">Issue a fine</p>
+              <p className="text-xs text-zinc-500 mb-4">Pick who's fined (e.g. for a 1-star review), set the reason and amount. Each selected person is fined the same amount.</p>
+              <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mb-2">Who</p>
+              <div className="flex flex-wrap gap-2 mb-4">
+                {(ALL_STAFF as any[]).filter((s) => s.id !== "nishant").map((s) => { const on = fineStaff.includes(s.id); return (
+                  <button key={s.id} onClick={() => setFineStaff((pp) => on ? pp.filter((x) => x !== s.id) : [...pp, s.id])} className={`px-3 py-1.5 text-sm font-semibold transition-colors ${on ? "bg-red-500 text-white" : "bg-zinc-900 text-zinc-400 hover:text-white"}`}>{s.name.split(" ")[0]}</button>
+                ); })}
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                <div><label className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest">Reason</label><input type="text" value={fineReason} onChange={(e) => setFineReason(e.target.value)} className="w-full bg-black border border-zinc-800 text-white px-3 py-2 focus:outline-none focus:border-yellow-400 transition-colors text-sm mt-1" placeholder="1-star review" /></div>
+                <div><label className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest">Amount (₹)</label><input type="number" value={fineAmount} onChange={(e) => setFineAmount(e.target.value)} className="w-full bg-black border border-zinc-800 text-white px-3 py-2 focus:outline-none focus:border-yellow-400 transition-colors text-sm mt-1" /></div>
+                <div><label className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest">Date</label><input type="date" value={fineDate} onChange={(e) => setFineDate(e.target.value)} className="w-full bg-black border border-zinc-800 text-white px-3 py-2 focus:outline-none focus:border-yellow-400 transition-colors text-sm mt-1" /></div>
+                <div><label className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest">Outlet (optional)</label><select value={fineOutlet} onChange={(e) => setFineOutlet(e.target.value)} className="w-full bg-black border border-zinc-800 text-white px-3 py-2 focus:outline-none focus:border-yellow-400 transition-colors text-sm mt-1"><option value="">—</option>{OUTLETS.map((o) => <option key={o} value={o}>{OUTLET_NAMES[o] || o}</option>)}</select></div>
+              </div>
+              <button onClick={saveFine} disabled={fineBusy} className="mt-4 bg-red-500 text-white px-5 py-2 text-sm font-semibold hover:bg-red-400 disabled:opacity-50 transition-colors">{fineBusy ? "Saving…" : `Fine ${fineStaff.length || 0} ${fineStaff.length === 1 ? "person" : "people"}`}</button>
+            </div>
+            <div className="max-w-3xl">
+              <p className="text-sm font-semibold mb-3">Recent fines</p>
+              {fines.length === 0 ? <p className="text-sm text-zinc-600">No fines yet.</p> : (
+                <div className="space-y-1.5">
+                  {fines.map((f) => (
+                    <div key={f.id} className="flex items-baseline gap-3 text-sm border-b border-zinc-900 pb-1.5">
+                      <span className="font-medium w-24">{f.staff_name}</span>
+                      <span className="flex-1 text-zinc-400">{f.reason}{f.outlet ? ` · ${OUTLET_NAMES[f.outlet] || f.outlet}` : ""}</span>
+                      <span className="font-mono text-red-400">−₹{Number(f.amount).toLocaleString("en-IN")}</span>
+                      <span className="font-mono text-zinc-600 text-xs">{f.fine_date}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         )}
 
