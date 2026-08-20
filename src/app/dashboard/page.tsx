@@ -11,6 +11,7 @@ import ReconciliationTab from "./ReconciliationTab";
 import supabaseStock from "@/lib/supabaseStock";
 import { OUTLET_ID_TO_STOCK_NAME } from "@/lib/outletMap";
 import { FOOD_COST_MAP } from "@/lib/foodCosts";
+import { useActivityHeartbeat } from "@/lib/useActivityHeartbeat";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -369,6 +370,7 @@ function parseProductTable(text: string): { product: string; gmv: number | null;
 }
 
 export default function DashboardPage() {
+    useActivityHeartbeat(typeof window !== "undefined" ? localStorage.getItem("tf_session_id") : null);
   const router = useRouter();
   const [user, setUser] = useState<Staff | null>(null);
   const [tasks, setTasks] = useState<Task[]>([]);
