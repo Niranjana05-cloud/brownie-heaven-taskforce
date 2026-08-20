@@ -47,10 +47,11 @@ try {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ staff_id: selectedUser }),
   });
-  const { session_id } = await res.json();
-  if (session_id) localStorage.setItem("tf_session_id", session_id);
-} catch {
-  // don't block login if this fails
+  const json = await res.json();
+  alert("Activity log response: " + JSON.stringify(json));
+  if (json.session_id) localStorage.setItem("tf_session_id", json.session_id);
+} catch (e) {
+  alert("Activity log failed: " + e);
 }
 
 router.push("/dashboard");
