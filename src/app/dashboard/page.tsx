@@ -1826,7 +1826,7 @@ else await fetchOutletReportsByDate(outletEntryDate);
 
   return (
     <div className="min-h-screen bg-[#0a0a0b] text-white flex">
-        {(user?.role === "Owner" || user?.isFO) && <ActivityToastStack />}
+      {(user?.role === "Owner" || (user as any)?.isFO) && <ActivityToastStack />}
       {sidebarOpen && <div className="fixed inset-0 bg-black/50 z-30 md:hidden" onClick={() => setSidebarOpen(false)} />}
       {targetCheck && targetCheck.length > 0 && !targetReaction && (() => {
         const wins = targetCheck.filter((r: any) => r.status === "win").length;
