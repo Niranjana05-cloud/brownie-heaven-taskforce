@@ -2170,6 +2170,7 @@ else await fetchOutletReportsByDate(outletEntryDate);
                 </div>
               </div>
             )}
+           <p className="text-yellow-400 text-sm font-mono uppercase tracking-wide mb-2">🧾 Coming soon: Cheque Tracking System — landing in the next few days</p>
             <div className="flex justify-between items-start mb-6 pb-5 border-b border-zinc-800">
               <div>
                 <h2 className="text-2xl md:text-3xl font-black tracking-tight">{canAssign ? "Command Center" : "My Tasks"}</h2>
