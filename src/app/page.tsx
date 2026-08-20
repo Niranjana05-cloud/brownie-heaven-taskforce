@@ -40,7 +40,20 @@ export default function LoginPage() {
     if (dbError) { setError("Error: " + dbError.message); return; }
     if (!data) { setError("Wrong PIN. Try again."); return; }
     localStorage.setItem("currentUser", JSON.stringify(data));
-    router.push("/dashboard");
+
+try {
+  const res = await fetch("/api/activity/login", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ staff_id: selectedUser }),
+  });
+  const { session_id } = await res.json();
+  if (session_id) localStorage.setItem("tf_session_id", session_id);
+} catch {
+  // don't block login if this fails
+}
+
+router.push("/dashboard");
   };
 
   return (
