@@ -714,6 +714,21 @@ export default function DashboardPage() {
     fetchFines();
   };
   useEffect(() => { if (user && (user.role === "Owner" || user.role === "Manager" || user.role === "Founder's Office")) fetchFines(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [user]);
+   const [nrEntries, setNrEntries] = useState<any[]>([]);
+  const [nrNewContent, setNrNewContent] = useState("");
+  const [nrNewDate, setNrNewDate] = useState(new Date().toISOString().slice(0, 10));
+  const [nrSaving, setNrSaving] = useState(false);
+  const fetchNrEntries = async () => { const { data } = await supabase.from("niranjana_log").select("*").order("entry_date", { ascending: false }); setNrEntries(data || []); };
+  const saveNrEntry = async () => {
+    if (!nrNewContent.trim()) { alert("Write something first."); return; }
+    setNrSaving(true);
+    const { error } = await supabase.from("niranjana_log").insert({ entry_date: nrNewDate, content: nrNewContent.trim() });
+    setNrSaving(false);
+    if (error) { alert("Save failed: " + error.message); return; }
+    setNrNewContent("");
+    fetchNrEntries();
+  };
+  useEffect(() => { if (activeTab === "niranjana_report") fetchNrEntries(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [activeTab]);
   const [ceoWin, setCeoWin] = useState("7");
   const [ceoRepRows, setCeoRepRows] = useState<any[]>([]);
   const [ceoMonthRep, setCeoMonthRep] = useState<any[]>([]);
@@ -1893,7 +1908,7 @@ else await fetchOutletReportsByDate(outletEntryDate);
               <span>📊</span> CEO Report
             </div>
           )}
-          {isOwner && (
+                   {(isOwner || isFO) && (
             <div onClick={() => { setActiveTab("niranjana_report"); setSidebarOpen(false); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "niranjana_report" ? "text-white bg-zinc-900 border-l-2 border-yellow-400" : "text-zinc-500 hover:text-white"}`}>
               <span>📝</span> Niranjana's Report
             </div>
@@ -3346,19 +3361,26 @@ else await fetchOutletReportsByDate(outletEntryDate);
           </div>
         )}
 
-         {activeTab === "niranjana_report" && isOwner && (
+                 {activeTab === "niranjana_report" && (isOwner || isFO) && (
           <div>
             <div className="mb-6 pb-5 border-b border-zinc-800">
               <h2 className="text-2xl font-black tracking-tight">Niranjana's Report</h2>
               <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mt-1">What's been built, day by day</p>
             </div>
+            {isFO && (
+              <div className="mb-8 border border-zinc-800 p-5 max-w-3xl">
+                <p className="text-sm font-semibold mb-3">Add today's entry</p>
+                <div className="flex flex-wrap gap-3 mb-3">
+                  <input type="date" value={nrNewDate} onChange={(e) => setNrNewDate(e.target.value)} className="bg-black border border-zinc-800 text-white px-3 py-2 focus:outline-none focus:border-yellow-400 transition-colors text-sm" />
+                </div>
+                <textarea value={nrNewContent} onChange={(e) => setNrNewContent(e.target.value)} rows={4} className="w-full bg-black border border-zinc-800 text-white px-3 py-2 focus:outline-none focus:border-yellow-400 transition-colors text-sm" placeholder="What did you build/fix today?" />
+                <button onClick={saveNrEntry} disabled={nrSaving} className="mt-3 bg-yellow-400 text-black px-5 py-2 text-sm font-semibold hover:bg-yellow-300 disabled:opacity-50 transition-colors">{nrSaving ? "Saving…" : "Push to report"}</button>
+              </div>
+            )}
             <div className="max-w-3xl space-y-4 text-sm text-zinc-300 leading-relaxed">
-              <p><span className="text-yellow-400 font-mono text-xs mr-2">Aug 8</span>Redesigned the Outlet Reports PDF: added a date-aware projection column, a totals row, discount and tax columns, switched it to landscape to fit everything, and fixed a top-margin gap and mid-page section cuts. Updated August sales targets for all 12 outlets. Scoped Outlet Reports access so Ahila and Vishnu each only see their own outlets, and added Bharani with Besant Nagar access. Cleaned up stale leaderboard point adjustments and fixed the starting-credit display.</p>
-              <p><span className="text-yellow-400 font-mono text-xs mr-2">Aug 9</span>Built Rafiq's full Kitchen Operations dashboard: daily chef assignment form, a live workload-balance panel that flags overloaded chefs, production-vs-target tracking across all 45 products, a customised-order form for Sangam/hotel/custom cake orders, a target editor, and an editable chef roster. Built the full Payout tab for Swiggy/Zomato reconciliation. Built the Item Performance tool — upload sales data and get it automatically sorted into Stars, overpriced suspects, sweet-spot winners, and more. Added a Products sub-tab to Competition tracking.</p>
-              <p><span className="text-yellow-400 font-mono text-xs mr-2">Aug 14</span>Connected TASKFORCE to the Stock app's database (read-only) to calculate real gross margin per outlet, mapped food costs for 67 products, and fixed two bugs that were distorting the numbers. Added live margin tracking to the CEO Report with a "push to Nishant" button, plus margin data in the PDF export. Redesigned the Outlet Reports date filters. Added a custom-date CEO report with a money-leakage flag and top-cost-driver breakdown. Handed off Besant Nagar's daily filing from Ahila to Bharani. Closed out the fines system with a forced acknowledgment popup.</p>
-              <p><span className="text-yellow-400 font-mono text-xs mr-2">Aug 20</span>Built live "who's active" tracking — shows on the dashboard in real time when staff log into the system.</p>
-              <p><span className="text-yellow-400 font-mono text-xs mr-2">Aug 21</span>Designed and built the Cheque Tracking System demo, using real supplier names and amounts pulled from the actual purchase report.</p>
-              <p><span className="text-yellow-400 font-mono text-xs mr-2">Aug 22</span>Fixed a Savouries totals bug in Production Stock (a database constraint was silently blocking saves). Fixed the Supply Ledger price-update flow so a rate change correctly prompts to update the master price and reflects instantly. Built a Settings panel with a Night Mode toggle for the whole app. Updated par stock values and reordered outlet columns on the Dispatch screen.</p>
+              {nrEntries.length === 0 ? <p className="text-zinc-600">No entries yet.</p> : nrEntries.map((e) => (
+                <p key={e.id}><span className="text-yellow-400 font-mono text-xs mr-2">{new Date(e.entry_date + "T00:00:00").toLocaleDateString("en-IN", { month: "short", day: "numeric" })}</span>{e.content}</p>
+              ))}
             </div>
           </div>
         )}
