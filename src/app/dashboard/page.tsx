@@ -379,7 +379,7 @@ export default function DashboardPage() {
   const [reports, setReports] = useState<Report[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
-  const [activeTab, setActiveTab] = useState<"tasks" | "my_report" | "all_reports" | "analytics" | "outlet_reports" | "owner_outlets" | "history" | "attendance" | "sales_target" | "payout" | "reconciliation" | "competition" | "item_perf" | "ceo_report" | "fines">("tasks");
+  const [activeTab, setActiveTab] = useState<"tasks" | "my_report" | "all_reports" | "analytics" | "outlet_reports" | "owner_outlets" | "history" | "attendance" | "sales_target" | "payout" | "reconciliation" | "competition" | "item_perf" | "ceo_report" | "fines" | "niranjana_report">("tasks");
   const RANGE_PRESETS = [
     { id: "yesterday", label: "Yesterday" },
     { id: "last7", label: "Last 7 days" },
@@ -1888,9 +1888,14 @@ else await fetchOutletReportsByDate(outletEntryDate);
               <span>⚖️</span> Fines
             </div>
           )}
-          {(isOwner || isFO) && (
+                    {(isOwner || isFO) && (
             <div onClick={() => { setActiveTab("ceo_report"); setSidebarOpen(false); fetchCeoData(ceoWin); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "ceo_report" ? "text-white bg-zinc-900 border-l-2 border-yellow-400" : "text-zinc-500 hover:text-white"}`}>
               <span>📊</span> CEO Report
+            </div>
+          )}
+          {isOwner && (
+            <div onClick={() => { setActiveTab("niranjana_report"); setSidebarOpen(false); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "niranjana_report" ? "text-white bg-zinc-900 border-l-2 border-yellow-400" : "text-zinc-500 hover:text-white"}`}>
+              <span>📝</span> Niranjana's Report
             </div>
           )}
         <div onClick={() => { router.push("/leaderboard"); }} className="flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors text-zinc-500 hover:text-white">
@@ -3341,6 +3346,22 @@ else await fetchOutletReportsByDate(outletEntryDate);
           </div>
         )}
 
+         {activeTab === "niranjana_report" && isOwner && (
+          <div>
+            <div className="mb-6 pb-5 border-b border-zinc-800">
+              <h2 className="text-2xl font-black tracking-tight">Niranjana's Report</h2>
+              <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mt-1">What's been built, day by day</p>
+            </div>
+            <div className="max-w-3xl space-y-4 text-sm text-zinc-300 leading-relaxed">
+              <p><span className="text-yellow-400 font-mono text-xs mr-2">Aug 8</span>Redesigned the Outlet Reports PDF: added a date-aware projection column, a totals row, discount and tax columns, switched it to landscape to fit everything, and fixed a top-margin gap and mid-page section cuts. Updated August sales targets for all 12 outlets. Scoped Outlet Reports access so Ahila and Vishnu each only see their own outlets, and added Bharani with Besant Nagar access. Cleaned up stale leaderboard point adjustments and fixed the starting-credit display.</p>
+              <p><span className="text-yellow-400 font-mono text-xs mr-2">Aug 9</span>Built Rafiq's full Kitchen Operations dashboard: daily chef assignment form, a live workload-balance panel that flags overloaded chefs, production-vs-target tracking across all 45 products, a customised-order form for Sangam/hotel/custom cake orders, a target editor, and an editable chef roster. Built the full Payout tab for Swiggy/Zomato reconciliation. Built the Item Performance tool — upload sales data and get it automatically sorted into Stars, overpriced suspects, sweet-spot winners, and more. Added a Products sub-tab to Competition tracking.</p>
+              <p><span className="text-yellow-400 font-mono text-xs mr-2">Aug 14</span>Connected TASKFORCE to the Stock app's database (read-only) to calculate real gross margin per outlet, mapped food costs for 67 products, and fixed two bugs that were distorting the numbers. Added live margin tracking to the CEO Report with a "push to Nishant" button, plus margin data in the PDF export. Redesigned the Outlet Reports date filters. Added a custom-date CEO report with a money-leakage flag and top-cost-driver breakdown. Handed off Besant Nagar's daily filing from Ahila to Bharani. Closed out the fines system with a forced acknowledgment popup.</p>
+              <p><span className="text-yellow-400 font-mono text-xs mr-2">Aug 20</span>Built live "who's active" tracking — shows on the dashboard in real time when staff log into the system.</p>
+              <p><span className="text-yellow-400 font-mono text-xs mr-2">Aug 21</span>Designed and built the Cheque Tracking System demo, using real supplier names and amounts pulled from the actual purchase report.</p>
+              <p><span className="text-yellow-400 font-mono text-xs mr-2">Aug 22</span>Fixed a Savouries totals bug in Production Stock (a database constraint was silently blocking saves). Fixed the Supply Ledger price-update flow so a rate change correctly prompts to update the master price and reflects instantly. Built a Settings panel with a Night Mode toggle for the whole app. Updated par stock values and reordered outlet columns on the Dispatch screen.</p>
+            </div>
+          </div>
+        )}
         {activeTab === "fines" && (canAssign || isFO) && (
           <div>
             <div className="mb-6 pb-5 border-b border-zinc-800">
