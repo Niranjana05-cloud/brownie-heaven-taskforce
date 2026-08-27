@@ -667,6 +667,10 @@ export default function DashboardPage() {
   const [anLoading, setAnLoading] = useState(false);
   const [outletHealthData, setOutletHealthData] = useState<any[]>([]);
   const [outletHealthLoading, setOutletHealthLoading] = useState(false);
+  const [outletHealthSel, setOutletHealthSel] = useState(OUTLETS[0]);
+  const [outletHealthPdfBusy, setOutletHealthPdfBusy] = useState(false);
+  const [outletHealthData, setOutletHealthData] = useState<any[]>([]);
+  const [outletHealthLoading, setOutletHealthLoading] = useState(false);
   const [outletHealthExpanded, setOutletHealthExpanded] = useState<string | null>(null);
   const [scoreRows, setScoreRows] = useState<ScoreRow[]>([]);
 
@@ -1080,7 +1084,7 @@ export default function DashboardPage() {
     finally { document.body.removeChild(holder); }
   };
 
-   useEffect(() => {
+    useEffect(() => {
     if (activeTab !== "analytics") return;
     let cancelled = false;
     (async () => {
@@ -1094,6 +1098,56 @@ export default function DashboardPage() {
     })();
     return () => { cancelled = true; };
   }, [activeTab, anFrom, anTo]);
+
+  const fetchOutletHealth = async () => {
+    setOutletHealthLoading(true);
+    const { data } = await supabase.from("outlet_reports").select("outlet_id, report_date, shop_sales_value, swiggy_sales_value, zomato_sales_value").gte("report_date", "2026-06-01");
+    const byOutletMonth: Record<string, Record<string, number>> = {};
+    (data || []).forEach((r: any) => {
+      const oid = r.outlet_id;
+      const ym = r.report_date.slice(0, 7);
+      const total = (Number(r.shop_sales_value) || 0) + (Number(r.swiggy_sales_value) || 0) + (Number(r.zomato_sales_value) || 0);
+      if (!byOutletMonth[oid]) byOutletMonth[oid] = {};
+      byOutletMonth[oid][ym] = (byOutletMonth[oid][ym] || 0) + total;
+    });
+    const nowYm = new Date().toISOString().slice(0, 7);
+    const result = OUTLETS.map((oid) => {
+      const months = byOutletMonth[oid] || {};
+      const sortedMonths = Object.keys(months).sort();
+      const thisMonthTotal = months[nowYm] || 0;
+      const tgt = monthlyTargetFor(oid, nowYm);
+      const pct = tgt > 0 ? (thisMonthTotal / tgt) * 100 : 0;
+      const prevMonths = sortedMonths.filter((m) => m !== nowYm);
+      const lastMonth = prevMonths[prevMonths.length - 1];
+      const lastMonthTotal = lastMonth ? months[lastMonth] : null;
+      let trendPct: number | null = null;
+      if (lastMonthTotal && lastMonthTotal > 0) trendPct = ((thisMonthTotal - lastMonthTotal) / lastMonthTotal) * 100;
+      let health = "No data";
+      if (tgt > 0 && thisMonthTotal > 0) health = pct >= 90 ? "Strong" : pct >= 60 ? "On track" : pct >= 30 ? "Needs attention" : "Struggling";
+      let trendLabel = "steady";
+      if (trendPct != null) trendLabel = trendPct > 10 ? "growing" : trendPct < -10 ? "declining" : "steady";
+      return { oid, name: OUTLET_NAMES[oid] || oid, thisMonthTotal, pct, health, trendPct, trendLabel, monthly: sortedMonths.map((m) => ({ month: m, total: months[m] })) };
+    });
+    setOutletHealthData(result);
+    setOutletHealthLoading(false);
+  };
+  useEffect(() => { if (activeTab === "analytics" && outletHealthData.length === 0) fetchOutletHealth(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [activeTab]);
+
+  const downloadOutletHealthPDF = async () => {
+    const o = outletHealthData.find((x) => x.oid === outletHealthSel);
+    if (!o) { alert("No data for this outlet yet."); return; }
+    setOutletHealthPdfBusy(true);
+    const C = { bg: "#FAF3E7", card: "#FFFDF8", ink: "#3E2415", soft: "#8A6A4A", line: "#EADBC2", green: "#2E7D32", red: "#C62828", amber: "#C8901E" };
+    const inr = (n: number) => "₹" + Math.round(n).toLocaleString("en-IN");
+    const rows = o.monthly.map((m: any) => `<tr><td style="padding:6px 10px;border-bottom:1px solid ${C.line};font-size:12px">${m.month}</td><td style="padding:6px 10px;border-bottom:1px solid ${C.line};text-align:right;font-size:12px;font-weight:700">${inr(m.total)}</td></tr>`).join("");
+    const html = `<div style="width:794px;background:${C.bg};font-family:'Segoe UI',Arial,sans-serif;color:${C.ink};padding:34px"><div style="font-size:22px;font-weight:900">Brownie Heaven — Outlet Health: ${o.name}</div><div style="font-size:11px;color:${C.soft};margin-bottom:16px">Since June launch · generated ${new Date().toISOString().split("T")[0]}</div><div style="background:${C.card};border:1px solid ${C.line};border-radius:12px;padding:18px;margin-bottom:16px"><div style="font-size:13px;color:${C.soft}">This month</div><div style="font-size:28px;font-weight:900">${inr(o.thisMonthTotal)}</div><div style="font-size:13px;color:${o.health === "Strong" ? C.green : o.health === "Struggling" ? C.red : C.amber};font-weight:700">${o.health}${o.pct > 0 ? ` · ${o.pct.toFixed(0)}% of target` : ""}</div><div style="font-size:12px;color:${C.ink};margin-top:10px;line-height:1.5">${o.name} is ${o.trendLabel === "growing" ? "trending up" : o.trendLabel === "declining" ? "trending down" : "holding steady"} month over month.${o.health === "Struggling" ? " Worth a closer look — consistently underperforming." : o.health === "Strong" ? " Performing well, keep the momentum." : ""}</div></div><div style="font-size:14px;font-weight:800;margin-bottom:8px">Monthly sales history</div><table style="width:100%;border-collapse:collapse;background:${C.card};border:1px solid ${C.line};border-radius:10px;overflow:hidden"><thead><tr style="background:${C.ink}"><th style="padding:8px 10px;text-align:left;color:#FFF6E5;font-size:10px">MONTH</th><th style="padding:8px 10px;text-align:right;color:#FFF6E5;font-size:10px">SALES</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+    const lib = await loadH2P();
+    window.scrollTo(0, 0); await new Promise((r) => setTimeout(r, 50));
+    const holder = document.createElement("div"); holder.style.position = "fixed"; holder.style.left = "-9999px"; holder.style.top = "0"; holder.innerHTML = html; document.body.appendChild(holder);
+    try { await lib().set({ margin: 0, filename: `OutletHealth_${o.name.replace(/\s+/g, "_")}.pdf`, image: { type: "jpeg", quality: 0.97 }, html2canvas: { scale: 2, backgroundColor: C.bg }, jsPDF: { unit: "pt", format: "a4", orientation: "portrait" }, pagebreak: { mode: ["css", "legacy"] } }).from(holder.firstElementChild).save(); }
+    finally { document.body.removeChild(holder); }
+    setOutletHealthPdfBusy(false);
+  };
 
   const fetchOutletHealth = async () => {
     setOutletHealthLoading(true);
@@ -3766,7 +3820,34 @@ else await fetchOutletReportsByDate(outletEntryDate);
           <div>
             <div className="mb-8 pb-5 border-b border-zinc-800">
               <h2 className="text-2xl font-black tracking-tight">Analytics</h2>
-                         <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mt-1">Sales performance · channel mix</p>
+                        <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mt-1">Sales performance · channel mix</p>
+            </div>
+
+            <div className="mb-10">
+              <p className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-3">Outlet Health — since June launch</p>
+              <div className="flex flex-wrap items-end gap-3 mb-4">
+                <select value={outletHealthSel} onChange={(e) => setOutletHealthSel(e.target.value)} className="bg-black border border-zinc-800 text-white px-3 py-2 text-sm focus:outline-none focus:border-yellow-400">
+                  {OUTLETS.map((o) => <option key={o} value={o}>{OUTLET_NAMES[o] || o}</option>)}
+                </select>
+                <button onClick={downloadOutletHealthPDF} disabled={outletHealthPdfBusy} className="bg-zinc-800 text-white px-4 py-2 text-sm font-semibold hover:bg-zinc-700 disabled:opacity-50 transition-colors">{outletHealthPdfBusy ? "Generating…" : "⬇ Download Report (PDF)"}</button>
+              </div>
+              {outletHealthLoading ? <p className="text-sm text-zinc-500">Loading…</p> : (() => {
+                const o = outletHealthData.find((x) => x.oid === outletHealthSel);
+                if (!o) return null;
+                const healthColor = o.health === "Strong" ? "text-green-400" : o.health === "On track" ? "text-yellow-400" : o.health === "Needs attention" ? "text-orange-400" : o.health === "Struggling" ? "text-red-500" : "text-zinc-600";
+                const trendArrow = o.trendPct == null ? "" : o.trendPct > 0 ? "▲" : o.trendPct < 0 ? "▼" : "—";
+                return (
+                  <div className="bg-[#131316] border border-zinc-800 p-5 max-w-2xl">
+                    <div className="flex items-center justify-between mb-2">
+                      <p className="font-semibold text-sm">{o.name}</p>
+                      <span className={`font-mono text-[10px] uppercase tracking-widest ${healthColor}`}>{o.health}</span>
+                    </div>
+                    <p className="text-2xl font-black">₹{Math.round(o.thisMonthTotal).toLocaleString("en-IN")}</p>
+                    <p className="text-xs text-zinc-500 mb-3">this month{o.pct > 0 ? ` · ${o.pct.toFixed(0)}% of target` : ""}{o.trendPct != null ? ` · ${trendArrow} ${Math.abs(o.trendPct).toFixed(0)}% vs last month` : ""}</p>
+                    <p className="text-xs text-zinc-400">{o.name} is {o.trendLabel === "growing" ? "trending up" : o.trendLabel === "declining" ? "trending down" : "holding steady"} month over month.{o.health === "Struggling" ? " Worth a closer look — consistently underperforming." : o.health === "Strong" ? " Performing well, keep the momentum." : ""}</p>
+                  </div>
+                );
+              })()}
             </div>
 
             <div className="mb-10">
