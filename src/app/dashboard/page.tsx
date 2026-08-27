@@ -47,6 +47,7 @@ const ALL_STAFF = [
   { id: "ahila", name: "Ahila", role: "Custom Cakes & Asst Ops", report_time: "22:00", outlets: ["royapettah","adayar","bsr_mall","pallavaram","ra_puram"] },
   { id: "niranjana", name: "Niranjana", role: "Founder's Office", report_time: null, outlets: [] },
   { id: "rafiq", name: "Rafiq", role: "Head Chef", report_time: null, outlets: [] },
+  { id: "ajay", name: "Ajay", role: "Financial Analyst", report_time: null, outlets: [] },
   { id: "bharani", name: "Bharani", role: "Auditor", report_time: "22:00", outlets: ["besant_nagar"] },
 ];
 
@@ -1780,7 +1781,7 @@ else await fetchOutletReportsByDate(outletEntryDate);
   const isOwner = user?.role === "Owner";
   const canUploadItemPerf = user?.id === "ahila" || user?.id === "vishnu";
   const canViewItemPerf = canAssign || canUploadItemPerf;
-  const hasReportDuty = user?.role !== "Owner" && user?.role !== "Founder's Office" && user?.role !== "Head Chef";
+  const hasReportDuty = user?.role !== "Owner" && user?.role !== "Founder's Office" && user?.role !== "Head Chef" && user?.role !== "Financial Analyst";
   const [kChefs, setKChefs] = useState<any[]>([]);
   const [kRows, setKRows] = useState<any[]>([]);
   const [kDate, setKDate] = useState(new Date().toISOString().slice(0, 10));
@@ -2169,7 +2170,20 @@ else await fetchOutletReportsByDate(outletEntryDate);
             </div>
           </div>
        )}
-       {activeTab === "tasks" && user?.role !== "Founder's Office" && user?.role !== "Head Chef" && (
+       {activeTab === "tasks" && user?.role === "Financial Analyst" && (
+          <div className="flex flex-col items-center justify-center py-24 text-center max-w-lg mx-auto">
+            <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-[0.3em] mb-3">{user.role}</p>
+            <h2 className="text-4xl md:text-5xl font-black tracking-tight mb-3">Constructing</h2>
+            <p className="text-sm text-zinc-500 mb-8">This workspace is being built, {user.name.split(" ")[0]} — live within 24 hours.</p>
+            <div className="text-left w-full space-y-3 text-sm text-zinc-400 border border-zinc-800 p-5">
+              <p>Outlet-wise and channel-wise P&amp;Ls</p>
+              <p>Weekly cash-flow forecasting</p>
+              <p>Product and outlet contribution margins</p>
+              <p>Swiggy/Zomato net-realisation analysis</p>
+            </div>
+          </div>
+       )}
+       {activeTab === "tasks" && user?.role !== "Founder's Office" && user?.role !== "Head Chef" && user?.role !== "Financial Analyst" && (
          <div>
             {canAssign && compTop && (compHeadlineOn || user?.role === "Owner") && (
               <div className="mb-6 border border-zinc-800 bg-zinc-900/40 px-5 py-4">
