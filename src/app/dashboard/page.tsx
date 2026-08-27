@@ -669,9 +669,6 @@ export default function DashboardPage() {
   const [outletHealthLoading, setOutletHealthLoading] = useState(false);
   const [outletHealthSel, setOutletHealthSel] = useState(OUTLETS[0]);
   const [outletHealthPdfBusy, setOutletHealthPdfBusy] = useState(false);
-  const [outletHealthData, setOutletHealthData] = useState<any[]>([]);
-  const [outletHealthLoading, setOutletHealthLoading] = useState(false);
-  const [outletHealthExpanded, setOutletHealthExpanded] = useState<string | null>(null);
   const [scoreRows, setScoreRows] = useState<ScoreRow[]>([]);
 
   useEffect(() => {
