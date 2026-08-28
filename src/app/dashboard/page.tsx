@@ -734,6 +734,48 @@ export default function DashboardPage() {
     fetchNrEntries();
   };
   useEffect(() => { if (activeTab === "niranjana_report") fetchNrEntries(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [activeTab]);
+  const [pnlFrom, setPnlFrom] = useState<string>(() => new Date().toISOString().slice(0, 8) + "01");
+  const [pnlTo, setPnlTo] = useState<string>(() => new Date().toISOString().slice(0, 10));
+  const [pnlRows, setPnlRows] = useState<any[]>([]);
+  const [pnlLoading, setPnlLoading] = useState(false);
+  const fetchPnl = async () => {
+    setPnlLoading(true);
+    const { data: salesRows } = await supabase.from("outlet_reports").select("outlet_id, shop_sales_value, swiggy_sales_value, zomato_sales_value").gte("report_date", pnlFrom).lte("report_date", pnlTo);
+    const { data: targetRows } = await supabase.from("sales_target").select("outlet_id, brand, line_items").eq("brand", "BH");
+    const fixedByOutlet: Record<string, number> = {};
+    (targetRows || []).forEach((t: any) => {
+      const f = t.line_items?.fixed || {};
+      const ab = (v: any) => Math.abs(Number(v) || 0);
+      const rm = 0.2 * ab(f.rent);
+      fixedByOutlet[t.outlet_id] = ab(f.staff) + ab(f.rent) + ab(f.eb) + ab(f.transport) + rm + ab(f.pest) + ab(f.water) + ab(f.airtel);
+    });
+    const byOutlet: Record<string, { shop: number; swiggy: number; zomato: number }> = {};
+    (salesRows || []).forEach((r: any) => {
+      if (!byOutlet[r.outlet_id]) byOutlet[r.outlet_id] = { shop: 0, swiggy: 0, zomato: 0 };
+      byOutlet[r.outlet_id].shop += Number(r.shop_sales_value) || 0;
+      byOutlet[r.outlet_id].swiggy += Number(r.swiggy_sales_value) || 0;
+      byOutlet[r.outlet_id].zomato += Number(r.zomato_sales_value) || 0;
+    });
+    const rows = OUTLETS.filter((o) => byOutlet[o]).map((o) => {
+      const b = byOutlet[o];
+      const chan = (sales: number, isOnline: boolean) => {
+        const cogs = sales * 0.294;
+        const wastage = sales * 0.05;
+        const commission = isOnline ? sales * 0.5 : 0;
+        const contrib = sales - cogs - wastage - commission;
+        return { sales, cogs, wastage, commission, contrib, margin: sales > 0 ? (contrib / sales) * 100 : 0 };
+      };
+      const shop = chan(b.shop, false), swiggy = chan(b.swiggy, true), zomato = chan(b.zomato, true);
+      const totalSales = b.shop + b.swiggy + b.zomato;
+      const totalContrib = shop.contrib + swiggy.contrib + zomato.contrib;
+      const fixed = fixedByOutlet[o] || 0;
+      const netProfit = totalContrib - fixed;
+      return { oid: o, name: OUTLET_NAMES[o] || o, shop, swiggy, zomato, totalSales, totalContrib, fixed, netProfit, netMargin: totalSales > 0 ? (netProfit / totalSales) * 100 : 0 };
+    });
+    setPnlRows(rows);
+    setPnlLoading(false);
+  };
+  useEffect(() => { if (activeTab === "tasks" && user?.role === "Financial Analyst") fetchPnl(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [activeTab, user, pnlFrom, pnlTo]);
   const [ceoWin, setCeoWin] = useState("7");
   const [ceoRepRows, setCeoRepRows] = useState<any[]>([]);
   const [ceoMonthRep, setCeoMonthRep] = useState<any[]>([]);
