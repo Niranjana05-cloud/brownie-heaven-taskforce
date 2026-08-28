@@ -737,17 +737,17 @@ export default function DashboardPage() {
   const [pnlFrom, setPnlFrom] = useState<string>(() => new Date().toISOString().slice(0, 8) + "01");
   const [pnlTo, setPnlTo] = useState<string>(() => new Date().toISOString().slice(0, 10));
   const [pnlRows, setPnlRows] = useState<any[]>([]);
-  const [pnlLoading, setPnlLoading] = useState(false);
+  const [pnlExpanded, setPnlExpanded] = useState<string | null>(null);
   const fetchPnl = async () => {
     setPnlLoading(true);
     const { data: salesRows } = await supabase.from("outlet_reports").select("outlet_id, shop_sales_value, swiggy_sales_value, zomato_sales_value").gte("report_date", pnlFrom).lte("report_date", pnlTo);
     const { data: targetRows } = await supabase.from("sales_target").select("outlet_id, brand, line_items").eq("brand", "BH");
-    const fixedByOutlet: Record<string, number> = {};
+       const fixedByOutlet: Record<string, any> = {};
     (targetRows || []).forEach((t: any) => {
       const f = t.line_items?.fixed || {};
       const ab = (v: any) => Math.abs(Number(v) || 0);
-      const rm = 0.2 * ab(f.rent);
-      fixedByOutlet[t.outlet_id] = ab(f.staff) + ab(f.rent) + ab(f.eb) + ab(f.transport) + rm + ab(f.pest) + ab(f.water) + ab(f.airtel);
+      const staff = ab(f.staff), rent = ab(f.rent), eb = ab(f.eb), transport = ab(f.transport), rm = 0.2 * rent, pest = ab(f.pest), water = ab(f.water), airtel = ab(f.airtel);
+      fixedByOutlet[t.outlet_id] = { staff, rent, eb, transport, rm, pest, water, airtel, total: staff + rent + eb + transport + rm + pest + water + airtel };
     });
     const byOutlet: Record<string, { shop: number; swiggy: number; zomato: number }> = {};
     (salesRows || []).forEach((r: any) => {
@@ -768,9 +768,10 @@ export default function DashboardPage() {
       const shop = chan(b.shop, false), swiggy = chan(b.swiggy, true), zomato = chan(b.zomato, true);
       const totalSales = b.shop + b.swiggy + b.zomato;
       const totalContrib = shop.contrib + swiggy.contrib + zomato.contrib;
-      const fixed = fixedByOutlet[o] || 0;
+           const fixedBreakdown = fixedByOutlet[o] || { staff: 0, rent: 0, eb: 0, transport: 0, rm: 0, pest: 0, water: 0, airtel: 0, total: 0 };
+      const fixed = fixedBreakdown.total;
       const netProfit = totalContrib - fixed;
-      return { oid: o, name: OUTLET_NAMES[o] || o, shop, swiggy, zomato, totalSales, totalContrib, fixed, netProfit, netMargin: totalSales > 0 ? (netProfit / totalSales) * 100 : 0 };
+      return { oid: o, name: OUTLET_NAMES[o] || o, shop, swiggy, zomato, totalSales, totalContrib, fixed, fixedBreakdown, netProfit, netMargin: totalSales > 0 ? (netProfit / totalSales) * 100 : 0 };
     });
     setPnlRows(rows);
     setPnlLoading(false);
@@ -2431,18 +2432,37 @@ else await fetchOutletReportsByDate(outletEntryDate);
                     </tr>
                   </thead>
                   <tbody>
-                    {pnlRows.map((r) => (
-                      <tr key={r.oid} className="border-b border-zinc-900">
-                        <td className="py-2 pr-3 font-semibold">{r.name}</td>
-                        <td className="py-2 pr-3 text-right font-mono text-xs text-zinc-400">₹{Math.round(r.shop.sales).toLocaleString("en-IN")}<br /><span className="text-zinc-600">{r.shop.margin.toFixed(0)}% margin</span></td>
-                        <td className="py-2 pr-3 text-right font-mono text-xs text-zinc-400">₹{Math.round(r.swiggy.sales).toLocaleString("en-IN")}<br /><span className="text-zinc-600">{r.swiggy.margin.toFixed(0)}% margin</span></td>
-                        <td className="py-2 pr-3 text-right font-mono text-xs text-zinc-400">₹{Math.round(r.zomato.sales).toLocaleString("en-IN")}<br /><span className="text-zinc-600">{r.zomato.margin.toFixed(0)}% margin</span></td>
-                        <td className="py-2 pr-3 text-right font-mono font-semibold">₹{Math.round(r.totalSales).toLocaleString("en-IN")}</td>
-                        <td className="py-2 pr-3 text-right font-mono text-zinc-400">₹{Math.round(r.totalContrib).toLocaleString("en-IN")}</td>
-                        <td className="py-2 pr-3 text-right font-mono text-zinc-400">₹{Math.round(r.fixed).toLocaleString("en-IN")}</td>
-                        <td className={`py-2 pr-3 text-right font-mono font-bold ${r.netProfit >= 0 ? "text-green-400" : "text-red-500"}`}>₹{Math.round(r.netProfit).toLocaleString("en-IN")}</td>
-                        <td className={`py-2 text-right font-mono font-bold ${r.netMargin >= 0 ? "text-green-400" : "text-red-500"}`}>{r.netMargin.toFixed(1)}%</td>
-                      </tr>
+                                       {pnlRows.map((r) => (
+                      <React.Fragment key={r.oid}>
+                        <tr className="border-b border-zinc-900 cursor-pointer hover:bg-zinc-900" onClick={() => setPnlExpanded(pnlExpanded === r.oid ? null : r.oid)}>
+                          <td className="py-2 pr-3 font-semibold">{r.name} <span className="text-zinc-600 text-xs">{pnlExpanded === r.oid ? "▲" : "▼"}</span></td>
+                          <td className="py-2 pr-3 text-right font-mono text-xs text-zinc-400">₹{Math.round(r.shop.sales).toLocaleString("en-IN")}<br /><span className="text-zinc-600">{r.shop.margin.toFixed(0)}% margin</span></td>
+                          <td className="py-2 pr-3 text-right font-mono text-xs text-zinc-400">₹{Math.round(r.swiggy.sales).toLocaleString("en-IN")}<br /><span className="text-zinc-600">{r.swiggy.margin.toFixed(0)}% margin</span></td>
+                          <td className="py-2 pr-3 text-right font-mono text-xs text-zinc-400">₹{Math.round(r.zomato.sales).toLocaleString("en-IN")}<br /><span className="text-zinc-600">{r.zomato.margin.toFixed(0)}% margin</span></td>
+                          <td className="py-2 pr-3 text-right font-mono font-semibold">₹{Math.round(r.totalSales).toLocaleString("en-IN")}</td>
+                          <td className="py-2 pr-3 text-right font-mono text-zinc-400">₹{Math.round(r.totalContrib).toLocaleString("en-IN")}</td>
+                          <td className="py-2 pr-3 text-right font-mono text-zinc-400">₹{Math.round(r.fixed).toLocaleString("en-IN")}</td>
+                          <td className={`py-2 pr-3 text-right font-mono font-bold ${r.netProfit >= 0 ? "text-green-400" : "text-red-500"}`}>₹{Math.round(r.netProfit).toLocaleString("en-IN")}</td>
+                          <td className={`py-2 text-right font-mono font-bold ${r.netMargin >= 0 ? "text-green-400" : "text-red-500"}`}>{r.netMargin.toFixed(1)}%</td>
+                        </tr>
+                        {pnlExpanded === r.oid && (
+                          <tr className="bg-zinc-900/40">
+                            <td colSpan={9} className="py-3 px-3">
+                              <p className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-2">Fixed costs — {r.name} (from Sales Target)</p>
+                              <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs font-mono">
+                                <div className="flex justify-between bg-black/40 px-2 py-1"><span className="text-zinc-500">Staff</span><span className="text-zinc-300">₹{Math.round(r.fixedBreakdown.staff).toLocaleString("en-IN")}</span></div>
+                                <div className="flex justify-between bg-black/40 px-2 py-1"><span className="text-zinc-500">Rent</span><span className="text-zinc-300">₹{Math.round(r.fixedBreakdown.rent).toLocaleString("en-IN")}</span></div>
+                                <div className="flex justify-between bg-black/40 px-2 py-1"><span className="text-zinc-500">Electricity</span><span className="text-zinc-300">₹{Math.round(r.fixedBreakdown.eb).toLocaleString("en-IN")}</span></div>
+                                <div className="flex justify-between bg-black/40 px-2 py-1"><span className="text-zinc-500">Transport</span><span className="text-zinc-300">₹{Math.round(r.fixedBreakdown.transport).toLocaleString("en-IN")}</span></div>
+                                <div className="flex justify-between bg-black/40 px-2 py-1"><span className="text-zinc-500">R&amp;M (20% rent)</span><span className="text-zinc-300">₹{Math.round(r.fixedBreakdown.rm).toLocaleString("en-IN")}</span></div>
+                                <div className="flex justify-between bg-black/40 px-2 py-1"><span className="text-zinc-500">Pest control</span><span className="text-zinc-300">₹{Math.round(r.fixedBreakdown.pest).toLocaleString("en-IN")}</span></div>
+                                <div className="flex justify-between bg-black/40 px-2 py-1"><span className="text-zinc-500">Water</span><span className="text-zinc-300">₹{Math.round(r.fixedBreakdown.water).toLocaleString("en-IN")}</span></div>
+                                <div className="flex justify-between bg-black/40 px-2 py-1"><span className="text-zinc-500">Airtel/WiFi</span><span className="text-zinc-300">₹{Math.round(r.fixedBreakdown.airtel).toLocaleString("en-IN")}</span></div>
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                      </React.Fragment>
                     ))}
                   </tbody>
                 </table>
