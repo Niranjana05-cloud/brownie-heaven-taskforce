@@ -2963,8 +2963,8 @@ else await fetchOutletReportsByDate(outletEntryDate);
     <div className="mb-8">
     <div className="flex items-center justify-between mb-3">
       <p className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest">Outlet Health — since June launch</p>
-      <button onClick={downloadOutletHealthPDF} disabled={outletHealthPdfBusy} title="Download report" className="p-2 border border-zinc-800 text-zinc-400 hover:border-yellow-400 hover:text-yellow-400 transition-colors disabled:opacity-50">
-        {outletHealthPdfBusy ? "…" : "⬇"}
+          <button onClick={downloadOutletHealthPDF} disabled={outletHealthPdfBusy} className="px-3 py-1.5 border border-zinc-800 text-zinc-400 hover:border-yellow-400 hover:text-yellow-400 transition-colors disabled:opacity-50 text-[10px] font-mono uppercase tracking-widest">
+        {outletHealthPdfBusy ? "…" : "Export"}
       </button>
     </div>
     <div className="mb-4">
