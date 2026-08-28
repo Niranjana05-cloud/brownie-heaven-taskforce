@@ -1128,7 +1128,7 @@ export default function DashboardPage() {
     setOutletHealthData(result);
     setOutletHealthLoading(false);
   };
-  useEffect(() => { if (activeTab === "analytics" && outletHealthData.length === 0) fetchOutletHealth(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [activeTab]);
+   useEffect(() => { if ((activeTab === "analytics" || activeTab === "owner_outlets") && outletHealthData.length === 0) fetchOutletHealth(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [activeTab]);
 
   const downloadOutletHealthPDF = async () => {
     const o = outletHealthData.find((x) => x.oid === outletHealthSel);
@@ -2828,6 +2828,37 @@ else await fetchOutletReportsByDate(outletEntryDate);
     className="bg-black border border-zinc-800 text-white px-4 py-2.5 focus:outline-none focus:border-yellow-400 transition-colors font-mono text-sm"
   />
 </div>
+    <div className="mb-8">
+    <div className="flex items-center justify-between mb-3">
+      <p className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest">Outlet Health — since June launch</p>
+      <button onClick={downloadOutletHealthPDF} disabled={outletHealthPdfBusy} title="Download report" className="p-2 border border-zinc-800 text-zinc-400 hover:border-yellow-400 hover:text-yellow-400 transition-colors disabled:opacity-50">
+        {outletHealthPdfBusy ? "…" : "⬇"}
+      </button>
+    </div>
+    <div className="mb-4">
+      <select value={outletHealthSel} onChange={(e) => setOutletHealthSel(e.target.value)} className="bg-black border border-zinc-800 text-white px-3 py-2 text-sm focus:outline-none focus:border-yellow-400">
+        {OUTLETS.map((o) => <option key={o} value={o}>{OUTLET_NAMES[o] || o}</option>)}
+      </select>
+    </div>
+    {outletHealthLoading ? <p className="text-sm text-zinc-500">Loading…</p> : (() => {
+      const o = outletHealthData.find((x) => x.oid === outletHealthSel);
+      if (!o) return null;
+      const healthColor = o.health === "Strong" ? "text-green-400" : o.health === "On track" ? "text-yellow-400" : o.health === "Needs attention" ? "text-orange-400" : o.health === "Struggling" ? "text-red-500" : "text-zinc-600";
+      const trendArrow = o.trendPct == null ? "" : o.trendPct > 0 ? "▲" : o.trendPct < 0 ? "▼" : "—";
+      return (
+        <div className="bg-[#131316] border border-zinc-800 p-5 max-w-2xl">
+          <div className="flex items-center justify-between mb-2">
+            <p className="font-semibold text-sm">{o.name}</p>
+            <span className={`font-mono text-[10px] uppercase tracking-widest ${healthColor}`}>{o.health}</span>
+          </div>
+          <p className="text-2xl font-black">₹{Math.round(o.thisMonthTotal).toLocaleString("en-IN")}</p>
+          <p className="text-xs text-zinc-500 mb-3">this month{o.pct > 0 ? ` · ${o.pct.toFixed(0)}% of target` : ""}{o.trendPct != null ? ` · ${trendArrow} ${Math.abs(o.trendPct).toFixed(0)}% vs last month` : ""}</p>
+          <p className="text-xs text-zinc-400">{o.name} is {o.trendLabel === "growing" ? "trending up" : o.trendLabel === "declining" ? "trending down" : "holding steady"} month over month.{o.health === "Struggling" ? " Worth a closer look — consistently underperforming." : o.health === "Strong" ? " Performing well, keep the momentum." : ""}</p>
+        </div>
+      );
+    })()}
+  </div>
+
   <div className="bg-[#131316] border border-zinc-800 p-5 mb-6">
     <p className="text-sm font-bold uppercase tracking-widest mb-1">📥 Download custom report</p>
     <p className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-4">Pick a date range + outlets · Excel or PDF · daily rows + summary</p>
@@ -3786,34 +3817,7 @@ else await fetchOutletReportsByDate(outletEntryDate);
                         <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mt-1">Sales performance · channel mix</p>
             </div>
 
-            <div className="mb-10">
-              <p className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-3">Outlet Health — since June launch</p>
-              <div className="flex flex-wrap items-end gap-3 mb-4">
-                <select value={outletHealthSel} onChange={(e) => setOutletHealthSel(e.target.value)} className="bg-black border border-zinc-800 text-white px-3 py-2 text-sm focus:outline-none focus:border-yellow-400">
-                  {OUTLETS.map((o) => <option key={o} value={o}>{OUTLET_NAMES[o] || o}</option>)}
-                </select>
-                <button onClick={downloadOutletHealthPDF} disabled={outletHealthPdfBusy} className="bg-zinc-800 text-white px-4 py-2 text-sm font-semibold hover:bg-zinc-700 disabled:opacity-50 transition-colors">{outletHealthPdfBusy ? "Generating…" : "⬇ Download Report (PDF)"}</button>
-              </div>
-              {outletHealthLoading ? <p className="text-sm text-zinc-500">Loading…</p> : (() => {
-                const o = outletHealthData.find((x) => x.oid === outletHealthSel);
-                if (!o) return null;
-                const healthColor = o.health === "Strong" ? "text-green-400" : o.health === "On track" ? "text-yellow-400" : o.health === "Needs attention" ? "text-orange-400" : o.health === "Struggling" ? "text-red-500" : "text-zinc-600";
-                const trendArrow = o.trendPct == null ? "" : o.trendPct > 0 ? "▲" : o.trendPct < 0 ? "▼" : "—";
-                return (
-                  <div className="bg-[#131316] border border-zinc-800 p-5 max-w-2xl">
-                    <div className="flex items-center justify-between mb-2">
-                      <p className="font-semibold text-sm">{o.name}</p>
-                      <span className={`font-mono text-[10px] uppercase tracking-widest ${healthColor}`}>{o.health}</span>
-                    </div>
-                    <p className="text-2xl font-black">₹{Math.round(o.thisMonthTotal).toLocaleString("en-IN")}</p>
-                    <p className="text-xs text-zinc-500 mb-3">this month{o.pct > 0 ? ` · ${o.pct.toFixed(0)}% of target` : ""}{o.trendPct != null ? ` · ${trendArrow} ${Math.abs(o.trendPct).toFixed(0)}% vs last month` : ""}</p>
-                    <p className="text-xs text-zinc-400">{o.name} is {o.trendLabel === "growing" ? "trending up" : o.trendLabel === "declining" ? "trending down" : "holding steady"} month over month.{o.health === "Struggling" ? " Worth a closer look — consistently underperforming." : o.health === "Strong" ? " Performing well, keep the momentum." : ""}</p>
-                  </div>
-                );
-              })()}
-            </div>
-
-           {/* Sales performance (date range) */}
+            {/* Sales performance (date range) */}
             <div className="mb-10">
               <div className="flex flex-wrap items-end gap-3 mb-6">
                 <div>
