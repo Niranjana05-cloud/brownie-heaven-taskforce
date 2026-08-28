@@ -1143,42 +1143,8 @@ export default function DashboardPage() {
     const holder = document.createElement("div"); holder.style.position = "fixed"; holder.style.left = "-9999px"; holder.style.top = "0"; holder.innerHTML = html; document.body.appendChild(holder);
     try { await lib().set({ margin: 0, filename: `OutletHealth_${o.name.replace(/\s+/g, "_")}.pdf`, image: { type: "jpeg", quality: 0.97 }, html2canvas: { scale: 2, backgroundColor: C.bg }, jsPDF: { unit: "pt", format: "a4", orientation: "portrait" }, pagebreak: { mode: ["css", "legacy"] } }).from(holder.firstElementChild).save(); }
     finally { document.body.removeChild(holder); }
-    setOutletHealthPdfBusy(false);
+      setOutletHealthPdfBusy(false);
   };
-
-  const fetchOutletHealth = async () => {
-    setOutletHealthLoading(true);
-    const { data } = await supabase.from("outlet_reports").select("outlet_id, report_date, shop_sales_value, swiggy_sales_value, zomato_sales_value").gte("report_date", "2026-06-01");
-    const byOutletMonth: Record<string, Record<string, number>> = {};
-    (data || []).forEach((r: any) => {
-      const oid = r.outlet_id;
-      const ym = r.report_date.slice(0, 7);
-      const total = (Number(r.shop_sales_value) || 0) + (Number(r.swiggy_sales_value) || 0) + (Number(r.zomato_sales_value) || 0);
-      if (!byOutletMonth[oid]) byOutletMonth[oid] = {};
-      byOutletMonth[oid][ym] = (byOutletMonth[oid][ym] || 0) + total;
-    });
-    const nowYm = new Date().toISOString().slice(0, 7);
-    const result = OUTLETS.map((oid) => {
-      const months = byOutletMonth[oid] || {};
-      const sortedMonths = Object.keys(months).sort();
-      const thisMonthTotal = months[nowYm] || 0;
-      const tgt = monthlyTargetFor(oid, nowYm);
-      const pct = tgt > 0 ? (thisMonthTotal / tgt) * 100 : 0;
-      const prevMonths = sortedMonths.filter((m) => m !== nowYm);
-      const lastMonth = prevMonths[prevMonths.length - 1];
-      const lastMonthTotal = lastMonth ? months[lastMonth] : null;
-      let trendPct: number | null = null;
-      if (lastMonthTotal && lastMonthTotal > 0) trendPct = ((thisMonthTotal - lastMonthTotal) / lastMonthTotal) * 100;
-      let health = "No data";
-      if (tgt > 0 && thisMonthTotal > 0) health = pct >= 90 ? "Strong" : pct >= 60 ? "On track" : pct >= 30 ? "Needs attention" : "Struggling";
-      let trendLabel = "steady";
-      if (trendPct != null) trendLabel = trendPct > 10 ? "growing" : trendPct < -10 ? "declining" : "steady";
-      return { oid, name: OUTLET_NAMES[oid] || oid, thisMonthTotal, pct, health, trendPct, trendLabel, monthly: sortedMonths.map((m) => ({ month: m, total: months[m] })) };
-    });
-    setOutletHealthData(result);
-    setOutletHealthLoading(false);
-  };
-  useEffect(() => { if (activeTab === "analytics" && outletHealthData.length === 0) fetchOutletHealth(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [activeTab]);
 
   const anAgg = (() => {
     const ch = { shop: { c: 0, v: 0 }, swiggy: { c: 0, v: 0 }, zomato: { c: 0, v: 0 } };
@@ -3847,48 +3813,7 @@ else await fetchOutletReportsByDate(outletEntryDate);
               })()}
             </div>
 
-            <div className="mb-10">
-              <p className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-4">Outlet Health — since June launch</p>
-              {outletHealthLoading ? <p className="text-sm text-zinc-500">Loading…</p> : (
-                <div className="bg-[#131316] border border-zinc-800">
-                  {outletHealthData.map((o) => {
-                    const healthColor = o.health === "Strong" ? "text-green-400" : o.health === "On track" ? "text-yellow-400" : o.health === "Needs attention" ? "text-orange-400" : o.health === "Struggling" ? "text-red-500" : "text-zinc-600";
-                    const trendArrow = o.trendPct == null ? "" : o.trendPct > 0 ? "▲" : o.trendPct < 0 ? "▼" : "—";
-                    const expanded = outletHealthExpanded === o.oid;
-                    return (
-                      <div key={o.oid} className="border-b border-zinc-800 last:border-0">
-                        <div className="flex items-center justify-between px-5 py-3 cursor-pointer hover:bg-zinc-900 transition-colors" onClick={() => setOutletHealthExpanded(expanded ? null : o.oid)}>
-                          <div>
-                            <p className="font-semibold text-sm">{o.name}</p>
-                            <p className="text-[10px] font-mono text-zinc-500">₹{Math.round(o.thisMonthTotal).toLocaleString("en-IN")} this month{o.pct > 0 ? ` · ${o.pct.toFixed(0)}% of target` : ""}</p>
-                          </div>
-                          <div className="flex items-center gap-3">
-                            {o.trendPct != null && <span className={`text-xs font-mono ${o.trendPct > 0 ? "text-green-400" : o.trendPct < 0 ? "text-red-400" : "text-zinc-500"}`}>{trendArrow} {Math.abs(o.trendPct).toFixed(0)}%</span>}
-                            <span className={`font-mono text-[10px] uppercase tracking-widest ${healthColor}`}>{o.health}</span>
-                            <span className="text-zinc-600 text-xs">{expanded ? "▲" : "▼"}</span>
-                          </div>
-                        </div>
-                        {expanded && (
-                          <div className="px-5 pb-4">
-                            <p className="text-xs text-zinc-400 mb-3">{o.name} is {o.trendLabel === "growing" ? "trending up" : o.trendLabel === "declining" ? "trending down" : "holding steady"} month over month, currently at {o.pct.toFixed(0)}% of target.{o.health === "Struggling" ? " Worth a closer look — consistently underperforming." : o.health === "Strong" ? " Performing well, keep the momentum." : ""}</p>
-                            <div className="space-y-1">
-                              {o.monthly.map((m: any) => (
-                                <div key={m.month} className="flex justify-between text-xs font-mono text-zinc-500">
-                                  <span>{m.month}</span>
-                                  <span>₹{Math.round(m.total).toLocaleString("en-IN")}</span>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-            
-            {/* Sales performance (date range) */}
+           {/* Sales performance (date range) */}
             <div className="mb-10">
               <div className="flex flex-wrap items-end gap-3 mb-6">
                 <div>
