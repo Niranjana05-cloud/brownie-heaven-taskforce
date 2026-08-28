@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, Fragment } from "react";
 import * as XLSX from "xlsx";
 import { useRouter } from "next/navigation";
 import { createClient } from "@supabase/supabase-js";
@@ -2452,7 +2452,7 @@ else await fetchOutletReportsByDate(outletEntryDate);
                   </thead>
                   <tbody>
                                        {pnlRows.map((r) => (
-                      <React.Fragment key={r.oid}>
+                          <Fragment key={r.oid}>
                         <tr className="border-b border-zinc-900 cursor-pointer hover:bg-zinc-900" onClick={() => setPnlExpanded(pnlExpanded === r.oid ? null : r.oid)}>
                           <td className="py-2 pr-3 font-semibold">{r.name} <span className="text-zinc-600 text-xs">{pnlExpanded === r.oid ? "▲" : "▼"}</span></td>
                           <td className="py-2 pr-3 text-right font-mono text-xs text-zinc-400">₹{Math.round(r.shop.sales).toLocaleString("en-IN")}<br /><span className="text-zinc-600">{r.shop.margin.toFixed(0)}% margin</span></td>
@@ -2481,7 +2481,7 @@ else await fetchOutletReportsByDate(outletEntryDate);
                             </td>
                           </tr>
                         )}
-                      </React.Fragment>
+                     </Fragment>
                     ))}
                   </tbody>
                 </table>
