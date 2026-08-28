@@ -2398,16 +2398,64 @@ else await fetchOutletReportsByDate(outletEntryDate);
             </div>
           </div>
        )}
-       {activeTab === "tasks" && user?.role === "Financial Analyst" && (
-          <div className="flex flex-col items-center justify-center py-24 text-center max-w-lg mx-auto">
-            <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-[0.3em] mb-3">{user.role}</p>
-            <h2 className="text-4xl md:text-5xl font-black tracking-tight mb-3">Constructing</h2>
-            <p className="text-sm text-zinc-500 mb-8">This workspace is being built, {user.name.split(" ")[0]} — live within 24 hours.</p>
-            <div className="text-left w-full space-y-3 text-sm text-zinc-400 border border-zinc-800 p-5">
-              <p>Outlet-wise and channel-wise P&amp;Ls</p>
-              <p>Weekly cash-flow forecasting</p>
-              <p>Product and outlet contribution margins</p>
-              <p>Swiggy/Zomato net-realisation analysis</p>
+              {activeTab === "tasks" && user?.role === "Financial Analyst" && (
+          <div>
+            <div className="flex justify-between items-start mb-6 pb-5 border-b border-zinc-800">
+              <div>
+                <h2 className="text-2xl md:text-3xl font-black tracking-tight">Outlet & Channel P&amp;L</h2>
+                <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mt-1">Real fixed costs from Sales Target · 29.4% COGS · 5% wastage · 50% online commission</p>
+              </div>
+              <div className="flex gap-2">
+                <input type="date" value={pnlFrom} onChange={(e) => setPnlFrom(e.target.value)} className="bg-black border border-zinc-800 text-white px-3 py-2 focus:outline-none focus:border-yellow-400 text-sm font-mono" />
+                <input type="date" value={pnlTo} onChange={(e) => setPnlTo(e.target.value)} className="bg-black border border-zinc-800 text-white px-3 py-2 focus:outline-none focus:border-yellow-400 text-sm font-mono" />
+              </div>
+            </div>
+            {pnlLoading ? (
+              <p className="text-sm text-zinc-500">Loading…</p>
+            ) : pnlRows.length === 0 ? (
+              <p className="text-sm text-zinc-500">No sales data for this range.</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-left text-[10px] font-mono text-zinc-500 uppercase border-b border-zinc-800">
+                      <th className="py-2 pr-3">Outlet</th>
+                      <th className="py-2 pr-3 text-right">Shop</th>
+                      <th className="py-2 pr-3 text-right">Swiggy</th>
+                      <th className="py-2 pr-3 text-right">Zomato</th>
+                      <th className="py-2 pr-3 text-right">Total Sales</th>
+                      <th className="py-2 pr-3 text-right">Contribution</th>
+                      <th className="py-2 pr-3 text-right">Fixed Costs</th>
+                      <th className="py-2 pr-3 text-right">Net Profit</th>
+                      <th className="py-2 text-right">Net %</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {pnlRows.map((r) => (
+                      <tr key={r.oid} className="border-b border-zinc-900">
+                        <td className="py-2 pr-3 font-semibold">{r.name}</td>
+                        <td className="py-2 pr-3 text-right font-mono text-xs text-zinc-400">₹{Math.round(r.shop.sales).toLocaleString("en-IN")}<br /><span className="text-zinc-600">{r.shop.margin.toFixed(0)}% margin</span></td>
+                        <td className="py-2 pr-3 text-right font-mono text-xs text-zinc-400">₹{Math.round(r.swiggy.sales).toLocaleString("en-IN")}<br /><span className="text-zinc-600">{r.swiggy.margin.toFixed(0)}% margin</span></td>
+                        <td className="py-2 pr-3 text-right font-mono text-xs text-zinc-400">₹{Math.round(r.zomato.sales).toLocaleString("en-IN")}<br /><span className="text-zinc-600">{r.zomato.margin.toFixed(0)}% margin</span></td>
+                        <td className="py-2 pr-3 text-right font-mono font-semibold">₹{Math.round(r.totalSales).toLocaleString("en-IN")}</td>
+                        <td className="py-2 pr-3 text-right font-mono text-zinc-400">₹{Math.round(r.totalContrib).toLocaleString("en-IN")}</td>
+                        <td className="py-2 pr-3 text-right font-mono text-zinc-400">₹{Math.round(r.fixed).toLocaleString("en-IN")}</td>
+                        <td className={`py-2 pr-3 text-right font-mono font-bold ${r.netProfit >= 0 ? "text-green-400" : "text-red-500"}`}>₹{Math.round(r.netProfit).toLocaleString("en-IN")}</td>
+                        <td className={`py-2 text-right font-mono font-bold ${r.netMargin >= 0 ? "text-green-400" : "text-red-500"}`}>{r.netMargin.toFixed(1)}%</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                <p className="text-[10px] text-zinc-600 mt-3">Fixed costs pulled from what's entered in Sales Target for each outlet (BH brand). Outlets with no fixed-cost entry yet show ₹0 there — worth flagging to whoever owns that outlet.</p>
+              </div>
+            )}
+            <div className="mt-10 pt-6 border-t border-zinc-800">
+              <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-[0.2em] mb-3">Still building</p>
+              <div className="text-sm text-zinc-500 space-y-2">
+                <p>Weekly cash-flow forecasting</p>
+                <p>Product and outlet contribution margins</p>
+                <p>Swiggy/Zomato net-realisation analysis</p>
+              </div>
             </div>
           </div>
        )}
