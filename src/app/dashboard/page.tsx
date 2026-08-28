@@ -737,6 +737,7 @@ export default function DashboardPage() {
   const [pnlFrom, setPnlFrom] = useState<string>(() => new Date().toISOString().slice(0, 8) + "01");
   const [pnlTo, setPnlTo] = useState<string>(() => new Date().toISOString().slice(0, 10));
   const [pnlRows, setPnlRows] = useState<any[]>([]);
+  const [pnlLoading, setPnlLoading] = useState(false);
   const [pnlExpanded, setPnlExpanded] = useState<string | null>(null);
   const fetchPnl = async () => {
     setPnlLoading(true);
