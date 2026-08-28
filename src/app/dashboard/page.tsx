@@ -1134,16 +1134,148 @@ export default function DashboardPage() {
     const o = outletHealthData.find((x) => x.oid === outletHealthSel);
     if (!o) { alert("No data for this outlet yet."); return; }
     setOutletHealthPdfBusy(true);
-    const C = { bg: "#FAF3E7", card: "#FFFDF8", ink: "#3E2415", soft: "#8A6A4A", line: "#EADBC2", green: "#2E7D32", red: "#C62828", amber: "#C8901E" };
-    const inr = (n: number) => "₹" + Math.round(n).toLocaleString("en-IN");
-    const rows = o.monthly.map((m: any) => `<tr><td style="padding:6px 10px;border-bottom:1px solid ${C.line};font-size:12px">${m.month}</td><td style="padding:6px 10px;border-bottom:1px solid ${C.line};text-align:right;font-size:12px;font-weight:700">${inr(m.total)}</td></tr>`).join("");
-    const html = `<div style="width:794px;background:${C.bg};font-family:'Segoe UI',Arial,sans-serif;color:${C.ink};padding:34px"><div style="font-size:22px;font-weight:900">Brownie Heaven — Outlet Health: ${o.name}</div><div style="font-size:11px;color:${C.soft};margin-bottom:16px">Since June launch · generated ${new Date().toISOString().split("T")[0]}</div><div style="background:${C.card};border:1px solid ${C.line};border-radius:12px;padding:18px;margin-bottom:16px"><div style="font-size:13px;color:${C.soft}">This month</div><div style="font-size:28px;font-weight:900">${inr(o.thisMonthTotal)}</div><div style="font-size:13px;color:${o.health === "Strong" ? C.green : o.health === "Struggling" ? C.red : C.amber};font-weight:700">${o.health}${o.pct > 0 ? ` · ${o.pct.toFixed(0)}% of target` : ""}</div><div style="font-size:12px;color:${C.ink};margin-top:10px;line-height:1.5">${o.name} is ${o.trendLabel === "growing" ? "trending up" : o.trendLabel === "declining" ? "trending down" : "holding steady"} month over month.${o.health === "Struggling" ? " Worth a closer look — consistently underperforming." : o.health === "Strong" ? " Performing well, keep the momentum." : ""}</div></div><div style="font-size:14px;font-weight:800;margin-bottom:8px">Monthly sales history</div><table style="width:100%;border-collapse:collapse;background:${C.card};border:1px solid ${C.line};border-radius:10px;overflow:hidden"><thead><tr style="background:${C.ink}"><th style="padding:8px 10px;text-align:left;color:#FFF6E5;font-size:10px">MONTH</th><th style="padding:8px 10px;text-align:right;color:#FFF6E5;font-size:10px">SALES</th></tr></thead><tbody>${rows}</tbody></table></div>`;
-    const lib = await loadH2P();
-    window.scrollTo(0, 0); await new Promise((r) => setTimeout(r, 50));
-    const holder = document.createElement("div"); holder.style.position = "fixed"; holder.style.left = "-9999px"; holder.style.top = "0"; holder.innerHTML = html; document.body.appendChild(holder);
-    try { await lib().set({ margin: 0, filename: `OutletHealth_${o.name.replace(/\s+/g, "_")}.pdf`, image: { type: "jpeg", quality: 0.97 }, html2canvas: { scale: 2, backgroundColor: C.bg }, jsPDF: { unit: "pt", format: "a4", orientation: "portrait" }, pagebreak: { mode: ["css", "legacy"] } }).from(holder.firstElementChild).save(); }
-    finally { document.body.removeChild(holder); }
-      setOutletHealthPdfBusy(false);
+    try {
+      const { data: rawRows } = await supabase.from("outlet_reports").select("report_date, shop_sales_value, swiggy_sales_value, zomato_sales_value").eq("outlet_id", outletHealthSel).gte("report_date", "2026-06-01");
+      const byMonth: Record<string, { shop: number; swiggy: number; zomato: number }> = {};
+      (rawRows || []).forEach((r: any) => {
+        const ym = r.report_date.slice(0, 7);
+        if (!byMonth[ym]) byMonth[ym] = { shop: 0, swiggy: 0, zomato: 0 };
+        byMonth[ym].shop += Number(r.shop_sales_value) || 0;
+        byMonth[ym].swiggy += Number(r.swiggy_sales_value) || 0;
+        byMonth[ym].zomato += Number(r.zomato_sales_value) || 0;
+      });
+      const months = Object.keys(byMonth).sort();
+      const nowYm = new Date().toISOString().slice(0, 7);
+      const thisM = byMonth[nowYm] || { shop: 0, swiggy: 0, zomato: 0 };
+      const prevYm = months.filter((m) => m !== nowYm).pop();
+      const lastM = prevYm ? byMonth[prevYm] : null;
+      const chg = (cur: number, prev: number | undefined) => prev == null || prev === 0 ? null : ((cur - prev) / prev) * 100;
+
+      const C = { bg: "#FAF3E7", card: "#FFFDF8", ink: "#3E2415", soft: "#8A6A4A", line: "#EADBC2", green: "#2E7D32", red: "#C62828", amber: "#C8901E" };
+      const inr = (n: number) => "₹" + Math.round(n).toLocaleString("en-IN");
+
+      const tAll = thisM.shop + thisM.swiggy + thisM.zomato || 1;
+      const R = 60, CX = 75, CY = 75, SW = 26, CIRC = 2 * Math.PI * R;
+      let acc = 0;
+      const segs = [[thisM.shop, "#FACC15"], [thisM.swiggy, "#FB923C"], [thisM.zomato, "#EF4444"]].map(([v, c]: any) => {
+        const frac = v / tAll; const len = frac * CIRC; const off = -acc * CIRC; acc += frac;
+        return `<circle cx="${CX}" cy="${CY}" r="${R}" fill="none" stroke="${c}" stroke-width="${SW}" stroke-dasharray="${len} ${CIRC - len}" stroke-dashoffset="${off}" transform="rotate(-90 ${CX} ${CY})"></circle>`;
+      }).join("");
+      const leg = (c: string, n: string, v: number) => `<div style="display:flex;align-items:center;gap:7px;margin-bottom:5px"><span style="width:11px;height:11px;background:${c};border-radius:2px;display:inline-block"></span><span style="font-size:12px;color:${C.ink};font-weight:600;min-width:62px">${n}</span><span style="font-size:12px;color:${C.soft}">${inr(v)} · ${((v / tAll) * 100).toFixed(0)}%</span></div>`;
+
+      const shopChg = chg(thisM.shop, lastM?.shop);
+      const swiggyChg = chg(thisM.swiggy, lastM?.swiggy);
+      const zomatoChg = chg(thisM.zomato, lastM?.zomato);
+      const chRow = (name: string, cur: number, prev: number | undefined, pct: number | null) => {
+        const col = pct == null ? C.soft : pct >= 0 ? C.green : C.red;
+        const arrow = pct == null ? "" : pct >= 0 ? "Up" : "Down";
+        return `<tr><td style="padding:7px 10px;border-bottom:1px solid ${C.line};font-size:12px;font-weight:600">${name}</td><td style="padding:7px 10px;border-bottom:1px solid ${C.line};text-align:right;font-size:12px">${inr(cur)}</td><td style="padding:7px 10px;border-bottom:1px solid ${C.line};text-align:right;font-size:12px;color:${C.soft}">${prev != null ? inr(prev) : "—"}</td><td style="padding:7px 10px;border-bottom:1px solid ${C.line};text-align:right;font-size:12px;font-weight:700;color:${col}">${pct == null ? "—" : arrow + " " + Math.abs(pct).toFixed(1) + "%"}</td></tr>`;
+      };
+      const channelRows = chRow("Shop", thisM.shop, lastM?.shop, shopChg) + chRow("Swiggy", thisM.swiggy, lastM?.swiggy, swiggyChg) + chRow("Zomato", thisM.zomato, lastM?.zomato, zomatoChg);
+
+      const monthTotals = months.map((m) => ({ m, total: byMonth[m].shop + byMonth[m].swiggy + byMonth[m].zomato }));
+
+      const chartW = 700, chartH = 220, padL = 60, padR = 20, padT = 20, padB = 34;
+      const plotW = chartW - padL - padR, plotH = chartH - padT - padB;
+      const maxV = Math.max(...monthTotals.map((x) => x.total), 1);
+      const stepX = monthTotals.length > 1 ? plotW / (monthTotals.length - 1) : 0;
+      const pts = monthTotals.map((x, i) => {
+        const px = padL + i * stepX;
+        const py = padT + plotH - (x.total / maxV) * plotH;
+        return { px, py, ...x };
+      });
+      const linePath = pts.map((p, i) => (i === 0 ? "M" : "L") + p.px.toFixed(1) + " " + p.py.toFixed(1)).join(" ");
+      const areaPath = linePath + ` L ${pts[pts.length - 1]?.px.toFixed(1) || padL} ${padT + plotH} L ${padL} ${padT + plotH} Z`;
+      const gridLines = [0, 0.25, 0.5, 0.75, 1].map((f) => {
+        const y = padT + plotH * f;
+        const val = Math.round(maxV * (1 - f));
+        return `<line x1="${padL}" y1="${y}" x2="${chartW - padR}" y2="${y}" stroke="${C.line}" stroke-width="1"></line><text x="${padL - 8}" y="${y + 4}" text-anchor="end" style="font-size:9px;fill:${C.soft}">${val >= 100000 ? (val / 100000).toFixed(1) + "L" : val}</text>`;
+      }).join("");
+      const dots = pts.map((p) => `<circle cx="${p.px}" cy="${p.py}" r="4" fill="${C.amber}" stroke="${C.card}" stroke-width="2"></circle><text x="${p.px}" y="${chartH - 8}" text-anchor="middle" style="font-size:9px;fill:${C.soft}">${p.m.slice(5)}</text>`).join("");
+      const chartSvg = `<svg width="${chartW}" height="${chartH}" viewBox="0 0 ${chartW} ${chartH}">
+        <defs><linearGradient id="areaFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="${C.amber}" stop-opacity="0.35"/><stop offset="100%" stop-color="${C.amber}" stop-opacity="0"/></linearGradient></defs>
+        ${gridLines}
+        <path d="${areaPath}" fill="url(#areaFill)"></path>
+        <path d="${linePath}" fill="none" stroke="${C.amber}" stroke-width="2.5"></path>
+        ${dots}
+      </svg>`;
+
+      const insights: string[] = [];
+      const channelName = (v: number) => v === shopChg ? "Shop" : v === swiggyChg ? "Swiggy" : "Zomato";
+      const validChgs = [shopChg, swiggyChg, zomatoChg].filter((v) => v != null) as number[];
+      if (validChgs.length) {
+        const worst = Math.min(...validChgs);
+        const best = Math.max(...validChgs);
+        if (worst < -5) {
+          const nm = channelName(worst);
+          const advice = nm === "Swiggy" || nm === "Zomato" ? `check if ads are still running, ratings haven't dipped, and the menu is fully available on ${nm}` : "check walk-in footfall, local competition, or staffing at peak hours";
+          insights.push(`${nm} dropped ${Math.abs(worst).toFixed(1)}% vs last month — ${advice}.`);
+        }
+        if (best > 5 && best !== worst) {
+          const nm = channelName(best);
+          insights.push(`${nm} grew ${best.toFixed(1)}% — worth finding out what worked (a promo, better ratings, more listings) and repeating it elsewhere.`);
+        }
+      }
+      if (monthTotals.length >= 3) {
+        const last3 = monthTotals.slice(-3);
+        const decliningStreak = last3[2].total < last3[1].total && last3[1].total < last3[0].total;
+        if (decliningStreak) insights.push(`Sales have fallen for two months straight (${last3[0].m} → ${last3[2].m}) — this isn't a one-off dip, worth a closer look at what changed.`);
+      }
+      if (o.pct > 0 && o.pct < 60) insights.push(`Only ${o.pct.toFixed(0)}% of this month's target hit so far — at this pace the outlet will fall well short unless the remaining days pick up.`);
+      if (o.pct >= 90) insights.push(`Tracking at ${o.pct.toFixed(0)}% of target — on pace to hit or beat the number this month.`);
+      if (insights.length === 0) insights.push("No sharp swings this month — performance is holding steady across channels.");
+      const insightRows = insights.map((s) => `<li style="margin:6px 0;font-size:12px;line-height:1.5">${s}</li>`).join("");
+
+      const html = `<div style="width:794px;background:${C.bg};font-family:'Segoe UI',Arial,sans-serif;color:${C.ink};padding:34px">
+        <div style="font-size:22px;font-weight:900">Brownie Heaven — Outlet Health: ${o.name}</div>
+        <div style="font-size:11px;color:${C.soft};margin-bottom:16px">Since June launch · generated ${new Date().toISOString().split("T")[0]}</div>
+        <div style="background:${C.card};border:1px solid ${C.line};border-radius:12px;padding:18px;margin-bottom:16px">
+          <div style="font-size:13px;color:${C.soft}">This month</div>
+          <div style="font-size:28px;font-weight:900">${inr(o.thisMonthTotal)}</div>
+          <div style="font-size:13px;color:${o.health === "Strong" ? C.green : o.health === "Struggling" ? C.red : C.amber};font-weight:700">${o.health}${o.pct > 0 ? ` · ${o.pct.toFixed(0)}% of target` : ""}</div>
+        </div>
+        <div style="font-size:14px;font-weight:800;margin-bottom:8px">Revenue trend — month by month</div>
+        <div style="background:${C.card};border:1px solid ${C.line};border-radius:12px;padding:16px 18px;margin-bottom:18px">
+          ${chartSvg}
+        </div>
+        <div style="display:flex;gap:18px;align-items:flex-start;margin-bottom:18px">
+          <div style="text-align:center">
+            <div style="font-size:13px;font-weight:800;color:${C.ink};margin-bottom:6px">Channel mix — this month</div>
+            <svg width="150" height="150" viewBox="0 0 150 150">
+              <circle cx="${CX}" cy="${CY}" r="${R}" fill="none" stroke="#EADBC2" stroke-width="${SW}"></circle>
+              ${segs}
+              <text x="${CX}" y="${CY - 4}" text-anchor="middle" style="font-size:14px;font-weight:800;fill:${C.ink}">${inr(tAll)}</text>
+              <text x="${CX}" y="${CY + 12}" text-anchor="middle" style="font-size:8px;fill:${C.soft};letter-spacing:1px">TOTAL</text>
+            </svg>
+            <div style="margin-top:10px;text-align:left">
+              ${leg("#FACC15", "Shop", thisM.shop)}
+              ${leg("#FB923C", "Swiggy", thisM.swiggy)}
+              ${leg("#EF4444", "Zomato", thisM.zomato)}
+            </div>
+          </div>
+          <div style="flex:1">
+            <div style="font-size:14px;font-weight:800;margin-bottom:8px">Did we gain or lose? — vs last month</div>
+            <table style="width:100%;border-collapse:collapse;background:${C.card};border:1px solid ${C.line};border-radius:10px;overflow:hidden">
+              <thead><tr style="background:${C.ink}"><th style="padding:7px 10px;text-align:left;color:#FFF6E5;font-size:9px">CHANNEL</th><th style="padding:7px 10px;text-align:right;color:#FFF6E5;font-size:9px">THIS MONTH</th><th style="padding:7px 10px;text-align:right;color:#FFF6E5;font-size:9px">LAST MONTH</th><th style="padding:7px 10px;text-align:right;color:#FFF6E5;font-size:9px">CHANGE</th></tr></thead>
+              <tbody>${channelRows}</tbody>
+            </table>
+          </div>
+        </div>
+        <div style="background:${C.card};border:2px solid ${C.amber};border-radius:12px;padding:16px">
+          <div style="font-size:14px;font-weight:800;margin-bottom:6px;color:${C.amber}">What this means, and what to do about it</div>
+          <ul style="margin:0;padding-left:18px">${insightRows}</ul>
+        </div>
+      </div>`;
+
+      const lib = await loadH2P();
+      window.scrollTo(0, 0); await new Promise((r) => setTimeout(r, 50));
+      const holder = document.createElement("div"); holder.style.position = "fixed"; holder.style.left = "-9999px"; holder.style.top = "0"; holder.innerHTML = html; document.body.appendChild(holder);
+      try { await lib().set({ margin: 0, filename: `OutletHealth_${o.name.replace(/\s+/g, "_")}.pdf`, image: { type: "jpeg", quality: 0.97 }, html2canvas: { scale: 2, backgroundColor: C.bg }, jsPDF: { unit: "pt", format: "a4", orientation: "portrait" }, pagebreak: { mode: ["css", "legacy"] } }).from(holder.firstElementChild).save(); }
+      finally { document.body.removeChild(holder); }
+    } catch (e: any) {
+      alert("Failed to generate: " + (e?.message || "error"));
+    }
+    setOutletHealthPdfBusy(false);
   };
 
   const anAgg = (() => {
