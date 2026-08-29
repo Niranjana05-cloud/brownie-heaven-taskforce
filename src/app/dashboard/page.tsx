@@ -2448,14 +2448,25 @@ else await fetchOutletReportsByDate(outletEntryDate);
             </div>
           </div>
        )}
-              {activeTab === "tasks" && user?.role === "Financial Analyst" && (
+                    {activeTab === "tasks" && user?.role === "Financial Analyst" && (
+          <div className="flex flex-col items-center justify-center py-24 text-center max-w-lg mx-auto">
+            <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-[0.3em] mb-3">{user.role}</p>
+            <h2 className="text-4xl md:text-5xl font-black tracking-tight mb-3">Welcome, {user.name.split(" ")[0]}</h2>
+            <p className="text-sm text-zinc-500 mb-8">Use the sidebar — Outlet &amp; Channel P&amp;L and Contribution Margins are live. Still building:</p>
+            <div className="text-left w-full space-y-3 text-sm text-zinc-400 border border-zinc-800 p-5">
+              <p>Weekly cash-flow forecasting</p>
+              <p>Swiggy/Zomato net-realisation analysis</p>
+            </div>
+          </div>
+       )}
+       {activeTab === "pnl" && user?.role === "Financial Analyst" && (
           <div>
             <div className="flex justify-between items-start mb-6 pb-5 border-b border-zinc-800">
               <div>
                 <h2 className="text-2xl md:text-3xl font-black tracking-tight">Outlet & Channel P&amp;L</h2>
                 <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mt-1">Real fixed costs from Sales Target · 29.4% COGS · 5% wastage · 50% online commission</p>
               </div>
-                            <div className="flex gap-2">
+              <div className="flex gap-2">
                 <input type="date" value={pnlFrom} onChange={(e) => setPnlFrom(e.target.value)} className="bg-black border border-zinc-800 text-white px-3 py-2 focus:outline-none focus:border-yellow-400 text-sm font-mono" />
                 <input type="date" value={pnlTo} onChange={(e) => setPnlTo(e.target.value)} className="bg-black border border-zinc-800 text-white px-3 py-2 focus:outline-none focus:border-yellow-400 text-sm font-mono" />
                 <button onClick={downloadPnlPDF} disabled={pnlPdfBusy} className="bg-yellow-400 text-black font-bold text-xs px-4 py-2 uppercase tracking-widest disabled:opacity-50 hover:opacity-90 transition-opacity">{pnlPdfBusy ? "Generating…" : "Download Report"}</button>
@@ -2482,8 +2493,8 @@ else await fetchOutletReportsByDate(outletEntryDate);
                     </tr>
                   </thead>
                   <tbody>
-                                       {pnlRows.map((r) => (
-                          <Fragment key={r.oid}>
+                    {pnlRows.map((r) => (
+                      <Fragment key={r.oid}>
                         <tr className="border-b border-zinc-900 cursor-pointer hover:bg-zinc-900" onClick={() => setPnlExpanded(pnlExpanded === r.oid ? null : r.oid)}>
                           <td className="py-2 pr-3 font-semibold">{r.name} <span className="text-zinc-600 text-xs">{pnlExpanded === r.oid ? "▲" : "▼"}</span></td>
                           <td className="py-2 pr-3 text-right font-mono text-xs text-zinc-400">₹{Math.round(r.shop.sales).toLocaleString("en-IN")}<br /><span className="text-zinc-600">{r.shop.margin.toFixed(0)}% margin</span></td>
@@ -2512,18 +2523,26 @@ else await fetchOutletReportsByDate(outletEntryDate);
                             </td>
                           </tr>
                         )}
-                     </Fragment>
+                      </Fragment>
                     ))}
                   </tbody>
                 </table>
                 <p className="text-[10px] text-zinc-600 mt-3">Fixed costs pulled from what's entered in Sales Target for each outlet (BH brand). Outlets with no fixed-cost entry yet show ₹0 there — worth flagging to whoever owns that outlet.</p>
               </div>
             )}
-                        <div className="mt-10 pt-6 border-t border-zinc-800">
+          </div>
+       )}
+       {activeTab === "contribution_margins" && user?.role === "Financial Analyst" && (
+          <div>
+            <div className="mb-6 pb-5 border-b border-zinc-800">
+              <h2 className="text-2xl md:text-3xl font-black tracking-tight">Contribution Margins</h2>
+              <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mt-1">Outlet and product-level profitability</p>
+            </div>
+            <div>
               <h3 className="text-xl font-black tracking-tight mb-1">Outlet Contribution Margins</h3>
-              <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mb-4">Ranked worst to best · same range as the P&amp;L above</p>
+              <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mb-4">Ranked worst to best · same range as the P&amp;L tab</p>
               {pnlRows.length === 0 ? (
-                <p className="text-sm text-zinc-500">No data for this range.</p>
+                <p className="text-sm text-zinc-500">No data yet — open the P&amp;L tab once first to load a date range.</p>
               ) : (
                 <div className="space-y-1.5 max-w-2xl">
                   {[...pnlRows].sort((a, b) => a.netMargin - b.netMargin).map((r) => {
@@ -2576,14 +2595,6 @@ else await fetchOutletReportsByDate(outletEntryDate);
                   <p className="text-[10px] text-zinc-600 mt-2">"no cost data" means that product isn't in the recipe cost map yet — margin can't be calculated until it is.</p>
                 </div>
               )}
-            </div>
-
-            <div className="mt-10 pt-6 border-t border-zinc-800">
-              <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-[0.2em] mb-3">Still building</p>
-              <div className="text-sm text-zinc-500 space-y-2">
-                <p>Weekly cash-flow forecasting</p>
-                <p>Swiggy/Zomato net-realisation analysis</p>
-              </div>
             </div>
           </div>
        )}
