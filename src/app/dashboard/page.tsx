@@ -778,6 +778,29 @@ export default function DashboardPage() {
     setPnlLoading(false);
   };
    useEffect(() => { if (activeTab === "tasks" && user?.role === "Financial Analyst") fetchPnl(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [activeTab, user, pnlFrom, pnlTo]);
+  const [nrFrom, setNrFrom] = useState<string>(() => { const d = new Date(); d.setDate(d.getDate() - 60); return d.toISOString().slice(0, 10); });
+  const [nrTo, setNrTo] = useState<string>(() => new Date().toISOString().slice(0, 10));
+  const [nrRows, setNrRows] = useState<any[]>([]);
+  const [nrLoading, setNrLoading] = useState(false);
+  const fetchNetRealisation = async () => {
+    setNrLoading(true);
+    const { data: payouts } = await supabase.from("outlet_payouts").select("*").gte("period_start", nrFrom).lte("period_end", nrTo);
+    const { data: repRows } = await supabase.from("outlet_reports").select("outlet_id, report_date, zomato_sales_value").gte("report_date", nrFrom).lte("report_date", nrTo);
+    const rows = (payouts || []).map((p: any) => {
+      if (p.platform === "swiggy") {
+        const gross = Number(p.customer_payable) || 0;
+        const net = Number(p.amount_transferable) || 0;
+        return { outlet: OUTLET_NAMES[p.outlet_id] || p.outlet_id, platform: "Swiggy", periodStart: p.period_start, periodEnd: p.period_end, gross, net, pct: gross > 0 ? (net / gross) * 100 : null, verified: true };
+      } else {
+        const gross = (repRows || []).filter((r: any) => r.outlet_id === p.outlet_id && r.report_date >= p.period_start && r.report_date <= p.period_end).reduce((a: number, r: any) => a + (Number(r.zomato_sales_value) || 0), 0);
+        const net = Number(p.net_payout) || 0;
+        return { outlet: OUTLET_NAMES[p.outlet_id] || p.outlet_id, platform: "Zomato", periodStart: p.period_start, periodEnd: p.period_end, gross, net, pct: gross > 0 ? (net / gross) * 100 : null, verified: false };
+      }
+    }).sort((a: any, b: any) => (a.periodStart < b.periodStart ? 1 : -1));
+    setNrRows(rows);
+    setNrLoading(false);
+  };
+  useEffect(() => { if (activeTab === "net_realisation") fetchNetRealisation(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [activeTab, nrFrom, nrTo]);
   const [cmProductRows, setCmProductRows] = useState<any[]>([]);
   const [cmLoading, setCmLoading] = useState(false);
   const fetchContributionMargins = async () => {
