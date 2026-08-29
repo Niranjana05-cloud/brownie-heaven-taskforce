@@ -2560,6 +2560,55 @@ else await fetchOutletReportsByDate(outletEntryDate);
             )}
           </div>
        )}
+       {activeTab === "net_realisation" && user?.role === "Financial Analyst" && (
+          <div>
+            <div className="flex justify-between items-start mb-6 pb-5 border-b border-zinc-800">
+              <div>
+                <h2 className="text-2xl md:text-3xl font-black tracking-tight">Net Realisation</h2>
+                <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mt-1">What Swiggy/Zomato actually pay vs the order value</p>
+              </div>
+              <div className="flex gap-2">
+                <input type="date" value={nrFrom} onChange={(e) => setNrFrom(e.target.value)} className="bg-black border border-zinc-800 text-white px-3 py-2 focus:outline-none focus:border-yellow-400 text-sm font-mono" />
+                <input type="date" value={nrTo} onChange={(e) => setNrTo(e.target.value)} className="bg-black border border-zinc-800 text-white px-3 py-2 focus:outline-none focus:border-yellow-400 text-sm font-mono" />
+              </div>
+            </div>
+            {nrLoading ? (
+              <p className="text-sm text-zinc-500">Loading…</p>
+            ) : nrRows.length === 0 ? (
+              <p className="text-sm text-zinc-500">No payouts entered yet for this range — add them in the Payout tab first.</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-left text-[10px] font-mono text-zinc-500 uppercase border-b border-zinc-800">
+                      <th className="py-2 pr-3">Outlet</th>
+                      <th className="py-2 pr-3">Platform</th>
+                      <th className="py-2 pr-3">Period</th>
+                      <th className="py-2 pr-3 text-right">Order Value</th>
+                      <th className="py-2 pr-3 text-right">Actually Paid</th>
+                      <th className="py-2 text-right">Realisation %</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {nrRows.map((r, i) => (
+                      <tr key={i} className="border-b border-zinc-900">
+                        <td className="py-2 pr-3 font-semibold">{r.outlet}</td>
+                        <td className="py-2 pr-3">
+                          <span className={`font-mono text-[10px] uppercase px-1.5 py-0.5 ${r.platform === "Swiggy" ? "bg-orange-500/10 text-orange-400" : "bg-red-500/10 text-red-400"}`}>{r.platform}</span>
+                        </td>
+                        <td className="py-2 pr-3 font-mono text-xs text-zinc-400">{r.periodStart} → {r.periodEnd}</td>
+                        <td className="py-2 pr-3 text-right font-mono">₹{Math.round(r.gross).toLocaleString("en-IN")}</td>
+                        <td className="py-2 pr-3 text-right font-mono">₹{Math.round(r.net).toLocaleString("en-IN")}</td>
+                        <td className={`py-2 text-right font-mono font-bold ${r.pct == null ? "text-zinc-600" : r.pct < 50 ? "text-red-500" : r.pct < 65 ? "text-yellow-400" : "text-green-400"}`}>{r.pct == null ? "—" : r.pct.toFixed(1) + "%"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                <p className="text-[10px] text-zinc-600 mt-3">Swiggy: both figures come straight from Swiggy's own statement, fully verified. Zomato: "Order Value" is the amount staff reported in Outlet Reports (Zomato's statement doesn't include a gross figure), so Zomato's % is directionally useful but not platform-verified like Swiggy's.</p>
+              </div>
+            )}
+          </div>
+       )}
        {activeTab === "contribution_margins" && user?.role === "Financial Analyst" && (
           <div>
             <div className="mb-6 pb-5 border-b border-zinc-800">
