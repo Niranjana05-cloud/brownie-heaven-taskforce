@@ -778,6 +778,44 @@ export default function DashboardPage() {
     setPnlLoading(false);
   };
    useEffect(() => { if (activeTab === "tasks" && user?.role === "Financial Analyst") fetchPnl(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [activeTab, user, pnlFrom, pnlTo]);
+  const [cfWeeks, setCfWeeks] = useState<any[]>([]);
+  const [cfLoading, setCfLoading] = useState(false);
+  const fetchCashFlowForecast = async () => {
+    setCfLoading(true);
+    const today = new Date();
+    const start = new Date(today); start.setDate(start.getDate() - 42); // last 6 weeks of history
+    const { data: salesRows } = await supabase.from("outlet_reports").select("report_date, shop_sales_value, swiggy_sales_value, zomato_sales_value").gte("report_date", start.toISOString().slice(0, 10));
+    const { data: targetRows } = await supabase.from("sales_target").select("outlet_id, line_items").eq("brand", "BH");
+    let totalWeeklyFixed = 0;
+    (targetRows || []).forEach((t: any) => {
+      const f = t.line_items?.fixed || {};
+      const ab = (v: any) => Math.abs(Number(v) || 0);
+      const monthly = ab(f.staff) + ab(f.rent) + ab(f.eb) + ab(f.transport) + 0.2 * ab(f.rent) + ab(f.pest) + ab(f.water) + ab(f.airtel);
+      totalWeeklyFixed += monthly / 4.33;
+    });
+    // bucket historical sales into weeks (Mon-Sun) for a trend
+    const weekOf = (d: Date) => { const x = new Date(d); const day = x.getDay() || 7; x.setDate(x.getDate() - day + 1); return x.toISOString().slice(0, 10); };
+    const byWeek: Record<string, number> = {};
+    (salesRows || []).forEach((r: any) => {
+      const wk = weekOf(new Date(r.report_date));
+      const total = (Number(r.shop_sales_value) || 0) + (Number(r.swiggy_sales_value) || 0) + (Number(r.zomato_sales_value) || 0);
+      byWeek[wk] = (byWeek[wk] || 0) + total;
+    });
+    const weekKeys = Object.keys(byWeek).sort();
+    const recentWeeks = weekKeys.slice(-5, -1); // exclude current partial week
+    const avgWeeklySales = recentWeeks.length ? recentWeeks.reduce((a, k) => a + byWeek[k], 0) / recentWeeks.length : 0;
+    // build history rows + 4 forecast weeks
+    const historyRows = weekKeys.slice(-5).map((k) => ({ week: k, sales: byWeek[k], fixed: totalWeeklyFixed, net: byWeek[k] - totalWeeklyFixed, isForecast: false }));
+    const forecastRows: any[] = [];
+    let lastMonday = new Date(weekOf(today));
+    for (let i = 1; i <= 4; i++) {
+      const wk = new Date(lastMonday); wk.setDate(wk.getDate() + i * 7);
+      forecastRows.push({ week: wk.toISOString().slice(0, 10), sales: avgWeeklySales, fixed: totalWeeklyFixed, net: avgWeeklySales - totalWeeklyFixed, isForecast: true });
+    }
+    setCfWeeks([...historyRows, ...forecastRows]);
+    setCfLoading(false);
+  };
+  useEffect(() => { if (activeTab === "cash_flow") fetchCashFlowForecast(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [activeTab]);
   const [nrFrom, setNrFrom] = useState<string>(() => { const d = new Date(); d.setDate(d.getDate() - 60); return d.toISOString().slice(0, 10); });
   const [nrTo, setNrTo] = useState<string>(() => new Date().toISOString().slice(0, 10));
   const [nrRows, setNrRows] = useState<any[]>([]);
