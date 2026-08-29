@@ -2652,6 +2652,47 @@ else await fetchOutletReportsByDate(outletEntryDate);
             )}
           </div>
        )}
+        {activeTab === "cash_flow" && user?.role === "Financial Analyst" && (
+          <div>
+            <div className="mb-6 pb-5 border-b border-zinc-800">
+              <h2 className="text-2xl md:text-3xl font-black tracking-tight">Weekly Cash-Flow Forecast</h2>
+              <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mt-1">Sales trend in · fixed costs out</p>
+            </div>
+            {cfLoading ? (
+              <p className="text-sm text-zinc-500">Loading…</p>
+            ) : cfWeeks.length === 0 ? (
+              <p className="text-sm text-zinc-500">Not enough sales history yet to build a forecast.</p>
+            ) : (
+              <>
+                <div className="overflow-x-auto mb-6">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="text-left text-[10px] font-mono text-zinc-500 uppercase border-b border-zinc-800">
+                        <th className="py-2 pr-3">Week of</th>
+                        <th className="py-2 pr-3 text-right">Sales In</th>
+                        <th className="py-2 pr-3 text-right">Fixed Costs Out</th>
+                        <th className="py-2 text-right">Net</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {cfWeeks.map((w, i) => (
+                        <tr key={i} className={`border-b border-zinc-900 ${w.isForecast ? "bg-yellow-400/5" : ""}`}>
+                          <td className="py-2 pr-3 font-mono text-xs">{w.week}{w.isForecast && <span className="ml-2 text-[9px] text-yellow-400 uppercase">Forecast</span>}</td>
+                          <td className="py-2 pr-3 text-right font-mono">₹{Math.round(w.sales).toLocaleString("en-IN")}</td>
+                          <td className="py-2 pr-3 text-right font-mono text-zinc-400">₹{Math.round(w.fixed).toLocaleString("en-IN")}</td>
+                          <td className={`py-2 text-right font-mono font-bold ${w.net >= 0 ? "text-green-400" : "text-red-500"}`}>₹{Math.round(w.net).toLocaleString("en-IN")}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <div className="bg-yellow-400/5 border border-yellow-400/30 p-4 max-w-2xl">
+                  <p className="text-xs text-zinc-300 leading-relaxed">The 4 highlighted weeks are projected from your last month's actual sales trend — not guaranteed, just where things are headed if nothing changes. This doesn't yet include supplier cheque payments, since that data isn't live in the system — once the Cheque Ledger is built, those outflows will factor in here too and the forecast will get sharper.</p>
+                </div>
+              </>
+            )}
+          </div>
+       )}
        {activeTab === "contribution_margins" && user?.role === "Financial Analyst" && (
           <div>
             <div className="mb-6 pb-5 border-b border-zinc-800">
