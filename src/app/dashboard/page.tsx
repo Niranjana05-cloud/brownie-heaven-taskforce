@@ -778,6 +778,27 @@ export default function DashboardPage() {
     setPnlLoading(false);
   };
    useEffect(() => { if (activeTab === "tasks" && user?.role === "Financial Analyst") fetchPnl(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [activeTab, user, pnlFrom, pnlTo]);
+  const [cmProductRows, setCmProductRows] = useState<any[]>([]);
+  const [cmLoading, setCmLoading] = useState(false);
+  const fetchContributionMargins = async () => {
+    setCmLoading(true);
+    const { data: latestUpload } = await supabase.from("item_perf_uploads").select("id").order("created_at", { ascending: false }).limit(1).maybeSingle();
+    if (!latestUpload) { setCmProductRows([]); setCmLoading(false); return; }
+    const { data: rows } = await supabase.from("item_perf_rows").select("name, net_revenue, units_sold").eq("upload_id", latestUpload.id);
+    const withMargin = (rows || []).map((r: any) => {
+      const unitCost = (FOOD_COST_MAP as any)[r.name];
+      const revenue = Number(r.net_revenue) || 0;
+      const units = Number(r.units_sold) || 0;
+      if (unitCost === undefined) return { name: r.name, revenue, units, cost: null, margin: null, marginPct: null };
+      const cost = unitCost * units;
+      const margin = revenue - cost;
+      const marginPct = revenue > 0 ? (margin / revenue) * 100 : null;
+      return { name: r.name, revenue, units, cost, margin, marginPct };
+    });
+    setCmProductRows(withMargin);
+    setCmLoading(false);
+  };
+  useEffect(() => { if (activeTab === "tasks" && user?.role === "Financial Analyst") fetchContributionMargins(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [activeTab, user]);
   const [pnlPdfBusy, setPnlPdfBusy] = useState(false);
   const downloadPnlPDF = async () => {
     if (pnlRows.length === 0) { alert("No data to export for this range."); return; }
