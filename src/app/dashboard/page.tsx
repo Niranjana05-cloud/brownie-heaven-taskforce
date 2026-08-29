@@ -2509,11 +2509,69 @@ else await fetchOutletReportsByDate(outletEntryDate);
                 <p className="text-[10px] text-zinc-600 mt-3">Fixed costs pulled from what's entered in Sales Target for each outlet (BH brand). Outlets with no fixed-cost entry yet show ₹0 there — worth flagging to whoever owns that outlet.</p>
               </div>
             )}
+                        <div className="mt-10 pt-6 border-t border-zinc-800">
+              <h3 className="text-xl font-black tracking-tight mb-1">Outlet Contribution Margins</h3>
+              <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mb-4">Ranked worst to best · same range as the P&amp;L above</p>
+              {pnlRows.length === 0 ? (
+                <p className="text-sm text-zinc-500">No data for this range.</p>
+              ) : (
+                <div className="space-y-1.5 max-w-2xl">
+                  {[...pnlRows].sort((a, b) => a.netMargin - b.netMargin).map((r) => {
+                    const col = r.netMargin >= 10 ? "text-green-400" : r.netMargin >= 0 ? "text-yellow-400" : "text-red-500";
+                    const barW = Math.min(100, Math.max(2, Math.abs(r.netMargin) * 3));
+                    return (
+                      <div key={r.oid} className="flex items-center gap-3 text-sm">
+                        <span className="w-28 shrink-0 font-medium">{r.name}</span>
+                        <div className="flex-1 h-2 bg-zinc-800"><div className={`h-full ${r.netMargin >= 0 ? "bg-green-500" : "bg-red-500"}`} style={{ width: `${barW}%` }} /></div>
+                        <span className={`font-mono w-14 text-right ${col}`}>{r.netMargin.toFixed(1)}%</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            <div className="mt-10 pt-6 border-t border-zinc-800">
+              <h3 className="text-xl font-black tracking-tight mb-1">Product Contribution Margins</h3>
+              <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mb-1">From the latest Item Performance upload</p>
+              <p className="text-xs text-zinc-500 mb-4">Chain-wide, not split by outlet — Item Performance data doesn't carry an outlet field, so this shows overall product profitability, not per-outlet.</p>
+              {cmLoading ? (
+                <p className="text-sm text-zinc-500">Loading…</p>
+              ) : cmProductRows.length === 0 ? (
+                <p className="text-sm text-zinc-500">No Item Performance upload yet — upload one from the Item Performance tab first.</p>
+              ) : (
+                <div className="overflow-x-auto max-w-3xl">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="text-left text-[10px] font-mono text-zinc-500 uppercase border-b border-zinc-800">
+                        <th className="py-2 pr-3">Product</th>
+                        <th className="py-2 pr-3 text-right">Revenue</th>
+                        <th className="py-2 pr-3 text-right">Units</th>
+                        <th className="py-2 pr-3 text-right">Cost</th>
+                        <th className="py-2 text-right">Margin %</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {[...cmProductRows].sort((a, b) => b.revenue - a.revenue).slice(0, 20).map((p, i) => (
+                        <tr key={i} className="border-b border-zinc-900">
+                          <td className="py-2 pr-3">{p.name}</td>
+                          <td className="py-2 pr-3 text-right font-mono">₹{Math.round(p.revenue).toLocaleString("en-IN")}</td>
+                          <td className="py-2 pr-3 text-right font-mono text-zinc-400">{p.units.toLocaleString("en-IN")}</td>
+                          <td className="py-2 pr-3 text-right font-mono text-zinc-400">{p.cost != null ? "₹" + Math.round(p.cost).toLocaleString("en-IN") : "—"}</td>
+                          <td className={`py-2 text-right font-mono font-bold ${p.marginPct == null ? "text-zinc-600" : p.marginPct < 40 ? "text-red-500" : p.marginPct < 60 ? "text-yellow-400" : "text-green-400"}`}>{p.marginPct == null ? "no cost data" : p.marginPct.toFixed(1) + "%"}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  <p className="text-[10px] text-zinc-600 mt-2">"no cost data" means that product isn't in the recipe cost map yet — margin can't be calculated until it is.</p>
+                </div>
+              )}
+            </div>
+
             <div className="mt-10 pt-6 border-t border-zinc-800">
               <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-[0.2em] mb-3">Still building</p>
               <div className="text-sm text-zinc-500 space-y-2">
                 <p>Weekly cash-flow forecasting</p>
-                <p>Product and outlet contribution margins</p>
                 <p>Swiggy/Zomato net-realisation analysis</p>
               </div>
             </div>
