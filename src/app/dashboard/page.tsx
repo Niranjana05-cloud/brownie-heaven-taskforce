@@ -67,8 +67,8 @@ const OUTLET_NAMES: Record<string, string> = {
   porur: "Porur",
 };
 const OUTLET_TARGETS: Record<string, string> = {
-  royapettah: "80000",
-  adayar: "18333",
+  royapettah: "86667",
+  adayar: "21667",
   bsr_mall: "35000",
   ra_puram: "21667",
   anna_nagar: "51667",
