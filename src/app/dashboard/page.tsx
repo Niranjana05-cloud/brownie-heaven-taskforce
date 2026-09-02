@@ -398,8 +398,8 @@ export default function DashboardPage() {
     if (sel.preset === "yesterday") { const y = new Date(today); y.setDate(y.getDate() - 1); return { from: iso(y), to: iso(y), label: "Yesterday" }; }
     if (sel.preset === "last7") { const f = new Date(today); f.setDate(f.getDate() - 6); return { from: iso(f), to: iso(today), label: "Last 7 days" }; }
     if (sel.preset === "last30") { const f = new Date(today); f.setDate(f.getDate() - 29); return { from: iso(f), to: iso(today), label: "Last 30 days" }; }
-    if (sel.preset === "mtd") { const f = new Date(today.getFullYear(), today.getMonth(), 1); return { from: iso(f), to: iso(today), label: "Month to date" }; }
-    if (sel.preset === "lastmonth") { const f = new Date(today.getFullYear(), today.getMonth() - 1, 1); const t = new Date(today.getFullYear(), today.getMonth(), 0); return { from: iso(f), to: iso(t), label: "Last month" }; }
+    if (sel.preset === "mtd") { const f = new Date(today.getFullYear(), today.getMonth(), 2); return { from: iso(f), to: iso(today), label: "Month to date" }; }
+    if (sel.preset === "lastmonth") { const f = new Date(today.getFullYear(), today.getMonth() - 1, 2); const t = new Date(today.getFullYear(), today.getMonth(), 1); return { from: iso(f), to: iso(t), label: "Last month" }; }
     const f = sel.from || iso(today), t = sel.to || iso(today);
     return { from: f, to: t, label: `${f} → ${t}` };
   };
