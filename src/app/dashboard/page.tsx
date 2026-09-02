@@ -394,7 +394,7 @@ export default function DashboardPage() {
   const getOutletSel = (o: string) => outletRangeSel[o] || { preset: "last30" };
   const resolveOutletRange = (sel: { preset: string; from?: string; to?: string }): { from: string; to: string; label: string } => {
     const today = new Date();
-    const iso = (d: Date) => d.toISOString().slice(0, 10);
+    const iso = (d: Date) => { const y = d.getFullYear(); const m = String(d.getMonth() + 1).padStart(2, "0"); const dd = String(d.getDate()).padStart(2, "0"); return `${y}-${m}-${dd}`; };
     if (sel.preset === "yesterday") { const y = new Date(today); y.setDate(y.getDate() - 1); return { from: iso(y), to: iso(y), label: "Yesterday" }; }
     if (sel.preset === "last7") { const f = new Date(today); f.setDate(f.getDate() - 6); return { from: iso(f), to: iso(today), label: "Last 7 days" }; }
     if (sel.preset === "last30") { const f = new Date(today); f.setDate(f.getDate() - 29); return { from: iso(f), to: iso(today), label: "Last 30 days" }; }
