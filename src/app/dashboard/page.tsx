@@ -411,9 +411,15 @@ export default function DashboardPage() {
     }));
     return results.flat();
   };
+   const salesDateOf = (reportDate: string) => {
+    const d = new Date(reportDate + "T00:00:00");
+    d.setDate(d.getDate() - 1);
+    const y = d.getFullYear(), m = String(d.getMonth() + 1).padStart(2, "0"), dd = String(d.getDate()).padStart(2, "0");
+    return `${y}-${m}-${dd}`;
+  };
   const buildRangeRows = (rows: any[]) => rows.map(r => {
     const shop = Number(r.shop_sales_value) || 0, sw = Number(r.swiggy_sales_value) || 0, zo = Number(r.zomato_sales_value) || 0;
-    return { Date: r.report_date, Outlet: (typeof OUTLET_NAMES !== "undefined" ? (OUTLET_NAMES as any)[r.outlet_id] : r.outlet_id) || r.outlet_id, RangeLabel: r._rangeLabel || "", Shop: shop, Swiggy: sw, Zomato: zo, Total: shop + sw + zo, "Shop Orders": Number(r.shop_sales_count) || 0, "Swiggy Orders": Number(r.swiggy_sales_count) || 0, "Zomato Orders": Number(r.zomato_sales_count) || 0, Target: Number(r.target) || 0, Discount: Number(r.discount_given) || 0, Late: r.is_late ? "Yes" : "No", Issues: r.issues || "" };
+    return { Date: salesDateOf(r.report_date), Outlet: (typeof OUTLET_NAMES !== "undefined" ? (OUTLET_NAMES as any)[r.outlet_id] : r.outlet_id) || r.outlet_id, RangeLabel: r._rangeLabel || "", Shop: shop, Swiggy: sw, Zomato: zo, Total: shop + sw + zo, "Shop Orders": Number(r.shop_sales_count) || 0, "Swiggy Orders": Number(r.swiggy_sales_count) || 0, "Zomato Orders": Number(r.zomato_sales_count) || 0, Target: Number(r.target) || 0, Discount: Number(r.discount_given) || 0, Late: r.is_late ? "Yes" : "No", Issues: r.issues || "" };
   });
   const downloadRangeExcel = async () => {
     setRepBusy(true);
