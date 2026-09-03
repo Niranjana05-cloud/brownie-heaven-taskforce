@@ -400,8 +400,10 @@ export default function DashboardPage() {
     if (sel.preset === "last30") { const f = new Date(today); f.setDate(f.getDate() - 29); return { from: iso(f), to: iso(today), label: "Last 30 days" }; }
     if (sel.preset === "mtd") { const f = new Date(today.getFullYear(), today.getMonth(), 2); return { from: iso(f), to: iso(today), label: "Month to date" }; }
     if (sel.preset === "lastmonth") { const f = new Date(today.getFullYear(), today.getMonth() - 1, 2); const t = new Date(today.getFullYear(), today.getMonth(), 1); return { from: iso(f), to: iso(t), label: "Last month" }; }
-    const f = sel.from || iso(today), t = sel.to || iso(today);
-    return { from: f, to: t, label: `${f} → ${t}` };
+    const shiftDay = (dateStr: string, days: number) => { const d = new Date(dateStr + "T00:00:00"); d.setDate(d.getDate() + days); return iso(d); };
+    const rawFrom = sel.from || iso(today), rawTo = sel.to || iso(today);
+    const f = shiftDay(rawFrom, 1), t = shiftDay(rawTo, 1);
+    return { from: f, to: t, label: `${rawFrom} → ${rawTo}` };
   };
   const fetchPerOutletReports = async (outlets: string[]) => {
     const results = await Promise.all(outlets.map(async (o) => {
