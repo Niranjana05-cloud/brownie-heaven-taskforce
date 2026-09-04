@@ -2354,7 +2354,7 @@ else await fetchOutletReportsByDate(outletEntryDate);
               <span>🎯</span> Sales Target
             </div>
           )}
-                 {false && ((user?.outlets && user.outlets.length > 0) || canAssign) && (
+                 {false && ((user?.outlets && user?.outlets.length > 0) || canAssign) && (
             <div onClick={() => { setActiveTab("payout"); setSidebarOpen(false); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "payout" ? "text-white bg-zinc-900 border-l-2 border-yellow-400" : "text-zinc-500 hover:text-white"}`}>
               <span>💰</span> Payout
             </div>
