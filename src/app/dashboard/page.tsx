@@ -4025,6 +4025,97 @@ else await fetchOutletReportsByDate(outletEntryDate);
             </div>
           </div>
         )}
+                {activeTab === "cheques" && (canAssign || isFO) && (
+          <div>
+            <div className="mb-6 pb-5 border-b border-zinc-800">
+              <h2 className="text-2xl font-black tracking-tight">Cheque Ledger</h2>
+              <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mt-1">Every cheque, tracked pending → cleared</p>
+            </div>
+
+            <div className="mb-8 border border-zinc-800 p-5 max-w-2xl">
+              <p className="text-sm font-semibold mb-4">Add a cheque</p>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
+                <div>
+                  <label className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest">Supplier</label>
+                  <select value={chqSupplierSel} onChange={(e) => setChqSupplierSel(e.target.value)} className="w-full bg-black border border-zinc-800 text-white px-3 py-2 focus:outline-none focus:border-yellow-400 transition-colors text-sm mt-1">
+                    <option value="">— pick —</option>
+                    {chqSuppliers.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                    <option value="__new__">+ Add new supplier</option>
+                  </select>
+                </div>
+                {chqSupplierSel === "__new__" && (
+                  <div>
+                    <label className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest">New supplier name</label>
+                    <input type="text" value={chqNewSupplierName} onChange={(e) => setChqNewSupplierName(e.target.value)} className="w-full bg-black border border-zinc-800 text-white px-3 py-2 focus:outline-none focus:border-yellow-400 transition-colors text-sm mt-1" placeholder="Supplier name" />
+                  </div>
+                )}
+                <div>
+                  <label className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest">Amount (₹)</label>
+                  <input type="number" value={chqAmount} onChange={(e) => setChqAmount(e.target.value)} className="w-full bg-black border border-zinc-800 text-white px-3 py-2 focus:outline-none focus:border-yellow-400 transition-colors text-sm mt-1" placeholder="e.g. 25000" />
+                </div>
+                <div>
+                  <label className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest">Date issued</label>
+                  <input type="date" value={chqDate} onChange={(e) => setChqDate(e.target.value)} className="w-full bg-black border border-zinc-800 text-white px-3 py-2 focus:outline-none focus:border-yellow-400 transition-colors text-sm mt-1" />
+                </div>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
+                <div>
+                  <label className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest block mb-1">Cheque photo — front</label>
+                  <input type="file" accept="image/*" onChange={(e) => setChqPhotoFront(e.target.files?.[0] || null)} className="text-xs text-zinc-400 w-full" />
+                </div>
+                <div>
+                  <label className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest block mb-1">Cheque photo — back (optional)</label>
+                  <input type="file" accept="image/*" onChange={(e) => setChqPhotoBack(e.target.files?.[0] || null)} className="text-xs text-zinc-400 w-full" />
+                </div>
+              </div>
+              <div className="mb-3">
+                <label className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest">Notes (optional)</label>
+                <input type="text" value={chqNotes} onChange={(e) => setChqNotes(e.target.value)} className="w-full bg-black border border-zinc-800 text-white px-3 py-2 focus:outline-none focus:border-yellow-400 transition-colors text-sm mt-1" placeholder="What's this for" />
+              </div>
+              <button onClick={saveCheque} disabled={chqSaving} className="bg-yellow-400 text-black px-5 py-2 text-sm font-semibold hover:bg-yellow-300 disabled:opacity-50 transition-colors">{chqSaving ? "Saving…" : "Save Cheque"}</button>
+            </div>
+
+            <div className="max-w-4xl">
+              <p className="text-sm font-semibold mb-3">Register</p>
+              {chqLoading ? (
+                <p className="text-sm text-zinc-500">Loading…</p>
+              ) : chqRows.length === 0 ? (
+                <p className="text-sm text-zinc-500">No cheques logged yet.</p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="text-left text-[10px] font-mono text-zinc-500 uppercase border-b border-zinc-800">
+                        <th className="py-2 pr-3">Date</th>
+                        <th className="py-2 pr-3">Supplier</th>
+                        <th className="py-2 pr-3 text-right">Amount</th>
+                        <th className="py-2 pr-3">Photo</th>
+                        <th className="py-2 pr-3">Status</th>
+                        <th className="py-2">Notes</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {chqRows.map((c) => (
+                        <tr key={c.id} className="border-b border-zinc-900">
+                          <td className="py-2 pr-3 font-mono text-xs">{c.date_issued}</td>
+                          <td className="py-2 pr-3 font-semibold">{c.supplier_name}</td>
+                          <td className="py-2 pr-3 text-right font-mono">₹{Math.round(c.amount).toLocaleString("en-IN")}</td>
+                          <td className="py-2 pr-3">
+                            {c.photo_front_url ? <a href={c.photo_front_url} target="_blank" rel="noreferrer" className="text-yellow-400 underline text-xs">View</a> : <span className="text-zinc-600 text-xs">—</span>}
+                          </td>
+                          <td className="py-2 pr-3">
+                            <button onClick={() => toggleChequeStatus(c)} className={`font-mono text-[10px] uppercase px-2 py-1 ${c.status === "cleared" ? "bg-green-400/10 text-green-400" : "bg-yellow-400/10 text-yellow-400"}`}>{c.status}</button>
+                          </td>
+                          <td className="py-2 text-xs text-zinc-400">{c.notes || "—"}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
         {activeTab === "fines" && (canAssign || isFO) && (
           <div>
             <div className="mb-6 pb-5 border-b border-zinc-800">
