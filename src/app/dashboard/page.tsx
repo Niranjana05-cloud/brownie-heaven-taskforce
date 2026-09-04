@@ -381,7 +381,7 @@ export default function DashboardPage() {
   const [reports, setReports] = useState<Report[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
-  const [activeTab, setActiveTab] = useState<"tasks" | "my_report" | "all_reports" | "analytics" | "outlet_reports" | "owner_outlets" | "history" | "attendance" | "sales_target" | "payout" | "reconciliation" | "competition" | "item_perf" | "ceo_report" | "fines" | "niranjana_report" | "pnl" | "contribution_margins" | "net_realisation" | "cash_flow">("tasks");
+  const [activeTab, setActiveTab] = useState<"tasks" | "my_report" | "all_reports" | "analytics" | "outlet_reports" | "owner_outlets" | "history" | "attendance" | "sales_target" | "payout" | "reconciliation" | "competition" | "item_perf" | "ceo_report" | "fines" | "niranjana_report" | "pnl" | "contribution_margins" | "net_realisation" | "cash_flow" | "cheques">("tasks");
   const RANGE_PRESETS = [
     { id: "yesterday", label: "Yesterday" },
     { id: "last7", label: "Last 7 days" },
@@ -886,6 +886,12 @@ export default function DashboardPage() {
     finally { document.body.removeChild(holder); }
     setPnlPdfBusy(false);
   };
+  const [chqSuppliers, setChqSuppliers] = useState<any[]>([]);
+  const [chqRows, setChqRows] = useState<any[]>([]);
+  const [chqLoading, setChqLoading] = useState(false);
+  const fetchChequeSuppliers = async () => { const { data } = await supabase.from("cheque_suppliers").select("*").order("name"); setChqSuppliers(data || []); };
+  const fetchCheques = async () => { setChqLoading(true); const { data } = await supabase.from("cheques").select("*").order("date_issued", { ascending: false }); setChqRows(data || []); setChqLoading(false); };
+  useEffect(() => { if (activeTab === "cheques") { fetchChequeSuppliers(); fetchCheques(); } /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [activeTab]);
   const [ceoWin, setCeoWin] = useState("7");
   const [ceoRepRows, setCeoRepRows] = useState<any[]>([]);
   const [ceoMonthRep, setCeoMonthRep] = useState<any[]>([]);
@@ -2237,9 +2243,14 @@ else await fetchOutletReportsByDate(outletEntryDate);
           <div onClick={() => { setActiveTab("tasks"); setSidebarOpen(false); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "tasks" ? "text-white bg-zinc-900 border-l-2 border-yellow-400" : "text-zinc-500 hover:text-white"}`}>
             <span>▣</span> Dashboard
           </div>
-                   {(canAssign || isFO) && (
+                            {(canAssign || isFO) && (
             <div onClick={() => { setActiveTab("fines"); setSidebarOpen(false); fetchFines(); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "fines" ? "text-white bg-zinc-900 border-l-2 border-yellow-400" : "text-zinc-500 hover:text-white"}`}>
               <span>⚖️</span> Fines
+            </div>
+          )}
+          {(canAssign || isFO) && (
+            <div onClick={() => { setActiveTab("cheques"); setSidebarOpen(false); fetchChequeSuppliers(); fetchCheques(); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "cheques" ? "text-white bg-zinc-900 border-l-2 border-yellow-400" : "text-zinc-500 hover:text-white"}`}>
+              <span>🧾</span> Cheque Ledger
             </div>
           )}
           {user?.role === "Financial Analyst" && (
