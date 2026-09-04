@@ -2294,12 +2294,7 @@ else await fetchOutletReportsByDate(outletEntryDate);
               <span>⚖️</span> Fines
             </div>
           )}
-          {(canAssign || isFO) && (
-            <div onClick={() => { setActiveTab("cheques"); setSidebarOpen(false); fetchChequeSuppliers(); fetchCheques(); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "cheques" ? "text-white bg-zinc-900 border-l-2 border-yellow-400" : "text-zinc-500 hover:text-white"}`}>
-              <span>🧾</span> Cheque Ledger
-            </div>
-          )}
-          {user?.role === "Financial Analyst" && (
+                {user?.role === "Financial Analyst" && (
             <div onClick={() => { setActiveTab("pnl"); setSidebarOpen(false); fetchPnl(); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "pnl" ? "text-white bg-zinc-900 border-l-2 border-yellow-400" : "text-zinc-500 hover:text-white"}`}>
               <span>💹</span> Outlet &amp; Channel P&amp;L
             </div>
@@ -2364,7 +2359,7 @@ else await fetchOutletReportsByDate(outletEntryDate);
               <span>💰</span> Payout
             </div>
           )}
-          {user.role === "Owner" && (
+                    {false && user.role === "Owner" && (
             <div onClick={() => { setActiveTab("reconciliation"); setSidebarOpen(false); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "reconciliation" ? "text-white bg-zinc-900 border-l-2 border-yellow-400" : "text-zinc-500 hover:text-white"}`}>
               <span>⚖️</span> Reconciliation
             </div>
