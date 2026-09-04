@@ -892,6 +892,52 @@ export default function DashboardPage() {
   const fetchChequeSuppliers = async () => { const { data } = await supabase.from("cheque_suppliers").select("*").order("name"); setChqSuppliers(data || []); };
   const fetchCheques = async () => { setChqLoading(true); const { data } = await supabase.from("cheques").select("*").order("date_issued", { ascending: false }); setChqRows(data || []); setChqLoading(false); };
   useEffect(() => { if (activeTab === "cheques") { fetchChequeSuppliers(); fetchCheques(); } /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [activeTab]);
+  const [chqSupplierSel, setChqSupplierSel] = useState("");
+  const [chqNewSupplierName, setChqNewSupplierName] = useState("");
+  const [chqAmount, setChqAmount] = useState("");
+  const [chqDate, setChqDate] = useState(new Date().toISOString().slice(0, 10));
+  const [chqPhotoFront, setChqPhotoFront] = useState<File | null>(null);
+  const [chqPhotoBack, setChqPhotoBack] = useState<File | null>(null);
+  const [chqNotes, setChqNotes] = useState("");
+  const [chqSaving, setChqSaving] = useState(false);
+  const uploadChequePhoto = async (file: File, label: string) => {
+    const ext = file.name.split(".").pop();
+    const path = `${Date.now()}_${label}.${ext}`;
+    const { error } = await supabase.storage.from("cheque-photos").upload(path, file);
+    if (error) { alert("Photo upload failed: " + error.message); return null; }
+    const { data } = supabase.storage.from("cheque-photos").getPublicUrl(path);
+    return data.publicUrl;
+  };
+  const saveCheque = async () => {
+    if (!chqSupplierSel) { alert("Pick a supplier."); return; }
+    if (chqSupplierSel === "__new__" && !chqNewSupplierName.trim()) { alert("Enter the new supplier's name."); return; }
+    if (!chqAmount || Number(chqAmount) <= 0) { alert("Enter a valid amount."); return; }
+    setChqSaving(true);
+    let supplierId = chqSupplierSel;
+    let supplierName = chqSuppliers.find((s) => s.id === chqSupplierSel)?.name || "";
+    if (chqSupplierSel === "__new__") {
+      const { data: newSup, error: supErr } = await supabase.from("cheque_suppliers").insert({ name: chqNewSupplierName.trim() }).select().single();
+      if (supErr) { alert("Could not add supplier: " + supErr.message); setChqSaving(false); return; }
+      supplierId = newSup.id;
+      supplierName = newSup.name;
+    }
+    let frontUrl = null, backUrl = null;
+    if (chqPhotoFront) frontUrl = await uploadChequePhoto(chqPhotoFront, "front");
+    if (chqPhotoBack) backUrl = await uploadChequePhoto(chqPhotoBack, "back");
+    const { error } = await supabase.from("cheques").insert({
+      supplier_id: supplierId, supplier_name: supplierName, amount: Number(chqAmount), date_issued: chqDate,
+      photo_front_url: frontUrl, photo_back_url: backUrl, notes: chqNotes.trim() || null, entered_by: user?.id || null,
+    });
+    setChqSaving(false);
+    if (error) { alert("Save failed: " + error.message); return; }
+    setChqSupplierSel(""); setChqNewSupplierName(""); setChqAmount(""); setChqPhotoFront(null); setChqPhotoBack(null); setChqNotes("");
+    fetchChequeSuppliers(); fetchCheques();
+  };
+  const toggleChequeStatus = async (c: any) => {
+    const newStatus = c.status === "cleared" ? "pending" : "cleared";
+    await supabase.from("cheques").update({ status: newStatus }).eq("id", c.id);
+    fetchCheques();
+  };
   const [ceoWin, setCeoWin] = useState("7");
   const [ceoRepRows, setCeoRepRows] = useState<any[]>([]);
   const [ceoMonthRep, setCeoMonthRep] = useState<any[]>([]);
