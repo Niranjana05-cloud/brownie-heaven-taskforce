@@ -736,6 +736,31 @@ export default function DashboardPage() {
   const [prodSaving, setProdSaving] = useState(false);
   const [compProducts, setCompProducts] = useState<any[]>([]);
   const [compHeadlineOn, setCompHeadlineOn] = useState(true);
+  const [autoReviewsChecking, setAutoReviewsChecking] = useState(false);
+  const [autoReviewsResult, setAutoReviewsResult] = useState<any>(null);
+  const [autoReviewsList, setAutoReviewsList] = useState<any[]>([]);
+  const fetchAutoReviews = async () => {
+    const { data } = await supabase
+      .from("outlet_reviews")
+      .select("*")
+      .eq("platform", "Google")
+      .order("created_at", { ascending: false })
+      .limit(20);
+    setAutoReviewsList(data || []);
+  };
+  const checkNewReviews = async () => {
+    setAutoReviewsChecking(true);
+    setAutoReviewsResult(null);
+    try {
+      const res = await fetch("/api/check-reviews");
+      const json = await res.json();
+      setAutoReviewsResult(json);
+      fetchAutoReviews();
+    } catch (err: any) {
+      setAutoReviewsResult({ success: false, error: err.message || String(err) });
+    }
+    setAutoReviewsChecking(false);
+  };
   const [fineStaff, setFineStaff] = useState<string[]>([]);
   const [fineReason, setFineReason] = useState("1-star review");
   const [fineAmount, setFineAmount] = useState("50");
@@ -2355,7 +2380,7 @@ else await fetchOutletReportsByDate(outletEntryDate);
             </div>
           )}
           {(isFO || ["nishant","arun","vishnu","ahila"].includes(user?.id ?? "")) && (
-            <div onClick={() => { setActiveTab("auto_reviews"); setSidebarOpen(false); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "auto_reviews" ? "text-white bg-zinc-900 border-l-2 border-yellow-400" : "text-zinc-500 hover:text-white"}`}>
+            <div onClick={() => { setActiveTab("auto_reviews"); setSidebarOpen(false); fetchAutoReviews(); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "auto_reviews" ? "text-white bg-zinc-900 border-l-2 border-yellow-400" : "text-zinc-500 hover:text-white"}`}>
               <span>⭐</span> Auto Reviews
             </div>
           )}
@@ -3948,19 +3973,56 @@ else await fetchOutletReportsByDate(outletEntryDate);
 )}
         {activeTab === "auto_reviews" && (isFO || ["nishant","arun","vishnu","ahila"].includes(user?.id ?? "")) && (
           <div>
-            <div className="mb-6">
-              <h2 className="text-3xl font-black tracking-tight">⭐ Auto Reviews</h2>
-              <p className="text-sm text-zinc-500 mt-1">Google, Swiggy &amp; Zomato reviews — auto-pulled into TASKFORCE.</p>
+            <div className="mb-6 flex items-center justify-between flex-wrap gap-3">
+              <div>
+                <h2 className="text-3xl font-black tracking-tight">⭐ Auto Reviews</h2>
+                <p className="text-sm text-zinc-500 mt-1">Google reviews auto-pulled into TASKFORCE. Swiggy &amp; Zomato coming next.</p>
+              </div>
+              <button
+                onClick={checkNewReviews}
+                disabled={autoReviewsChecking}
+                className="bg-yellow-400 text-black px-4 py-2 text-sm font-semibold hover:bg-yellow-300 transition-colors disabled:opacity-50"
+              >
+                {autoReviewsChecking ? "Checking..." : "🔄 Check Now"}
+              </button>
             </div>
-            <div className="bg-zinc-900 border border-zinc-800 p-6 max-w-xl">
-              <p className="text-yellow-400 font-semibold mb-2">🔧 Constructing</p>
-              <p className="text-sm text-zinc-400 leading-relaxed">
-                We're building an automatic pull of new Google, Swiggy, and Zomato review
-                notifications straight into the reviews table — no manual entry needed for
-                rating and outlet. "Valid complaint" will still need a quick manual check
-                since that can't be read from the email itself. Coming soon.
-              </p>
-            </div>
+
+            {autoReviewsResult && (
+              <div className={`border p-4 mb-6 text-sm ${autoReviewsResult.success ? "border-green-700 bg-green-950/30 text-green-300" : "border-red-700 bg-red-950/30 text-red-300"}`}>
+                {autoReviewsResult.success ? (
+                  <>
+                    <p className="font-semibold mb-1">
+                      ✅ Found {autoReviewsResult.inserted.length} new review{autoReviewsResult.inserted.length === 1 ? "" : "s"}
+                      {autoReviewsResult.skipped.length > 0 ? `, skipped ${autoReviewsResult.skipped.length}` : ""}
+                    </p>
+                    {autoReviewsResult.skipped.length > 0 && (
+                      <p className="text-xs text-zinc-400 mt-1">Skipped items usually mean the outlet name in the email didn't match, or it wasn't a review email — safe to ignore unless it happens a lot.</p>
+                    )}
+                  </>
+                ) : (
+                  <p className="font-semibold">⚠️ Error: {autoReviewsResult.error}</p>
+                )}
+              </div>
+            )}
+
+            {autoReviewsList.length === 0 ? (
+              <div className="bg-zinc-900 border border-zinc-800 p-6 max-w-xl">
+                <p className="text-sm text-zinc-400">No auto-pulled reviews yet. Click "Check Now" to pull in any new Google reviews sitting in the inbox.</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {autoReviewsList.map((r) => (
+                  <div key={r.id} className="bg-zinc-900 border border-zinc-800 p-4">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="font-semibold">{OUTLET_NAMES[r.outlet_id] || r.outlet_id}</span>
+                      <span className="text-yellow-400">{"★".repeat(r.rating || 0)}{"☆".repeat(5 - (r.rating || 0))}</span>
+                    </div>
+                    <p className="text-sm text-zinc-400">{r.note}</p>
+                    <p className="text-xs text-zinc-600 mt-2">{r.report_date}</p>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
         {activeTab === "ceo_report" && (isOwner || isFO) && (
