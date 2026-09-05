@@ -381,7 +381,7 @@ export default function DashboardPage() {
   const [reports, setReports] = useState<Report[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
-  const [activeTab, setActiveTab] = useState<"tasks" | "my_report" | "all_reports" | "analytics" | "outlet_reports" | "owner_outlets" | "history" | "attendance" | "sales_target" | "payout" | "reconciliation" | "competition" | "item_perf" | "ceo_report" | "fines" | "niranjana_report" | "pnl" | "contribution_margins" | "net_realisation" | "cash_flow" | "cheques">("tasks");
+  const [activeTab, setActiveTab] = useState<"tasks" | "my_report" | "all_reports" | "analytics" | "outlet_reports" | "owner_outlets" | "history" | "attendance" | "sales_target" | "payout" | "reconciliation" | "competition" | "item_perf" | "ceo_report" | "fines" | "niranjana_report" | "pnl" | "contribution_margins" | "net_realisation" | "cash_flow" | "cheques" | "auto_reviews">("tasks");
   const RANGE_PRESETS = [
     { id: "yesterday", label: "Yesterday" },
     { id: "last7", label: "Last 7 days" },
@@ -2354,6 +2354,11 @@ else await fetchOutletReportsByDate(outletEntryDate);
               <span>📝</span> Niranjana's Report
             </div>
           )}
+          {(isFO || ["nishant","arun","vishnu","ahila"].includes(user?.id ?? "")) && (
+            <div onClick={() => { setActiveTab("auto_reviews"); setSidebarOpen(false); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "auto_reviews" ? "text-white bg-zinc-900 border-l-2 border-yellow-400" : "text-zinc-500 hover:text-white"}`}>
+              <span>⭐</span> Auto Reviews
+            </div>
+          )}
         <div onClick={() => { router.push("/leaderboard"); }} className="flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors text-zinc-500 hover:text-white">
             <span>🏆</span> Leaderboard
           </div>
@@ -3941,6 +3946,23 @@ else await fetchOutletReportsByDate(outletEntryDate);
     </div>
   </div>
 )}
+        {activeTab === "auto_reviews" && (isFO || ["nishant","arun","vishnu","ahila"].includes(user?.id ?? "")) && (
+          <div>
+            <div className="mb-6">
+              <h2 className="text-3xl font-black tracking-tight">⭐ Auto Reviews</h2>
+              <p className="text-sm text-zinc-500 mt-1">Google, Swiggy &amp; Zomato reviews — auto-pulled into TASKFORCE.</p>
+            </div>
+            <div className="bg-zinc-900 border border-zinc-800 p-6 max-w-xl">
+              <p className="text-yellow-400 font-semibold mb-2">🔧 Constructing</p>
+              <p className="text-sm text-zinc-400 leading-relaxed">
+                We're building an automatic pull of new Google, Swiggy, and Zomato review
+                notifications straight into the reviews table — no manual entry needed for
+                rating and outlet. "Valid complaint" will still need a quick manual check
+                since that can't be read from the email itself. Coming soon.
+              </p>
+            </div>
+          </div>
+        )}
         {activeTab === "ceo_report" && (isOwner || isFO) && (
           <div>
             <div className="mb-6">
