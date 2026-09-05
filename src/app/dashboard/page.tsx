@@ -1281,7 +1281,15 @@ export default function DashboardPage() {
   useEffect(() => { if (activeTab === "competition") { fetchCompRows(); fetchCompProducts(); } /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [activeTab]);
   useEffect(() => { if (user) { fetchCompRows(); fetchCompProducts(); fetchCompHeadline(); } /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [user]);
   const fetchIpRows = async (uploadId: string) => { const { data } = await supabase.from("item_perf_rows").select("*").eq("upload_id", uploadId).order("net_revenue", { ascending: false, nullsFirst: false }); setIpRows(data || []); };
-  const fetchIpUploads = async () => { const { data } = await supabase.from("item_perf_uploads").select("*").order("created_at", { ascending: false }); setIpUploads(data || []); if (data && data.length) { setIpSel((cur) => cur || data[0].id); if (!ipSel) fetchIpRows(data[0].id); } };
+   const fetchIpUploads = async () => { const { data } = await supabase.from("item_perf_uploads").select("*").order("created_at", { ascending: false }); setIpUploads(data || []); if (data && data.length) { setIpSel((cur) => cur || data[0].id); if (!ipSel) fetchIpRows(data[0].id); } };
+  const deleteIpUpload = async (uploadId: string) => {
+    if (!confirm("Clear this uploaded data? This can't be undone.")) return;
+    await supabase.from("item_perf_rows").delete().eq("upload_id", uploadId);
+    await supabase.from("item_perf_uploads").delete().eq("id", uploadId);
+    setIpSel("");
+    setIpRows([]);
+    await fetchIpUploads();
+  };
   useEffect(() => { if (activeTab === "item_perf") fetchIpUploads(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [activeTab]);
   const parseItemFile = async (file: File) => {
     const buf = await file.arrayBuffer();
@@ -4352,11 +4360,12 @@ else await fetchOutletReportsByDate(outletEntryDate);
               </div>
             )}
 
-            <div className="mb-4 flex items-center gap-3 flex-wrap">
+               <div className="mb-4 flex items-center gap-3 flex-wrap">
               <label className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest">Upload</label>
               <select value={ipSel} onChange={(e) => { setIpSel(e.target.value); fetchIpRows(e.target.value); }} className="bg-black border border-zinc-800 text-white px-3 py-2 focus:outline-none focus:border-yellow-400 text-sm">
                 {ipUploads.length === 0 ? <option value="">No uploads yet</option> : ipUploads.map((u) => <option key={u.id} value={u.id}>{u.label} · {new Date(u.created_at).toLocaleDateString("en-IN")} · {u.row_count} items</option>)}
               </select>
+              {ipSel && <button onClick={() => deleteIpUpload(ipSel)} className="text-[11px] font-mono uppercase px-3 py-2 border border-zinc-700 hover:border-red-500 hover:text-red-500 transition-colors">🗑 Clear this upload</button>}
             </div>
             <div className="flex gap-2 mb-6">
               <button onClick={() => setIpView("insights")} className={`px-4 py-2 text-sm font-semibold transition-colors ${ipView === "insights" ? "bg-yellow-400 text-black" : "bg-zinc-900 text-zinc-400 hover:text-white"}`}>Insights</button>
