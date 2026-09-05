@@ -5,6 +5,10 @@ import { simpleParser } from "mailparser";
 import { isGoogleReviewEmail, parseGoogleReview } from "@/lib/reviewParsers/google";
 import { matchReviewOutletId, staffIdForReviewOutlet } from "@/lib/reviewOutletMap";
 
+// Give this route more time than Vercel's default 10s — IMAP + parsing +
+// inserting several emails can take a while.
+export const maxDuration = 60;
+
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
