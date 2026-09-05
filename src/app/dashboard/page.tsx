@@ -2169,7 +2169,7 @@ else await fetchOutletReportsByDate(outletEntryDate);
   const hasOutlets = (user?.outlets?.length || 0) > 0;
   const isFO = user?.role === "Founder's Office";
   const isOwner = user?.role === "Owner";
-  const canUploadItemPerf = user?.id === "ahila" || user?.id === "vishnu";
+  const canUploadItemPerf = true;
   const canViewItemPerf = canAssign || canUploadItemPerf;
   const hasReportDuty = user?.role !== "Owner" && user?.role !== "Founder's Office" && user?.role !== "Head Chef" && user?.role !== "Financial Analyst";
   const [kChefs, setKChefs] = useState<any[]>([]);
