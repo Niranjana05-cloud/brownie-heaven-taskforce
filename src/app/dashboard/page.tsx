@@ -751,15 +751,23 @@ export default function DashboardPage() {
   const checkNewReviews = async () => {
     setAutoReviewsChecking(true);
     setAutoReviewsResult(null);
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 65000); // safety cap
     try {
-      const res = await fetch("/api/check-reviews");
+      const res = await fetch("/api/check-reviews", { signal: controller.signal });
       const json = await res.json();
       setAutoReviewsResult(json);
       fetchAutoReviews();
     } catch (err: any) {
-      setAutoReviewsResult({ success: false, error: err.message || String(err) });
+      const timedOut = err.name === "AbortError";
+      setAutoReviewsResult({
+        success: false,
+        error: timedOut ? "Timed out after 65 seconds — the inbox check is taking too long. Try again, or there may be too many unread emails to process at once." : (err.message || String(err)),
+      });
+    } finally {
+      clearTimeout(timeoutId);
+      setAutoReviewsChecking(false);
     }
-    setAutoReviewsChecking(false);
   };
   const [fineStaff, setFineStaff] = useState<string[]>([]);
   const [fineReason, setFineReason] = useState("1-star review");
