@@ -31,13 +31,19 @@ export async function GET() {
 
     try {
       // Only look at unread emails from Google's review notification sender
-      const uids = await client.search({
-        seen: false,
-        from: "businessprofile-noreply@google.com",
-      });
+      // (must pass { uid: true } here, or the numbers returned are sequence
+      // numbers, not UIDs — and everything downstream expects UIDs)
+      const uids = await client.search(
+        { seen: false, from: "businessprofile-noreply@google.com" },
+        { uid: true }
+      );
 
-      for (const uid of uids as number[]) {
+      for (const uid of (uids || []) as number[]) {
         const raw = await client.download(uid.toString(), undefined, { uid: true });
+        if (!raw || !raw.content) {
+          skipped.push({ uid, reason: "download returned no content" });
+          continue;
+        }
         const parsedEmail = await simpleParser(raw.content);
 
         const subject = parsedEmail.subject || "";
@@ -78,7 +84,7 @@ export async function GET() {
         inserted.push({ outletId, rating: review.rating, reviewer: review.reviewerName });
 
         // Mark as read so we don't process it again next time
-        await client.messageFlagsAdd({ uid: uid.toString() }, ["\\Seen"], { uid: true });
+        await client.messageFlagsAdd(uid.toString(), ["\\Seen"], { uid: true });
       }
     } finally {
       lock.release();
