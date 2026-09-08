@@ -390,6 +390,18 @@ export default function DashboardPage() {
     { id: "lastmonth", label: "Last month" },
     { id: "custom", label: "Custom" },
   ];
+  // Separate preset list just for the Outlet Health period comparison — adds explicit
+  // week/month options useful for "this week vs last week" or "this month vs last month"
+  // style comparisons. Kept separate from RANGE_PRESETS so Download Custom Report is untouched.
+  const COMPARE_PRESETS = [
+    { id: "thisweek", label: "This week" },
+    { id: "lastweek", label: "Last week" },
+    { id: "last7", label: "Last 7 days" },
+    { id: "mtd", label: "This month (so far)" },
+    { id: "lastmonth", label: "Last month" },
+    { id: "prevmonth", label: "Month before last" },
+    { id: "custom", label: "Custom" },
+  ];
   const [outletRangeSel, setOutletRangeSel] = useState<Record<string, { preset: string; from?: string; to?: string }>>({});
   const getOutletSel = (o: string) => outletRangeSel[o] || { preset: "last30" };
   const resolveOutletRange = (sel: { preset: string; from?: string; to?: string }): { from: string; to: string; label: string } => {
@@ -400,6 +412,9 @@ export default function DashboardPage() {
     if (sel.preset === "last30") { const f = new Date(today); f.setDate(f.getDate() - 29); return { from: iso(f), to: iso(today), label: "Last 30 days" }; }
     if (sel.preset === "mtd") { const f = new Date(today.getFullYear(), today.getMonth(), 2); return { from: iso(f), to: iso(today), label: "Month to date" }; }
     if (sel.preset === "lastmonth") { const f = new Date(today.getFullYear(), today.getMonth() - 1, 2); const t = new Date(today.getFullYear(), today.getMonth(), 1); return { from: iso(f), to: iso(t), label: "Last month" }; }
+    if (sel.preset === "prevmonth") { const f = new Date(today.getFullYear(), today.getMonth() - 2, 2); const t = new Date(today.getFullYear(), today.getMonth() - 1, 1); return { from: iso(f), to: iso(t), label: "Month before last" }; }
+    if (sel.preset === "thisweek") { const dow = (today.getDay() + 6) % 7; const f = new Date(today); f.setDate(f.getDate() - dow); return { from: iso(f), to: iso(today), label: "This week" }; }
+    if (sel.preset === "lastweek") { const dow = (today.getDay() + 6) % 7; const thisMon = new Date(today); thisMon.setDate(thisMon.getDate() - dow); const t = new Date(thisMon); t.setDate(t.getDate() - 1); const f = new Date(t); f.setDate(f.getDate() - 6); return { from: iso(f), to: iso(t), label: "Last week" }; }
     const shiftDay = (dateStr: string, days: number) => { const d = new Date(dateStr + "T00:00:00"); d.setDate(d.getDate() + days); return iso(d); };
     const rawFrom = sel.from || iso(today), rawTo = sel.to || iso(today);
     const f = shiftDay(rawFrom, 1), t = shiftDay(rawTo, 1);
@@ -1487,7 +1502,29 @@ export default function DashboardPage() {
     if (discountPct >= 15) insights.push(`Discounts this month equal ${discountPct.toFixed(1)}% of sales — on the high side. Blanket discounts every day quietly erode margin; a targeted offer (specific day, specific item, or first-time-customer only) usually drives similar order volume for a fraction of the giveaway.`);
     if (insights.length === 0) insights.push("No sharp swings this month — performance is holding steady across channels. Worth using this calm stretch to test one small change (a new combo, a weekday offer) since there's no crisis pulling focus elsewhere.");
 
-    return { dailyRows, byMonth, months, thisM, lastM, shopChg, swiggyChg, zomatoChg, monthTotals, hitRate, daysHit, daysWithTarget: thisMonthDays.length, bestDow, worstDow, dowNames, onlineShare, shopShare, discountPct, insights };
+    const thisMonthTotal = thisM.shop + thisM.swiggy + thisM.zomato;
+    const lastMonthTotal = lastM ? lastM.shop + lastM.swiggy + lastM.zomato : null;
+    const monthTarget = monthlyTargetFor(oid, nowYm);
+    const monthPct = monthTarget > 0 ? (thisMonthTotal / monthTarget) * 100 : 0;
+    const monthTrendPct = lastMonthTotal != null && lastMonthTotal > 0 ? ((thisMonthTotal - lastMonthTotal) / lastMonthTotal) * 100 : null;
+    let health = "No data";
+    if (monthTarget > 0 && thisMonthTotal > 0) health = monthPct >= 90 ? "Strong" : monthPct >= 60 ? "On track" : monthPct >= 30 ? "Needs attention" : "Struggling";
+    let trendLabel = "steady";
+    if (monthTrendPct != null) trendLabel = monthTrendPct > 10 ? "growing" : monthTrendPct < -10 ? "declining" : "steady";
+
+    // A standing set of researched, platform-specific tactics — always included as general
+    // reference alongside the personalized points above, since these apply regardless of
+    // this month's specific numbers.
+    const playbook: string[] = [
+      "Keep negative reviews under roughly 2% of total ratings. Even a handful of bad reviews can quietly push a listing down in Swiggy/Zomato search ranking, well before it shows up as a sales drop.",
+      "Kitchen prep speed directly affects visibility — both platforms' ranking algorithms favour restaurants with faster prep times. A slow kitchen doesn't just frustrate the customer, it actively loses future orders by ranking lower.",
+      "Menu photos and descriptions convert browsers into orders. Clear, appetizing photos with specific descriptions (ingredients, what makes a dish different) consistently outsell bare listings — this is one of the cheapest fixes available.",
+      "Time-boxed offers (a 'Meal of the Day', a 2–4pm 'Happy Hour') tend to earn better in-app placement than a blanket all-day discount, and cost the business far less margin for a similar lift in orders.",
+      "Running a paid ad slot timed to your own peak order hours usually pays back better than spreading the same ad budget across the whole day.",
+      "Offline presence still feeds online trust — customers who've noticed the outlet in person are more likely to order from its Swiggy/Zomato listing, so shop-front visibility matters even for online-heavy outlets.",
+    ];
+
+    return { dailyRows, byMonth, months, thisM, lastM, shopChg, swiggyChg, zomatoChg, monthTotals, hitRate, daysHit, daysWithTarget: thisMonthDays.length, bestDow, worstDow, dowNames, onlineShare, shopShare, discountPct, insights, playbook, thisMonthTotal, monthTarget, monthPct, monthTrendPct, health, trendLabel };
   };
 
   const fetchOutletDeepDive = async (oid: string) => {
@@ -1534,8 +1571,8 @@ export default function DashboardPage() {
   };
 
   const downloadOutletHealthPDF = async () => {
-    const o = outletHealthData.find((x) => x.oid === outletHealthSel);
-    if (!o || !outletDeepDive) { alert("No data for this outlet yet."); return; }
+    const outletName = OUTLET_NAMES[outletHealthSel] || outletHealthSel;
+    if (!outletDeepDive) { alert("No data for this outlet yet."); return; }
     setOutletHealthPdfBusy(true);
     try {
       const dd = outletDeepDive;
@@ -1576,6 +1613,7 @@ export default function DashboardPage() {
       </svg>`;
 
       const insightRows = dd.insights.map((s: string) => `<li style="margin:6px 0;font-size:12px;line-height:1.5">${s}</li>`).join("");
+      const playbookRows = dd.playbook.map((s: string) => `<li style="margin:6px 0;font-size:11px;line-height:1.5;color:${C.soft}">${s}</li>`).join("");
 
       const monthNames: Record<string, string> = { "01": "January", "02": "February", "03": "March", "04": "April", "05": "May", "06": "June", "07": "July", "08": "August", "09": "September", "10": "October", "11": "November", "12": "December" };
       const byMonthRows: Record<string, any[]> = {};
@@ -1594,16 +1632,21 @@ export default function DashboardPage() {
       }).join("");
 
       const html = `<div style="width:794px;background:${C.bg};font-family:'Segoe UI',Arial,sans-serif;color:${C.ink};padding:34px">
-        <div style="font-size:22px;font-weight:900">Brownie Heaven — Outlet Health: ${o.name}</div>
+        <div style="font-size:22px;font-weight:900">Brownie Heaven — Outlet Health: ${outletName}</div>
         <div style="font-size:11px;color:${C.soft};margin-bottom:16px">Since June launch · generated ${new Date().toISOString().split("T")[0]}</div>
         <div style="background:${C.card};border:1px solid ${C.line};border-radius:12px;padding:18px;margin-bottom:16px">
           <div style="font-size:13px;color:${C.soft}">This month</div>
-          <div style="font-size:28px;font-weight:900">${inr(o.thisMonthTotal)}</div>
-          <div style="font-size:13px;color:${o.health === "Strong" ? C.green : o.health === "Struggling" ? C.red : C.amber};font-weight:700">${o.health}${o.pct > 0 ? ` · ${o.pct.toFixed(0)}% of target` : ""}${dd.hitRate != null ? ` · hit target ${dd.daysHit}/${dd.daysWithTarget} days (${dd.hitRate.toFixed(0)}%)` : ""}</div>
+          <div style="font-size:28px;font-weight:900">${inr(dd.thisMonthTotal)}</div>
+          <div style="font-size:13px;color:${dd.health === "Strong" ? C.green : dd.health === "Struggling" ? C.red : C.amber};font-weight:700">${dd.health}${dd.monthPct > 0 ? ` · ${dd.monthPct.toFixed(0)}% of target` : ""}${dd.hitRate != null ? ` · hit target ${dd.daysHit}/${dd.daysWithTarget} days (${dd.hitRate.toFixed(0)}%)` : ""}</div>
         </div>
         <div style="background:${C.card};border:2px solid ${C.amber};border-radius:12px;padding:18px;margin-bottom:18px;page-break-inside:avoid">
           <div style="font-size:15px;font-weight:800;margin-bottom:8px;color:${C.amber}">📈 Business Insights &amp; What To Do About It</div>
           <ul style="margin:0;padding-left:18px">${insightRows}</ul>
+        </div>
+        <div style="background:${C.card};border:1px solid ${C.line};border-radius:12px;padding:18px;margin-bottom:18px;page-break-inside:avoid">
+          <div style="font-size:13px;font-weight:800;margin-bottom:4px;color:${C.ink}">📚 General playbook — worth checking regardless of this month's numbers</div>
+          <div style="font-size:10px;color:${C.soft};margin-bottom:8px">Researched practices for Swiggy/Zomato/walk-in performance, not specific to this outlet's current numbers.</div>
+          <ul style="margin:0;padding-left:18px">${playbookRows}</ul>
         </div>
         <div style="font-size:14px;font-weight:800;margin-bottom:8px">Revenue trend — month by month</div>
         <div style="background:${C.card};border:1px solid ${C.line};border-radius:12px;padding:16px 18px;margin-bottom:18px">
@@ -1631,7 +1674,7 @@ export default function DashboardPage() {
       const lib = await loadH2P();
       window.scrollTo(0, 0); await new Promise((r) => setTimeout(r, 50));
       const holder = document.createElement("div"); holder.style.position = "fixed"; holder.style.left = "-9999px"; holder.style.top = "0"; holder.innerHTML = html; document.body.appendChild(holder);
-      try { await lib().set({ margin: 0, filename: `OutletHealth_${o.name.replace(/\s+/g, "_")}.pdf`, image: { type: "jpeg", quality: 0.97 }, html2canvas: { scale: 2, backgroundColor: C.bg }, jsPDF: { unit: "pt", format: "a4", orientation: "portrait" }, pagebreak: { mode: ["css", "legacy"] } }).from(holder.firstElementChild).save(); }
+      try { await lib().set({ margin: 0, filename: `OutletHealth_${outletName.replace(/\s+/g, "_")}.pdf`, image: { type: "jpeg", quality: 0.97 }, html2canvas: { scale: 2, backgroundColor: C.bg }, jsPDF: { unit: "pt", format: "a4", orientation: "portrait" }, pagebreak: { mode: ["css", "legacy"] } }).from(holder.firstElementChild).save(); }
       finally { document.body.removeChild(holder); }
     } catch (e: any) {
       alert("Failed to generate: " + (e?.message || "error"));
@@ -1641,8 +1684,8 @@ export default function DashboardPage() {
 
 
   const downloadOutletHealthExcel = async () => {
-    const o = outletHealthData.find((x) => x.oid === outletHealthSel);
-    if (!o || !outletDeepDive) { alert("No data for this outlet yet."); return; }
+    const outletName = OUTLET_NAMES[outletHealthSel] || outletHealthSel;
+    if (!outletDeepDive) { alert("No data for this outlet yet."); return; }
     setOutletHealthXlsxBusy(true);
     try {
       const cmp = await fetchPeriodComparison();
@@ -1653,7 +1696,10 @@ export default function DashboardPage() {
       const monthlySheet = outletDeepDive.monthTotals.map((m: any) => ({
         Month: m.m, Total: Math.round(m.total), Target: m.target, "%": m.target > 0 ? Math.round((m.total / m.target) * 100) + "%" : "-",
       }));
-      const insightsSheet = outletDeepDive.insights.map((s: string) => ({ Insight: s }));
+      const insightsSheet = [
+        ...outletDeepDive.insights.map((s: string) => ({ Type: "This outlet, this month", Insight: s })),
+        ...outletDeepDive.playbook.map((s: string) => ({ Type: "General playbook", Insight: s })),
+      ];
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(insightsSheet), "Insights");
       XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(monthlySheet), "Monthly Summary");
@@ -1667,7 +1713,7 @@ export default function DashboardPage() {
         XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(compareSheet), "Period Comparison");
       }
       XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(dailySheet), "Daily (by month, latest last)");
-      XLSX.writeFile(wb, `OutletHealth_${o.name.replace(/\s+/g, "_")}.xlsx`);
+      XLSX.writeFile(wb, `OutletHealth_${outletName.replace(/\s+/g, "_")}.xlsx`);
     } catch (e: any) {
       alert("Failed to generate: " + (e?.message || "error"));
     }
@@ -3636,7 +3682,7 @@ else await fetchOutletReportsByDate(outletEntryDate);
           <span className="text-[9px] text-zinc-600">A:</span>
           <select value={comparePresetA} onChange={(e) => applyComparePreset("A", e.target.value)} className="bg-black border border-zinc-800 text-white px-2 py-1.5 text-xs font-mono focus:outline-none focus:border-yellow-400">
             <option value="none">None</option>
-            {RANGE_PRESETS.map(p => <option key={p.id} value={p.id}>{p.label}</option>)}
+            {COMPARE_PRESETS.map(p => <option key={p.id} value={p.id}>{p.label}</option>)}
           </select>
           {comparePresetA === "custom" && (
             <>
@@ -3650,7 +3696,7 @@ else await fetchOutletReportsByDate(outletEntryDate);
           <span className="text-[9px] text-zinc-600">B:</span>
           <select value={comparePresetB} onChange={(e) => applyComparePreset("B", e.target.value)} className="bg-black border border-zinc-800 text-white px-2 py-1.5 text-xs font-mono focus:outline-none focus:border-yellow-400">
             <option value="none">None</option>
-            {RANGE_PRESETS.map(p => <option key={p.id} value={p.id}>{p.label}</option>)}
+            {COMPARE_PRESETS.map(p => <option key={p.id} value={p.id}>{p.label}</option>)}
           </select>
           {comparePresetB === "custom" && (
             <>
