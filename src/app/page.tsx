@@ -36,9 +36,9 @@ export default function LoginPage() {
       .select("*")
       .eq("id", selectedUser)
       .eq("pin", pin)
-      .single();
+      .maybeSingle();
     setLoading(false);
-    if (dbError) { setError("Error: " + dbError.message); return; }
+    if (dbError) { setError("Login is temporarily unavailable. Please try again in a moment."); return; }
     if (!data) { setError("Wrong PIN. Try again."); return; }
     localStorage.setItem("currentUser", JSON.stringify(data));
 
