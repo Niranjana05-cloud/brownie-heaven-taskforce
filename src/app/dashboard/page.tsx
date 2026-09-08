@@ -708,6 +708,15 @@ export default function DashboardPage() {
   const [outletHealthLoading, setOutletHealthLoading] = useState(false);
   const [outletHealthSel, setOutletHealthSel] = useState(OUTLETS[0]);
   const [outletHealthPdfBusy, setOutletHealthPdfBusy] = useState(false);
+  const [outletHealthXlsxBusy, setOutletHealthXlsxBusy] = useState(false);
+  const [outletDeepDive, setOutletDeepDive] = useState<any>(null);
+  const [outletDeepDiveLoading, setOutletDeepDiveLoading] = useState(false);
+  const [compareAFrom, setCompareAFrom] = useState("");
+  const [compareATo, setCompareATo] = useState("");
+  const [compareBFrom, setCompareBFrom] = useState("");
+  const [compareBTo, setCompareBTo] = useState("");
+  const [compareResult, setCompareResult] = useState<any>(null);
+  const [compareBusy, setCompareBusy] = useState(false);
   const [scoreRows, setScoreRows] = useState<ScoreRow[]>([]);
 
   useEffect(() => {
@@ -1397,6 +1406,78 @@ export default function DashboardPage() {
   };
    useEffect(() => { if ((activeTab === "analytics" || activeTab === "owner_outlets") && outletHealthData.length === 0) fetchOutletHealth(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [activeTab]);
 
+  // Builds the full daily series + monthly aggregates + rule-based insights for one
+  // outlet. Shared by the in-app deep-dive view and the PDF export so both stay in sync.
+  const computeOutletAnalysis = (oid: string, rawRows: any[]) => {
+    const daily = [...rawRows].sort((a, b) => (a.report_date as string).localeCompare(b.report_date));
+    const dailyRows = daily.map((r: any) => {
+      const ym = r.report_date.slice(0, 7);
+      const shop = Number(r.shop_sales_value) || 0, swiggy = Number(r.swiggy_sales_value) || 0, zomato = Number(r.zomato_sales_value) || 0;
+      const total = shop + swiggy + zomato;
+      const target = dailyTargetFor(oid, ym);
+      return { date: r.report_date, shop, swiggy, zomato, total, target, pct: target > 0 ? (total / target) * 100 : 0 };
+    });
+    const byMonth: Record<string, { shop: number; swiggy: number; zomato: number }> = {};
+    dailyRows.forEach((r) => {
+      const ym = r.date.slice(0, 7);
+      if (!byMonth[ym]) byMonth[ym] = { shop: 0, swiggy: 0, zomato: 0 };
+      byMonth[ym].shop += r.shop; byMonth[ym].swiggy += r.swiggy; byMonth[ym].zomato += r.zomato;
+    });
+    const months = Object.keys(byMonth).sort();
+    const nowYm = new Date().toISOString().slice(0, 7);
+    const thisM = byMonth[nowYm] || { shop: 0, swiggy: 0, zomato: 0 };
+    const prevYm = months.filter((m) => m !== nowYm).pop();
+    const lastM = prevYm ? byMonth[prevYm] : null;
+    const chg = (cur: number, prev: number | undefined) => prev == null || prev === 0 ? null : ((cur - prev) / prev) * 100;
+    const shopChg = chg(thisM.shop, lastM?.shop), swiggyChg = chg(thisM.swiggy, lastM?.swiggy), zomatoChg = chg(thisM.zomato, lastM?.zomato);
+    const monthTotals = months.map((m) => ({ m, total: byMonth[m].shop + byMonth[m].swiggy + byMonth[m].zomato, target: monthlyTargetFor(oid, m) }));
+
+    const thisMonthDays = dailyRows.filter((r) => r.date.slice(0, 7) === nowYm && r.target > 0);
+    const daysHit = thisMonthDays.filter((r) => r.total >= r.target).length;
+    const hitRate = thisMonthDays.length > 0 ? (daysHit / thisMonthDays.length) * 100 : null;
+
+    const insights: string[] = [];
+    const channelName = (v: number) => v === shopChg ? "Shop" : v === swiggyChg ? "Swiggy" : "Zomato";
+    const validChgs = [shopChg, swiggyChg, zomatoChg].filter((v) => v != null) as number[];
+    if (validChgs.length) {
+      const worst = Math.min(...validChgs), best = Math.max(...validChgs);
+      if (worst < -5) { const nm = channelName(worst); const advice = nm === "Swiggy" || nm === "Zomato" ? `check if ads are still running, ratings haven't dipped, and the menu is fully available on ${nm}` : "check walk-in footfall, local competition, or staffing at peak hours"; insights.push(`${nm} dropped ${Math.abs(worst).toFixed(1)}% vs last month — ${advice}.`); }
+      if (best > 5 && best !== worst) { const nm = channelName(best); insights.push(`${nm} grew ${best.toFixed(1)}% — worth finding out what worked (a promo, better ratings, more listings) and repeating it elsewhere.`); }
+    }
+    if (monthTotals.length >= 3) { const last3 = monthTotals.slice(-3); if (last3[2].total < last3[1].total && last3[1].total < last3[0].total) insights.push(`Sales have fallen for two months straight (${last3[0].m} → ${last3[2].m}) — this isn't a one-off dip, worth a closer look at what changed.`); }
+    const tgtNow = monthlyTargetFor(oid, nowYm);
+    const pctNow = tgtNow > 0 ? (thisM.shop + thisM.swiggy + thisM.zomato) / tgtNow * 100 : 0;
+    if (pctNow > 0 && pctNow < 60) insights.push(`Only ${pctNow.toFixed(0)}% of this month's target hit so far — at this pace the outlet will fall well short unless the remaining days pick up.`);
+    if (pctNow >= 90) insights.push(`Tracking at ${pctNow.toFixed(0)}% of target — on pace to hit or beat the number this month.`);
+    if (hitRate != null && hitRate < 40) insights.push(`Only hit the daily target on ${daysHit} of ${thisMonthDays.length} days this month (${hitRate.toFixed(0)}%) — consistency is the bigger issue here, not just the average.`);
+    if (hitRate != null && hitRate >= 80) insights.push(`Hit the daily target on ${daysHit} of ${thisMonthDays.length} days (${hitRate.toFixed(0)}%) — very consistent month.`);
+    if (insights.length === 0) insights.push("No sharp swings this month — performance is holding steady across channels.");
+
+    return { dailyRows, byMonth, months, thisM, lastM, shopChg, swiggyChg, zomatoChg, monthTotals, hitRate, daysHit, daysWithTarget: thisMonthDays.length, insights };
+  };
+
+  const fetchOutletDeepDive = async (oid: string) => {
+    setOutletDeepDiveLoading(true);
+    const { data } = await supabase.from("outlet_reports").select("report_date, shop_sales_value, swiggy_sales_value, zomato_sales_value").eq("outlet_id", oid).gte("report_date", "2026-06-01");
+    setOutletDeepDive(computeOutletAnalysis(oid, data || []));
+    setOutletDeepDiveLoading(false);
+    setCompareResult(null);
+  };
+  useEffect(() => { if (activeTab === "owner_outlets" && outletHealthSel) fetchOutletDeepDive(outletHealthSel); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [activeTab, outletHealthSel]);
+
+  const runCompare = async () => {
+    if (!compareAFrom || !compareATo || !compareBFrom || !compareBTo) { alert("Pick both date ranges."); return; }
+    setCompareBusy(true);
+    const { data: aRows } = await supabase.from("outlet_reports").select("shop_sales_value, swiggy_sales_value, zomato_sales_value").eq("outlet_id", outletHealthSel).gte("report_date", compareAFrom).lte("report_date", compareATo);
+    const { data: bRows } = await supabase.from("outlet_reports").select("shop_sales_value, swiggy_sales_value, zomato_sales_value").eq("outlet_id", outletHealthSel).gte("report_date", compareBFrom).lte("report_date", compareBTo);
+    const sum = (rows: any[]) => (rows || []).reduce((acc, r) => ({ shop: acc.shop + (Number(r.shop_sales_value) || 0), swiggy: acc.swiggy + (Number(r.swiggy_sales_value) || 0), zomato: acc.zomato + (Number(r.zomato_sales_value) || 0) }), { shop: 0, swiggy: 0, zomato: 0 });
+    const a = sum(aRows || []), b = sum(bRows || []);
+    const aTotal = a.shop + a.swiggy + a.zomato, bTotal = b.shop + b.swiggy + b.zomato;
+    const pctChg = (curV: number, prevV: number) => prevV === 0 ? null : ((curV - prevV) / prevV) * 100;
+    setCompareResult({ a, b, aTotal, bTotal, totalChg: pctChg(bTotal, aTotal), shopChg: pctChg(b.shop, a.shop), swiggyChg: pctChg(b.swiggy, a.swiggy), zomatoChg: pctChg(b.zomato, a.zomato) });
+    setCompareBusy(false);
+  };
+
   const downloadOutletHealthPDF = async () => {
     const o = outletHealthData.find((x) => x.oid === outletHealthSel);
     if (!o) { alert("No data for this outlet yet."); return; }
@@ -1543,6 +1624,30 @@ export default function DashboardPage() {
       alert("Failed to generate: " + (e?.message || "error"));
     }
     setOutletHealthPdfBusy(false);
+  };
+
+  const downloadOutletHealthExcel = async () => {
+    const o = outletHealthData.find((x) => x.oid === outletHealthSel);
+    if (!o || !outletDeepDive) { alert("No data for this outlet yet."); return; }
+    setOutletHealthXlsxBusy(true);
+    try {
+      const dailySheet = outletDeepDive.dailyRows.map((r: any) => ({
+        Date: r.date, Shop: r.shop, Swiggy: r.swiggy, Zomato: r.zomato, Total: r.total, Target: r.target,
+        "%": r.target > 0 ? Math.round(r.pct) + "%" : "-",
+      }));
+      const monthlySheet = outletDeepDive.monthTotals.map((m: any) => ({
+        Month: m.m, Total: Math.round(m.total), Target: m.target, "%": m.target > 0 ? Math.round((m.total / m.target) * 100) + "%" : "-",
+      }));
+      const insightsSheet = outletDeepDive.insights.map((s: string) => ({ Insight: s }));
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(dailySheet), "Daily");
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(monthlySheet), "Monthly Summary");
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(insightsSheet), "Insights");
+      XLSX.writeFile(wb, `OutletHealth_${o.name.replace(/\s+/g, "_")}.xlsx`);
+    } catch (e: any) {
+      alert("Failed to generate: " + (e?.message || "error"));
+    }
+    setOutletHealthXlsxBusy(false);
   };
 
   const anAgg = (() => {
@@ -3483,9 +3588,14 @@ else await fetchOutletReportsByDate(outletEntryDate);
     <div className="bg-[#131316] border border-zinc-800 p-5 mb-6">
     <div className="flex items-center justify-between mb-1">
       <p className="text-sm font-bold uppercase tracking-widest">📊 Outlet Health</p>
-          <button onClick={downloadOutletHealthPDF} disabled={outletHealthPdfBusy} className="px-3 py-1.5 border border-zinc-800 text-zinc-400 hover:border-yellow-400 hover:text-yellow-400 transition-colors disabled:opacity-50 text-[10px] font-mono uppercase tracking-widest">
-        {outletHealthPdfBusy ? "…" : "Export"}
-      </button>
+      <div className="flex gap-2">
+        <button onClick={downloadOutletHealthExcel} disabled={outletHealthXlsxBusy || !outletDeepDive} className="px-3 py-1.5 bg-green-600 hover:bg-green-500 text-white transition-colors disabled:opacity-50 text-[10px] font-mono uppercase tracking-widest">
+          {outletHealthXlsxBusy ? "…" : "↓ Excel"}
+        </button>
+        <button onClick={downloadOutletHealthPDF} disabled={outletHealthPdfBusy} className="px-3 py-1.5 bg-yellow-400 hover:bg-yellow-300 text-black transition-colors disabled:opacity-50 text-[10px] font-mono uppercase tracking-widest">
+          {outletHealthPdfBusy ? "…" : "↓ PDF"}
+        </button>
+      </div>
     </div>
     <p className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-4">Pick an outlet · full breakdown, trend &amp; verdict</p>
     <div className="mb-4">
@@ -3495,11 +3605,30 @@ else await fetchOutletReportsByDate(outletEntryDate);
         ); })}
       </div>
     </div>
-    {outletHealthLoading ? <p className="text-sm text-zinc-500">Loading…</p> : (() => {
+    {outletHealthLoading || outletDeepDiveLoading ? <p className="text-sm text-zinc-500">Loading…</p> : (() => {
       const o = outletHealthData.find((x) => x.oid === outletHealthSel);
-      if (!o) return null;
+      if (!o || !outletDeepDive) return null;
       const healthColor = o.health === "Strong" ? "text-green-400" : o.health === "On track" ? "text-yellow-400" : o.health === "Needs attention" ? "text-orange-400" : o.health === "Struggling" ? "text-red-500" : "text-zinc-600";
       const trendArrow = o.trendPct == null ? "" : o.trendPct > 0 ? "▲" : o.trendPct < 0 ? "▼" : "—";
+      const dd = outletDeepDive;
+      const rs2 = (n: number) => "₹" + Math.round(n).toLocaleString("en-IN");
+
+      // Daily trend chart — last 60 days, with a target reference line
+      const last60 = dd.dailyRows.slice(-60);
+      const chartW = 100, chartH = 32;
+      const maxV = Math.max(...last60.map((r: any) => Math.max(r.total, r.target)), 1);
+      const stepX = last60.length > 1 ? chartW / (last60.length - 1) : 0;
+      const pathFor = (key: "total" | "target") => last60.map((r: any, i: number) => `${i === 0 ? "M" : "L"}${(i * stepX).toFixed(2)},${(chartH - (r[key] / maxV) * chartH).toFixed(2)}`).join(" ");
+
+      // Channel mix donut — this month
+      const tAll = dd.thisM.shop + dd.thisM.swiggy + dd.thisM.zomato || 1;
+      const R = 42, CX = 50, CY = 50, SW = 16, CIRC = 2 * Math.PI * R;
+      let acc = 0;
+      const segs = [[dd.thisM.shop, "#FACC15"], [dd.thisM.swiggy, "#FB923C"], [dd.thisM.zomato, "#EF4444"]].map(([v, c]: any, i: number) => {
+        const frac = v / tAll; const len = frac * CIRC; const off = -acc * CIRC; acc += frac;
+        return <circle key={i} cx={CX} cy={CY} r={R} fill="none" stroke={c} strokeWidth={SW} strokeDasharray={`${len} ${CIRC - len}`} strokeDashoffset={off} transform={`rotate(-90 ${CX} ${CY})`} />;
+      });
+
       return (
         <div className="border-t border-zinc-800 pt-4">
           <div className="flex items-center justify-between mb-2">
@@ -3507,8 +3636,95 @@ else await fetchOutletReportsByDate(outletEntryDate);
             <span className={`font-mono text-[10px] uppercase tracking-widest ${healthColor}`}>{o.health}</span>
           </div>
           <p className="text-2xl font-black">₹{Math.round(o.thisMonthTotal).toLocaleString("en-IN")}</p>
-          <p className="text-xs text-zinc-500 mb-3">this month{o.pct > 0 ? ` · ${o.pct.toFixed(0)}% of target` : ""}{o.trendPct != null ? ` · ${trendArrow} ${Math.abs(o.trendPct).toFixed(0)}% vs last month` : ""}</p>
-          <p className="text-xs text-zinc-400">{o.name} is {o.trendLabel === "growing" ? "trending up" : o.trendLabel === "declining" ? "trending down" : "holding steady"} month over month.{o.health === "Struggling" ? " Worth a closer look — consistently underperforming." : o.health === "Strong" ? " Performing well, keep the momentum." : ""}</p>
+          <p className="text-xs text-zinc-500 mb-4">this month{o.pct > 0 ? ` · ${o.pct.toFixed(0)}% of target` : ""}{o.trendPct != null ? ` · ${trendArrow} ${Math.abs(o.trendPct).toFixed(0)}% vs last month` : ""}{dd.hitRate != null ? ` · hit target ${dd.daysHit}/${dd.daysWithTarget} days (${dd.hitRate.toFixed(0)}%)` : ""}</p>
+
+          {last60.length > 1 && (
+            <div className="mb-5">
+              <p className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-2">📈 Daily trend — last {last60.length} days (dotted = target)</p>
+              <svg viewBox={`0 0 ${chartW} ${chartH}`} className="w-full h-24 bg-black border border-zinc-800">
+                <path d={pathFor("target")} fill="none" stroke="#52525b" strokeWidth="0.4" strokeDasharray="1.5,1" vectorEffect="non-scaling-stroke" />
+                <path d={pathFor("total")} fill="none" stroke="#FBBF24" strokeWidth="0.6" vectorEffect="non-scaling-stroke" />
+              </svg>
+            </div>
+          )}
+
+          <div className="flex flex-wrap gap-6 mb-5">
+            <div>
+              <p className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-2">Channel mix — this month</p>
+              <svg width="100" height="100" viewBox="0 0 100 100">
+                <circle cx={CX} cy={CY} r={R} fill="none" stroke="#27272a" strokeWidth={SW} />
+                {segs}
+              </svg>
+              <div className="mt-2 space-y-1">
+                <p className="text-[10px] text-zinc-400"><span className="inline-block w-2 h-2 bg-yellow-400 mr-1.5" />Shop {rs2(dd.thisM.shop)}</p>
+                <p className="text-[10px] text-zinc-400"><span className="inline-block w-2 h-2 bg-orange-400 mr-1.5" />Swiggy {rs2(dd.thisM.swiggy)}</p>
+                <p className="text-[10px] text-zinc-400"><span className="inline-block w-2 h-2 bg-red-500 mr-1.5" />Zomato {rs2(dd.thisM.zomato)}</p>
+              </div>
+            </div>
+            <div className="flex-1 min-w-[220px]">
+              <p className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-2">This vs last month</p>
+              <table className="w-full text-xs">
+                <tbody>
+                  {[["Shop", dd.thisM.shop, dd.shopChg], ["Swiggy", dd.thisM.swiggy, dd.swiggyChg], ["Zomato", dd.thisM.zomato, dd.zomatoChg]].map(([n, v, c]: any) => (
+                    <tr key={n} className="border-b border-zinc-800">
+                      <td className="py-1.5 text-zinc-400">{n}</td>
+                      <td className="py-1.5 text-right">{rs2(v)}</td>
+                      <td className={`py-1.5 text-right font-semibold ${c == null ? "text-zinc-600" : c >= 0 ? "text-green-400" : "text-red-400"}`}>{c == null ? "—" : `${c >= 0 ? "▲" : "▼"} ${Math.abs(c).toFixed(1)}%`}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div className="bg-black border border-yellow-400/30 p-3 mb-5">
+            <p className="text-[10px] font-mono text-yellow-400 uppercase tracking-widest mb-2">What this means</p>
+            <ul className="space-y-1.5">
+              {dd.insights.map((s: string, i: number) => <li key={i} className="text-xs text-zinc-300">• {s}</li>)}
+            </ul>
+          </div>
+
+          <div className="border-t border-zinc-800 pt-4">
+            <p className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-2">🔍 Compare two periods</p>
+            <div className="flex flex-wrap items-end gap-3 mb-3">
+              <div>
+                <label className="text-[9px] text-zinc-600 block mb-1">Period A</label>
+                <div className="flex gap-1">
+                  <input type="date" value={compareAFrom} onChange={(e) => setCompareAFrom(e.target.value)} className="bg-black border border-zinc-800 text-white px-2 py-1 text-xs font-mono focus:outline-none focus:border-yellow-400" />
+                  <input type="date" value={compareATo} onChange={(e) => setCompareATo(e.target.value)} className="bg-black border border-zinc-800 text-white px-2 py-1 text-xs font-mono focus:outline-none focus:border-yellow-400" />
+                </div>
+              </div>
+              <div>
+                <label className="text-[9px] text-zinc-600 block mb-1">Period B</label>
+                <div className="flex gap-1">
+                  <input type="date" value={compareBFrom} onChange={(e) => setCompareBFrom(e.target.value)} className="bg-black border border-zinc-800 text-white px-2 py-1 text-xs font-mono focus:outline-none focus:border-yellow-400" />
+                  <input type="date" value={compareBTo} onChange={(e) => setCompareBTo(e.target.value)} className="bg-black border border-zinc-800 text-white px-2 py-1 text-xs font-mono focus:outline-none focus:border-yellow-400" />
+                </div>
+              </div>
+              <button onClick={runCompare} disabled={compareBusy} className="px-3 py-1.5 bg-yellow-400 hover:bg-yellow-300 text-black text-[10px] font-mono uppercase tracking-widest disabled:opacity-50">{compareBusy ? "…" : "Compare"}</button>
+            </div>
+            {compareResult && (
+              <div className="bg-black border border-zinc-800 p-3">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs text-zinc-400">A: {rs2(compareResult.aTotal)}</span>
+                  <span className="text-xs text-zinc-400">B: {rs2(compareResult.bTotal)}</span>
+                  <span className={`text-xs font-semibold ${compareResult.totalChg == null ? "text-zinc-600" : compareResult.totalChg >= 0 ? "text-green-400" : "text-red-400"}`}>{compareResult.totalChg == null ? "—" : `${compareResult.totalChg >= 0 ? "▲" : "▼"} ${Math.abs(compareResult.totalChg).toFixed(1)}%`}</span>
+                </div>
+                <table className="w-full text-xs">
+                  <tbody>
+                    {[["Shop", compareResult.a.shop, compareResult.b.shop, compareResult.shopChg], ["Swiggy", compareResult.a.swiggy, compareResult.b.swiggy, compareResult.swiggyChg], ["Zomato", compareResult.a.zomato, compareResult.b.zomato, compareResult.zomatoChg]].map(([n, av, bv, c]: any) => (
+                      <tr key={n} className="border-t border-zinc-800">
+                        <td className="py-1.5 text-zinc-400">{n}</td>
+                        <td className="py-1.5 text-right text-zinc-500">{rs2(av)}</td>
+                        <td className="py-1.5 text-right">{rs2(bv)}</td>
+                        <td className={`py-1.5 text-right font-semibold ${c == null ? "text-zinc-600" : c >= 0 ? "text-green-400" : "text-red-400"}`}>{c == null ? "—" : `${c >= 0 ? "▲" : "▼"} ${Math.abs(c).toFixed(1)}%`}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
         </div>
       );
     })()}
