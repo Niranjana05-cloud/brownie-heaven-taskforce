@@ -482,7 +482,7 @@ export default function DashboardPage() {
       const dayRowHtml = (d: any) => `<tr><td style="padding:3px 8px;border-bottom:1px solid ${C.line};font-size:10px;color:${C.soft}">${d.Date}</td><td style="padding:3px 8px;border-bottom:1px solid ${C.line};text-align:right;font-size:10px;color:${C.soft}">${rs(d.Shop)}</td><td style="padding:3px 8px;border-bottom:1px solid ${C.line};text-align:right;font-size:10px;color:${C.soft}">${rs(d.Swiggy)}</td><td style="padding:3px 8px;border-bottom:1px solid ${C.line};text-align:right;font-size:10px;color:${C.soft}">${rs(d.Zomato)}</td><td style="padding:3px 8px;border-bottom:1px solid ${C.line};text-align:right;font-weight:700;color:${C.ink};font-size:10px">${rs(d.Total)}</td><td style="padding:3px 8px;border-bottom:1px solid ${C.line};text-align:right;font-size:10px;color:${C.soft}">${dayTgt(d) > 0 ? rs(dayTgt(d)) : "-"}</td><td style="padding:3px 8px;border-bottom:1px solid ${C.line};text-align:right;font-size:10px;font-weight:700;color:${dayTgt(d) > 0 ? pctCol((d.Total / dayTgt(d)) * 100) : C.soft}">${dayTgt(d) > 0 ? ((d.Total / dayTgt(d)) * 100).toFixed(0) + "%" : "-"}</td></tr>`;
       const dayTablesByOutlet = summ.map((s: any) => {
       const outletRows = [...data].filter((d: any) => d.Outlet === s.Outlet).sort((a: any, b: any) => (a.Date as string).localeCompare(b.Date));
-        return `<div style="margin-bottom:16px;"><div style="font-size:12px;font-weight:800;margin:8px 0 4px;color:${C.ink}">${s.Outlet} — ${s.Range}</div><table style="width:100%;border-collapse:collapse;background:${C.card};border:1px solid ${C.line};border-radius:10px;overflow:hidden;page-break-inside:avoid"><thead><tr style="background:${C.ink}"><th style="padding:5px 8px;text-align:left;color:#FFF6E5;font-size:9px">DATE</th><th style="padding:5px 8px;text-align:right;color:#FFF6E5;font-size:9px">SHOP</th><th style="padding:5px 8px;text-align:right;color:#FFF6E5;font-size:9px">SWIGGY</th><th style="padding:5px 8px;text-align:right;color:#FFF6E5;font-size:9px">ZOMATO</th><th style="padding:5px 8px;text-align:right;color:#FFF6E5;font-size:9px">TOTAL</th><th style="padding:5px 8px;text-align:right;color:#FFF6E5;font-size:9px">TARGET</th><th style="padding:5px 8px;text-align:right;color:#FFF6E5;font-size:9px">%</th></tr></thead><tbody>${outletRows.map(dayRowHtml).join("")}</tbody></table></div>`;
+        return `<div style="margin-bottom:16px;page-break-inside:avoid;break-inside:avoid;"><div style="font-size:12px;font-weight:800;margin:8px 0 4px;color:${C.ink}">${s.Outlet} — ${s.Range}</div><table style="width:100%;border-collapse:collapse;background:${C.card};border:1px solid ${C.line};border-radius:10px;overflow:hidden;page-break-inside:avoid;break-inside:avoid;"><thead><tr style="background:${C.ink}"><th style="padding:5px 8px;text-align:left;color:#FFF6E5;font-size:9px">DATE</th><th style="padding:5px 8px;text-align:right;color:#FFF6E5;font-size:9px">SHOP</th><th style="padding:5px 8px;text-align:right;color:#FFF6E5;font-size:9px">SWIGGY</th><th style="padding:5px 8px;text-align:right;color:#FFF6E5;font-size:9px">ZOMATO</th><th style="padding:5px 8px;text-align:right;color:#FFF6E5;font-size:9px">TOTAL</th><th style="padding:5px 8px;text-align:right;color:#FFF6E5;font-size:9px">TARGET</th><th style="padding:5px 8px;text-align:right;color:#FFF6E5;font-size:9px">%</th></tr></thead><tbody>${outletRows.map(dayRowHtml).join("")}</tbody></table></div>`;
       }).join("");    
       const html = `<div style="width:1120px;background:${C.bg};font-family:'Segoe UI',Arial,sans-serif;color:${C.ink}">
         <div style="background:linear-gradient(135deg,${C.ink},#5C3A22);padding:22px 32px">
@@ -1281,15 +1281,7 @@ export default function DashboardPage() {
   useEffect(() => { if (activeTab === "competition") { fetchCompRows(); fetchCompProducts(); } /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [activeTab]);
   useEffect(() => { if (user) { fetchCompRows(); fetchCompProducts(); fetchCompHeadline(); } /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [user]);
   const fetchIpRows = async (uploadId: string) => { const { data } = await supabase.from("item_perf_rows").select("*").eq("upload_id", uploadId).order("net_revenue", { ascending: false, nullsFirst: false }); setIpRows(data || []); };
-   const fetchIpUploads = async () => { const { data } = await supabase.from("item_perf_uploads").select("*").order("created_at", { ascending: false }); setIpUploads(data || []); if (data && data.length) { setIpSel((cur) => cur || data[0].id); if (!ipSel) fetchIpRows(data[0].id); } };
-  const deleteIpUpload = async (uploadId: string) => {
-    if (!confirm("Clear this uploaded data? This can't be undone.")) return;
-    await supabase.from("item_perf_rows").delete().eq("upload_id", uploadId);
-    await supabase.from("item_perf_uploads").delete().eq("id", uploadId);
-    setIpSel("");
-    setIpRows([]);
-    await fetchIpUploads();
-  };
+  const fetchIpUploads = async () => { const { data } = await supabase.from("item_perf_uploads").select("*").order("created_at", { ascending: false }); setIpUploads(data || []); if (data && data.length) { setIpSel((cur) => cur || data[0].id); if (!ipSel) fetchIpRows(data[0].id); } };
   useEffect(() => { if (activeTab === "item_perf") fetchIpUploads(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [activeTab]);
   const parseItemFile = async (file: File) => {
     const buf = await file.arrayBuffer();
@@ -4360,12 +4352,11 @@ else await fetchOutletReportsByDate(outletEntryDate);
               </div>
             )}
 
-               <div className="mb-4 flex items-center gap-3 flex-wrap">
+            <div className="mb-4 flex items-center gap-3 flex-wrap">
               <label className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest">Upload</label>
               <select value={ipSel} onChange={(e) => { setIpSel(e.target.value); fetchIpRows(e.target.value); }} className="bg-black border border-zinc-800 text-white px-3 py-2 focus:outline-none focus:border-yellow-400 text-sm">
                 {ipUploads.length === 0 ? <option value="">No uploads yet</option> : ipUploads.map((u) => <option key={u.id} value={u.id}>{u.label} · {new Date(u.created_at).toLocaleDateString("en-IN")} · {u.row_count} items</option>)}
               </select>
-              {ipSel && <button onClick={() => deleteIpUpload(ipSel)} className="text-[11px] font-mono uppercase px-3 py-2 border border-zinc-700 hover:border-red-500 hover:text-red-500 transition-colors">🗑 Clear this upload</button>}
             </div>
             <div className="flex gap-2 mb-6">
               <button onClick={() => setIpView("insights")} className={`px-4 py-2 text-sm font-semibold transition-colors ${ipView === "insights" ? "bg-yellow-400 text-black" : "bg-zinc-900 text-zinc-400 hover:text-white"}`}>Insights</button>
