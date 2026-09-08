@@ -715,8 +715,6 @@ export default function DashboardPage() {
   const [compareATo, setCompareATo] = useState("");
   const [compareBFrom, setCompareBFrom] = useState("");
   const [compareBTo, setCompareBTo] = useState("");
-  const [compareResult, setCompareResult] = useState<any>(null);
-  const [compareBusy, setCompareBusy] = useState(false);
   const [scoreRows, setScoreRows] = useState<ScoreRow[]>([]);
 
   useEffect(() => {
@@ -1461,21 +1459,20 @@ export default function DashboardPage() {
     const { data } = await supabase.from("outlet_reports").select("report_date, shop_sales_value, swiggy_sales_value, zomato_sales_value").eq("outlet_id", oid).gte("report_date", "2026-06-01");
     setOutletDeepDive(computeOutletAnalysis(oid, data || []));
     setOutletDeepDiveLoading(false);
-    setCompareResult(null);
   };
   useEffect(() => { if (activeTab === "owner_outlets" && outletHealthSel) fetchOutletDeepDive(outletHealthSel); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [activeTab, outletHealthSel]);
 
-  const runCompare = async () => {
-    if (!compareAFrom || !compareATo || !compareBFrom || !compareBTo) { alert("Pick both date ranges."); return; }
-    setCompareBusy(true);
+  // Returns the A-vs-B period comparison if all four dates are filled in, else null.
+  // Used by the PDF/Excel exports — there's no live on-screen result for this anymore.
+  const fetchPeriodComparison = async () => {
+    if (!compareAFrom || !compareATo || !compareBFrom || !compareBTo) return null;
     const { data: aRows } = await supabase.from("outlet_reports").select("shop_sales_value, swiggy_sales_value, zomato_sales_value").eq("outlet_id", outletHealthSel).gte("report_date", compareAFrom).lte("report_date", compareATo);
     const { data: bRows } = await supabase.from("outlet_reports").select("shop_sales_value, swiggy_sales_value, zomato_sales_value").eq("outlet_id", outletHealthSel).gte("report_date", compareBFrom).lte("report_date", compareBTo);
     const sum = (rows: any[]) => (rows || []).reduce((acc, r) => ({ shop: acc.shop + (Number(r.shop_sales_value) || 0), swiggy: acc.swiggy + (Number(r.swiggy_sales_value) || 0), zomato: acc.zomato + (Number(r.zomato_sales_value) || 0) }), { shop: 0, swiggy: 0, zomato: 0 });
     const a = sum(aRows || []), b = sum(bRows || []);
     const aTotal = a.shop + a.swiggy + a.zomato, bTotal = b.shop + b.swiggy + b.zomato;
     const pctChg = (curV: number, prevV: number) => prevV === 0 ? null : ((curV - prevV) / prevV) * 100;
-    setCompareResult({ a, b, aTotal, bTotal, totalChg: pctChg(bTotal, aTotal), shopChg: pctChg(b.shop, a.shop), swiggyChg: pctChg(b.swiggy, a.swiggy), zomatoChg: pctChg(b.zomato, a.zomato) });
-    setCompareBusy(false);
+    return { a, b, aTotal, bTotal, totalChg: pctChg(bTotal, aTotal), shopChg: pctChg(b.shop, a.shop), swiggyChg: pctChg(b.swiggy, a.swiggy), zomatoChg: pctChg(b.zomato, a.zomato) };
   };
 
   const downloadOutletHealthPDF = async () => {
@@ -1484,6 +1481,7 @@ export default function DashboardPage() {
     setOutletHealthPdfBusy(true);
     try {
       const dd = outletDeepDive;
+      const cmp = await fetchPeriodComparison();
       const C = { bg: "#FAF3E7", card: "#FFFDF8", ink: "#3E2415", soft: "#8A6A4A", line: "#EADBC2", green: "#2E7D32", red: "#C62828", amber: "#C8901E" };
       const inr = (n: number) => "₹" + Math.round(n).toLocaleString("en-IN");
 
@@ -1544,6 +1542,16 @@ export default function DashboardPage() {
           <div style="font-size:14px;font-weight:800;margin-bottom:6px;color:${C.amber}">What this means, and what to do about it</div>
           <ul style="margin:0;padding-left:18px">${insightRows}</ul>
         </div>
+        ${cmp ? `<div style="font-size:14px;font-weight:800;margin-bottom:8px">Period comparison — ${compareAFrom} to ${compareATo} vs ${compareBFrom} to ${compareBTo}</div>
+        <table style="width:100%;border-collapse:collapse;background:${C.card};border:1px solid ${C.line};border-radius:10px;overflow:hidden;margin-bottom:18px;page-break-inside:avoid">
+          <thead><tr style="background:${C.ink}"><th style="padding:7px 10px;text-align:left;color:#FFF6E5;font-size:9px">CHANNEL</th><th style="padding:7px 10px;text-align:right;color:#FFF6E5;font-size:9px">PERIOD A</th><th style="padding:7px 10px;text-align:right;color:#FFF6E5;font-size:9px">PERIOD B</th><th style="padding:7px 10px;text-align:right;color:#FFF6E5;font-size:9px">CHANGE</th></tr></thead>
+          <tbody>
+            ${chRow("Shop", cmp.b.shop, cmp.a.shop, cmp.shopChg)}
+            ${chRow("Swiggy", cmp.b.swiggy, cmp.a.swiggy, cmp.swiggyChg)}
+            ${chRow("Zomato", cmp.b.zomato, cmp.a.zomato, cmp.zomatoChg)}
+            <tr style="background:${C.line}"><td style="padding:8px 10px;font-size:12px;font-weight:900">TOTAL</td><td style="padding:8px 10px;text-align:right;font-size:12px;font-weight:700">${inr(cmp.aTotal)}</td><td style="padding:8px 10px;text-align:right;font-size:12px;font-weight:900">${inr(cmp.bTotal)}</td><td style="padding:8px 10px;text-align:right;font-size:12px;font-weight:900;color:${cmp.totalChg == null ? C.soft : cmp.totalChg >= 0 ? C.green : C.red}">${cmp.totalChg == null ? "—" : (cmp.totalChg >= 0 ? "Up " : "Down ") + Math.abs(cmp.totalChg).toFixed(1) + "%"}</td></tr>
+          </tbody>
+        </table>` : ""}
         <div style="font-size:14px;font-weight:800;margin-bottom:8px">Full daily detail — since June 1</div>
         <table style="width:100%;border-collapse:collapse;background:${C.card};border:1px solid ${C.line};border-radius:10px;overflow:hidden">
           <thead><tr style="background:${C.ink}"><th style="padding:6px 8px;text-align:left;color:#FFF6E5;font-size:9px">DATE</th><th style="padding:6px 8px;text-align:right;color:#FFF6E5;font-size:9px">SHOP</th><th style="padding:6px 8px;text-align:right;color:#FFF6E5;font-size:9px">SWIGGY</th><th style="padding:6px 8px;text-align:right;color:#FFF6E5;font-size:9px">ZOMATO</th><th style="padding:6px 8px;text-align:right;color:#FFF6E5;font-size:9px">TOTAL</th><th style="padding:6px 8px;text-align:right;color:#FFF6E5;font-size:9px">TARGET</th><th style="padding:6px 8px;text-align:right;color:#FFF6E5;font-size:9px">%</th></tr></thead>
@@ -1568,6 +1576,7 @@ export default function DashboardPage() {
     if (!o || !outletDeepDive) { alert("No data for this outlet yet."); return; }
     setOutletHealthXlsxBusy(true);
     try {
+      const cmp = await fetchPeriodComparison();
       const dailySheet = outletDeepDive.dailyRows.map((r: any) => ({
         Date: r.date, Shop: r.shop, Swiggy: r.swiggy, Zomato: r.zomato, Total: r.total, Target: r.target,
         "%": r.target > 0 ? Math.round(r.pct) + "%" : "-",
@@ -1580,6 +1589,15 @@ export default function DashboardPage() {
       XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(dailySheet), "Daily");
       XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(monthlySheet), "Monthly Summary");
       XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(insightsSheet), "Insights");
+      if (cmp) {
+        const compareSheet = [
+          { Channel: "Shop", [`Period A (${compareAFrom} to ${compareATo})`]: cmp.a.shop, [`Period B (${compareBFrom} to ${compareBTo})`]: cmp.b.shop, "Change %": cmp.shopChg == null ? "-" : cmp.shopChg.toFixed(1) + "%" },
+          { Channel: "Swiggy", [`Period A (${compareAFrom} to ${compareATo})`]: cmp.a.swiggy, [`Period B (${compareBFrom} to ${compareBTo})`]: cmp.b.swiggy, "Change %": cmp.swiggyChg == null ? "-" : cmp.swiggyChg.toFixed(1) + "%" },
+          { Channel: "Zomato", [`Period A (${compareAFrom} to ${compareATo})`]: cmp.a.zomato, [`Period B (${compareBFrom} to ${compareBTo})`]: cmp.b.zomato, "Change %": cmp.zomatoChg == null ? "-" : cmp.zomatoChg.toFixed(1) + "%" },
+          { Channel: "TOTAL", [`Period A (${compareAFrom} to ${compareATo})`]: cmp.aTotal, [`Period B (${compareBFrom} to ${compareBTo})`]: cmp.bTotal, "Change %": cmp.totalChg == null ? "-" : cmp.totalChg.toFixed(1) + "%" },
+        ];
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(compareSheet), "Period Comparison");
+      }
       XLSX.writeFile(wb, `OutletHealth_${o.name.replace(/\s+/g, "_")}.xlsx`);
     } catch (e: any) {
       alert("Failed to generate: " + (e?.message || "error"));
@@ -3534,7 +3552,7 @@ else await fetchOutletReportsByDate(outletEntryDate);
         </button>
       </div>
     </div>
-    <p className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-4">Pick an outlet · full breakdown, trend &amp; verdict</p>
+    <p className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-4">Pick an outlet, optionally compare two periods · full breakdown, trend &amp; verdict inside the download</p>
     <div className="mb-4">
       <div className="flex flex-wrap gap-2">
         {OUTLETS.map((o) => { const on = outletHealthSel === o; return (
@@ -3542,138 +3560,23 @@ else await fetchOutletReportsByDate(outletEntryDate);
         ); })}
       </div>
     </div>
-    {outletHealthLoading || outletDeepDiveLoading ? <p className="text-sm text-zinc-500">Loading…</p> : (() => {
-      const o = outletHealthData.find((x) => x.oid === outletHealthSel);
-      if (!o || !outletDeepDive) return null;
-      const healthColor = o.health === "Strong" ? "text-green-400" : o.health === "On track" ? "text-yellow-400" : o.health === "Needs attention" ? "text-orange-400" : o.health === "Struggling" ? "text-red-500" : "text-zinc-600";
-      const trendArrow = o.trendPct == null ? "" : o.trendPct > 0 ? "▲" : o.trendPct < 0 ? "▼" : "—";
-      const dd = outletDeepDive;
-      const rs2 = (n: number) => "₹" + Math.round(n).toLocaleString("en-IN");
-
-      // Daily trend chart — last 60 days, with a target reference line
-      const last60 = dd.dailyRows.slice(-60);
-      const chartW = 100, chartH = 32;
-      const maxV = Math.max(...last60.map((r: any) => Math.max(r.total, r.target)), 1);
-      const stepX = last60.length > 1 ? chartW / (last60.length - 1) : 0;
-      const pathFor = (key: "total" | "target") => last60.map((r: any, i: number) => `${i === 0 ? "M" : "L"}${(i * stepX).toFixed(2)},${(chartH - (r[key] / maxV) * chartH).toFixed(2)}`).join(" ");
-
-      return (
-        <div className="border-t border-zinc-800 pt-4">
-          <div className="flex items-center justify-between mb-2">
-            <p className="font-semibold text-sm">{o.name}</p>
-            <span className={`font-mono text-[10px] uppercase tracking-widest ${healthColor}`}>{o.health}</span>
-          </div>
-          <p className="text-2xl font-black">₹{Math.round(o.thisMonthTotal).toLocaleString("en-IN")}</p>
-          <p className="text-xs text-zinc-500 mb-4">this month{o.pct > 0 ? ` · ${o.pct.toFixed(0)}% of target` : ""}{o.trendPct != null ? ` · ${trendArrow} ${Math.abs(o.trendPct).toFixed(0)}% vs last month` : ""}{dd.hitRate != null ? ` · hit target ${dd.daysHit}/${dd.daysWithTarget} days (${dd.hitRate.toFixed(0)}%)` : ""}</p>
-
-          {last60.length > 1 && (
-            <div className="mb-5">
-              <p className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-2">📈 Daily trend — last {last60.length} days (dotted = target)</p>
-              <svg viewBox={`0 0 ${chartW} ${chartH}`} className="w-full h-24 bg-black border border-zinc-800">
-                <path d={pathFor("target")} fill="none" stroke="#52525b" strokeWidth="0.4" strokeDasharray="1.5,1" vectorEffect="non-scaling-stroke" />
-                <path d={pathFor("total")} fill="none" stroke="#FBBF24" strokeWidth="0.6" vectorEffect="non-scaling-stroke" />
-              </svg>
-            </div>
-          )}
-
-          <div className="mb-5">
-            <p className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-2">This vs last month</p>
-            <table className="w-full text-xs max-w-md">
-              <tbody>
-                {[["Shop", dd.thisM.shop, dd.shopChg], ["Swiggy", dd.thisM.swiggy, dd.swiggyChg], ["Zomato", dd.thisM.zomato, dd.zomatoChg]].map(([n, v, c]: any) => (
-                  <tr key={n} className="border-b border-zinc-800">
-                    <td className="py-1.5 text-zinc-400">{n}</td>
-                    <td className="py-1.5 text-right">{rs2(v)}</td>
-                    <td className={`py-1.5 text-right font-semibold ${c == null ? "text-zinc-600" : c >= 0 ? "text-green-400" : "text-red-400"}`}>{c == null ? "—" : `${c >= 0 ? "▲" : "▼"} ${Math.abs(c).toFixed(1)}%`}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-
-          <div className="mb-5">
-            <p className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-2">📋 Full daily detail — since June 1</p>
-            <div className="max-h-96 overflow-y-auto border border-zinc-800">
-              <table className="w-full text-xs">
-                <thead className="sticky top-0 bg-zinc-900">
-                  <tr>
-                    <th className="text-left py-2 px-2 text-zinc-500 font-mono text-[10px]">DATE</th>
-                    <th className="text-right py-2 px-2 text-zinc-500 font-mono text-[10px]">SHOP</th>
-                    <th className="text-right py-2 px-2 text-zinc-500 font-mono text-[10px]">SWIGGY</th>
-                    <th className="text-right py-2 px-2 text-zinc-500 font-mono text-[10px]">ZOMATO</th>
-                    <th className="text-right py-2 px-2 text-zinc-500 font-mono text-[10px]">TOTAL</th>
-                    <th className="text-right py-2 px-2 text-zinc-500 font-mono text-[10px]">TARGET</th>
-                    <th className="text-right py-2 px-2 text-zinc-500 font-mono text-[10px]">%</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {[...dd.dailyRows].reverse().map((r: any) => (
-                    <tr key={r.date} className="border-t border-zinc-800">
-                      <td className="py-1.5 px-2 text-zinc-400">{r.date}</td>
-                      <td className="py-1.5 px-2 text-right text-zinc-300">{rs2(r.shop)}</td>
-                      <td className="py-1.5 px-2 text-right text-zinc-300">{rs2(r.swiggy)}</td>
-                      <td className="py-1.5 px-2 text-right text-zinc-300">{rs2(r.zomato)}</td>
-                      <td className="py-1.5 px-2 text-right text-white font-semibold">{rs2(r.total)}</td>
-                      <td className="py-1.5 px-2 text-right text-zinc-500">{r.target > 0 ? rs2(r.target) : "-"}</td>
-                      <td className={`py-1.5 px-2 text-right font-semibold ${r.target === 0 ? "text-zinc-600" : r.pct >= 100 ? "text-green-400" : r.pct >= 70 ? "text-yellow-400" : "text-red-400"}`}>{r.target > 0 ? r.pct.toFixed(0) + "%" : "-"}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          <div className="bg-black border border-yellow-400/30 p-3 mb-5">
-            <p className="text-[10px] font-mono text-yellow-400 uppercase tracking-widest mb-2">What this means</p>
-            <ul className="space-y-1.5">
-              {dd.insights.map((s: string, i: number) => <li key={i} className="text-xs text-zinc-300">• {s}</li>)}
-            </ul>
-          </div>
-
-          <div className="border-t border-zinc-800 pt-4">
-            <p className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-2">🔍 Compare two periods</p>
-            <div className="flex flex-wrap items-end gap-3 mb-3">
-              <div>
-                <label className="text-[9px] text-zinc-600 block mb-1">Period A</label>
-                <div className="flex gap-1">
-                  <input type="date" value={compareAFrom} onChange={(e) => setCompareAFrom(e.target.value)} className="bg-black border border-zinc-800 text-white px-2 py-1 text-xs font-mono focus:outline-none focus:border-yellow-400" />
-                  <input type="date" value={compareATo} onChange={(e) => setCompareATo(e.target.value)} className="bg-black border border-zinc-800 text-white px-2 py-1 text-xs font-mono focus:outline-none focus:border-yellow-400" />
-                </div>
-              </div>
-              <div>
-                <label className="text-[9px] text-zinc-600 block mb-1">Period B</label>
-                <div className="flex gap-1">
-                  <input type="date" value={compareBFrom} onChange={(e) => setCompareBFrom(e.target.value)} className="bg-black border border-zinc-800 text-white px-2 py-1 text-xs font-mono focus:outline-none focus:border-yellow-400" />
-                  <input type="date" value={compareBTo} onChange={(e) => setCompareBTo(e.target.value)} className="bg-black border border-zinc-800 text-white px-2 py-1 text-xs font-mono focus:outline-none focus:border-yellow-400" />
-                </div>
-              </div>
-              <button onClick={runCompare} disabled={compareBusy} className="px-3 py-1.5 bg-yellow-400 hover:bg-yellow-300 text-black text-[10px] font-mono uppercase tracking-widest disabled:opacity-50">{compareBusy ? "…" : "Compare"}</button>
-            </div>
-            {compareResult && (
-              <div className="bg-black border border-zinc-800 p-3">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs text-zinc-400">A: {rs2(compareResult.aTotal)}</span>
-                  <span className="text-xs text-zinc-400">B: {rs2(compareResult.bTotal)}</span>
-                  <span className={`text-xs font-semibold ${compareResult.totalChg == null ? "text-zinc-600" : compareResult.totalChg >= 0 ? "text-green-400" : "text-red-400"}`}>{compareResult.totalChg == null ? "—" : `${compareResult.totalChg >= 0 ? "▲" : "▼"} ${Math.abs(compareResult.totalChg).toFixed(1)}%`}</span>
-                </div>
-                <table className="w-full text-xs">
-                  <tbody>
-                    {[["Shop", compareResult.a.shop, compareResult.b.shop, compareResult.shopChg], ["Swiggy", compareResult.a.swiggy, compareResult.b.swiggy, compareResult.swiggyChg], ["Zomato", compareResult.a.zomato, compareResult.b.zomato, compareResult.zomatoChg]].map(([n, av, bv, c]: any) => (
-                      <tr key={n} className="border-t border-zinc-800">
-                        <td className="py-1.5 text-zinc-400">{n}</td>
-                        <td className="py-1.5 text-right text-zinc-500">{rs2(av)}</td>
-                        <td className="py-1.5 text-right">{rs2(bv)}</td>
-                        <td className={`py-1.5 text-right font-semibold ${c == null ? "text-zinc-600" : c >= 0 ? "text-green-400" : "text-red-400"}`}>{c == null ? "—" : `${c >= 0 ? "▲" : "▼"} ${Math.abs(c).toFixed(1)}%`}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
+    <div className="mb-2">
+      <label className="text-[10px] font-mono text-zinc-500 uppercase block mb-2">Compare two periods (optional — leave blank to skip)</label>
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="flex items-center gap-1">
+          <span className="text-[9px] text-zinc-600 mr-1">A:</span>
+          <input type="date" value={compareAFrom} onChange={(e) => setCompareAFrom(e.target.value)} className="bg-black border border-zinc-800 text-white px-2 py-1.5 text-xs font-mono focus:outline-none focus:border-yellow-400" />
+          <span className="text-zinc-600 text-xs">to</span>
+          <input type="date" value={compareATo} onChange={(e) => setCompareATo(e.target.value)} className="bg-black border border-zinc-800 text-white px-2 py-1.5 text-xs font-mono focus:outline-none focus:border-yellow-400" />
         </div>
-      );
-    })()}
+        <div className="flex items-center gap-1">
+          <span className="text-[9px] text-zinc-600 mr-1">B:</span>
+          <input type="date" value={compareBFrom} onChange={(e) => setCompareBFrom(e.target.value)} className="bg-black border border-zinc-800 text-white px-2 py-1.5 text-xs font-mono focus:outline-none focus:border-yellow-400" />
+          <span className="text-zinc-600 text-xs">to</span>
+          <input type="date" value={compareBTo} onChange={(e) => setCompareBTo(e.target.value)} className="bg-black border border-zinc-800 text-white px-2 py-1.5 text-xs font-mono focus:outline-none focus:border-yellow-400" />
+        </div>
+      </div>
+    </div>
   </div>
 
   <div className="bg-[#131316] border border-zinc-800 p-5 mb-6">
