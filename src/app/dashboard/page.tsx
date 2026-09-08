@@ -713,6 +713,8 @@ export default function DashboardPage() {
   const [outletDeepDiveLoading, setOutletDeepDiveLoading] = useState(false);
   const [comparePresetA, setComparePresetA] = useState("none");
   const [comparePresetB, setComparePresetB] = useState("none");
+  const [quickCompareResult, setQuickCompareResult] = useState<any>(null);
+  const [quickCompareBusy, setQuickCompareBusy] = useState(false);
   const [compareAFrom, setCompareAFrom] = useState("");
   const [compareATo, setCompareATo] = useState("");
   const [compareBFrom, setCompareBFrom] = useState("");
@@ -1415,7 +1417,8 @@ export default function DashboardPage() {
       const shop = Number(r.shop_sales_value) || 0, swiggy = Number(r.swiggy_sales_value) || 0, zomato = Number(r.zomato_sales_value) || 0;
       const total = shop + swiggy + zomato;
       const target = dailyTargetFor(oid, ym);
-      return { date: r.report_date, shop, swiggy, zomato, total, target, pct: target > 0 ? (total / target) * 100 : 0 };
+      const discount = Number(r.discount_given) || 0;
+      return { date: r.report_date, shop, swiggy, zomato, total, target, discount, pct: target > 0 ? (total / target) * 100 : 0 };
     });
     const byMonth: Record<string, { shop: number; swiggy: number; zomato: number }> = {};
     dailyRows.forEach((r) => {
@@ -1432,33 +1435,64 @@ export default function DashboardPage() {
     const shopChg = chg(thisM.shop, lastM?.shop), swiggyChg = chg(thisM.swiggy, lastM?.swiggy), zomatoChg = chg(thisM.zomato, lastM?.zomato);
     const monthTotals = months.map((m) => ({ m, total: byMonth[m].shop + byMonth[m].swiggy + byMonth[m].zomato, target: monthlyTargetFor(oid, m) }));
 
-    const thisMonthDays = dailyRows.filter((r) => r.date.slice(0, 7) === nowYm && r.target > 0);
+    const thisMonthRows = dailyRows.filter((r) => r.date.slice(0, 7) === nowYm);
+    const thisMonthDays = thisMonthRows.filter((r) => r.target > 0);
     const daysHit = thisMonthDays.filter((r) => r.total >= r.target).length;
     const hitRate = thisMonthDays.length > 0 ? (daysHit / thisMonthDays.length) * 100 : null;
+
+    // Weekday pattern — which day of the week performs best/worst, this month
+    const dowNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+    const dowTotals = [0, 0, 0, 0, 0, 0, 0], dowCounts = [0, 0, 0, 0, 0, 0, 0];
+    thisMonthRows.forEach((r) => { const dow = new Date(r.date + "T00:00:00").getDay(); dowTotals[dow] += r.total; dowCounts[dow]++; });
+    const dowAvg = dowTotals.map((t, i) => dowCounts[i] > 0 ? t / dowCounts[i] : 0);
+    const validDow = dowAvg.map((v, i) => ({ v, i })).filter((x) => dowCounts[x.i] > 0);
+    const bestDow = validDow.length ? validDow.reduce((a, b) => (b.v > a.v ? b : a)) : null;
+    const worstDow = validDow.length ? validDow.reduce((a, b) => (b.v < a.v ? b : a)) : null;
+
+    // Channel balance — this month
+    const tAll = thisM.shop + thisM.swiggy + thisM.zomato || 1;
+    const onlineShare = ((thisM.swiggy + thisM.zomato) / tAll) * 100;
+    const shopShare = (thisM.shop / tAll) * 100;
+
+    // Discount drag — this month
+    const discountTotal = thisMonthRows.reduce((a, r) => a + r.discount, 0);
+    const discountPct = tAll > 0 ? (discountTotal / tAll) * 100 : 0;
 
     const insights: string[] = [];
     const channelName = (v: number) => v === shopChg ? "Shop" : v === swiggyChg ? "Swiggy" : "Zomato";
     const validChgs = [shopChg, swiggyChg, zomatoChg].filter((v) => v != null) as number[];
     if (validChgs.length) {
       const worst = Math.min(...validChgs), best = Math.max(...validChgs);
-      if (worst < -5) { const nm = channelName(worst); const advice = nm === "Swiggy" || nm === "Zomato" ? `check if ads are still running, ratings haven't dipped, and the menu is fully available on ${nm}` : "check walk-in footfall, local competition, or staffing at peak hours"; insights.push(`${nm} dropped ${Math.abs(worst).toFixed(1)}% vs last month — ${advice}.`); }
-      if (best > 5 && best !== worst) { const nm = channelName(best); insights.push(`${nm} grew ${best.toFixed(1)}% — worth finding out what worked (a promo, better ratings, more listings) and repeating it elsewhere.`); }
+      if (worst < -5) {
+        const nm = channelName(worst);
+        const advice = nm === "Swiggy" || nm === "Zomato"
+          ? `Check three things on ${nm}: menu photos and descriptions are complete and appetizing, negative reviews are kept under 2% (a couple of bad ratings can quietly sink ranking), and kitchen prep time is fast — ${nm}'s own ranking algorithm favours restaurants with lower prep times. Running a paid ad slot during your peak order hours can also recover lost visibility fast.`
+          : "Check walk-in footfall at peak hours, whether a nearby competitor has opened or is running a stronger offer, and whether staffing dips are causing wait times to build up.";
+        insights.push(`${nm} dropped ${Math.abs(worst).toFixed(1)}% vs last month. ${advice}`);
+      }
+      if (best > 5 && best !== worst) { const nm = channelName(best); insights.push(`${nm} grew ${best.toFixed(1)}% vs last month — find out what worked (a running offer, a new combo, better ratings) and repeat it on the other channels too.`); }
     }
-    if (monthTotals.length >= 3) { const last3 = monthTotals.slice(-3); if (last3[2].total < last3[1].total && last3[1].total < last3[0].total) insights.push(`Sales have fallen for two months straight (${last3[0].m} → ${last3[2].m}) — this isn't a one-off dip, worth a closer look at what changed.`); }
+    if (monthTotals.length >= 3) { const last3 = monthTotals.slice(-3); if (last3[2].total < last3[1].total && last3[1].total < last3[0].total) insights.push(`Sales have fallen for two months straight (${last3[0].m} → ${last3[2].m}) — this isn't a one-off dip, worth digging into what changed structurally (menu, pricing, a competitor, staffing).`); }
     const tgtNow = monthlyTargetFor(oid, nowYm);
     const pctNow = tgtNow > 0 ? (thisM.shop + thisM.swiggy + thisM.zomato) / tgtNow * 100 : 0;
-    if (pctNow > 0 && pctNow < 60) insights.push(`Only ${pctNow.toFixed(0)}% of this month's target hit so far — at this pace the outlet will fall well short unless the remaining days pick up.`);
-    if (pctNow >= 90) insights.push(`Tracking at ${pctNow.toFixed(0)}% of target — on pace to hit or beat the number this month.`);
-    if (hitRate != null && hitRate < 40) insights.push(`Only hit the daily target on ${daysHit} of ${thisMonthDays.length} days this month (${hitRate.toFixed(0)}%) — consistency is the bigger issue here, not just the average.`);
-    if (hitRate != null && hitRate >= 80) insights.push(`Hit the daily target on ${daysHit} of ${thisMonthDays.length} days (${hitRate.toFixed(0)}%) — very consistent month.`);
-    if (insights.length === 0) insights.push("No sharp swings this month — performance is holding steady across channels.");
+    if (pctNow > 0 && pctNow < 60) insights.push(`Only ${pctNow.toFixed(0)}% of this month's target hit so far — at this pace the outlet will fall well short unless the remaining days pick up sharply.`);
+    if (pctNow >= 90) insights.push(`Tracking at ${pctNow.toFixed(0)}% of target — on pace to hit or beat the number this month. Keep doing what's working rather than changing course.`);
+    if (hitRate != null && hitRate < 40) insights.push(`Only hit the daily target on ${daysHit} of ${thisMonthDays.length} days this month (${hitRate.toFixed(0)}%) — the real problem is consistency, not the average. A few big days are propping up a lot of weak ones.`);
+    if (hitRate != null && hitRate >= 80) insights.push(`Hit the daily target on ${daysHit} of ${thisMonthDays.length} days (${hitRate.toFixed(0)}%) — a genuinely consistent month, which matters more for planning than any single big day.`);
+    if (bestDow && worstDow && bestDow.i !== worstDow.i && dowCounts[bestDow.i] >= 2 && dowCounts[worstDow.i] >= 2) {
+      insights.push(`${dowNames[bestDow.i]}s are consistently the strongest day (avg ₹${Math.round(bestDow.v).toLocaleString("en-IN")}), while ${dowNames[worstDow.i]}s lag behind (avg ₹${Math.round(worstDow.v).toLocaleString("en-IN")}). A targeted offer or a 'Meal of the Day' combo on ${dowNames[worstDow.i]}s specifically — rather than a blanket discount every day — usually lifts the weak day without giving away margin on days that already sell well.`);
+    }
+    if (onlineShare >= 75) insights.push(`Online (Swiggy + Zomato) carries ${onlineShare.toFixed(0)}% of sales — walk-in is a small slice. A strong offline presence (visible signage, in-store promos, local awareness) actually feeds online credibility too, so it's worth not neglecting the shop-front experience even if most orders arrive through an app.`);
+    if (shopShare >= 60) insights.push(`Shop (walk-in) carries ${shopShare.toFixed(0)}% of sales — online is underused here. Getting listed on Swiggy POP or a similar budget-meal slot, and making sure the online menu has clear photos and combo pricing, is usually the fastest way to pick up incremental online orders without cannibalising walk-in.`);
+    if (discountPct >= 15) insights.push(`Discounts this month equal ${discountPct.toFixed(1)}% of sales — on the high side. Blanket discounts every day quietly erode margin; a targeted offer (specific day, specific item, or first-time-customer only) usually drives similar order volume for a fraction of the giveaway.`);
+    if (insights.length === 0) insights.push("No sharp swings this month — performance is holding steady across channels. Worth using this calm stretch to test one small change (a new combo, a weekday offer) since there's no crisis pulling focus elsewhere.");
 
-    return { dailyRows, byMonth, months, thisM, lastM, shopChg, swiggyChg, zomatoChg, monthTotals, hitRate, daysHit, daysWithTarget: thisMonthDays.length, insights };
+    return { dailyRows, byMonth, months, thisM, lastM, shopChg, swiggyChg, zomatoChg, monthTotals, hitRate, daysHit, daysWithTarget: thisMonthDays.length, bestDow, worstDow, dowNames, onlineShare, shopShare, discountPct, insights };
   };
 
   const fetchOutletDeepDive = async (oid: string) => {
     setOutletDeepDiveLoading(true);
-    const { data } = await supabase.from("outlet_reports").select("report_date, shop_sales_value, swiggy_sales_value, zomato_sales_value").eq("outlet_id", oid).gte("report_date", "2026-06-01");
+    const { data } = await supabase.from("outlet_reports").select("report_date, shop_sales_value, swiggy_sales_value, zomato_sales_value, discount_given").eq("outlet_id", oid).gte("report_date", "2026-06-01");
     setOutletDeepDive(computeOutletAnalysis(oid, data || []));
     setOutletDeepDiveLoading(false);
   };
@@ -1473,6 +1507,7 @@ export default function DashboardPage() {
     const setFrom = which === "A" ? setCompareAFrom : setCompareBFrom;
     const setTo = which === "A" ? setCompareATo : setCompareBTo;
     setPreset(presetId);
+    setQuickCompareResult(null);
     if (presetId === "none") { setFrom(""); setTo(""); return; }
     if (presetId === "custom") return;
     const r = resolveOutletRange({ preset: presetId });
@@ -1488,6 +1523,14 @@ export default function DashboardPage() {
     const aTotal = a.shop + a.swiggy + a.zomato, bTotal = b.shop + b.swiggy + b.zomato;
     const pctChg = (curV: number, prevV: number) => prevV === 0 ? null : ((curV - prevV) / prevV) * 100;
     return { a, b, aTotal, bTotal, totalChg: pctChg(bTotal, aTotal), shopChg: pctChg(b.shop, a.shop), swiggyChg: pctChg(b.swiggy, a.swiggy), zomatoChg: pctChg(b.zomato, a.zomato) };
+  };
+
+  // Quick on-screen compare — one compact result line, not a table. Full detail stays PDF/Excel-only.
+  const runQuickCompare = async () => {
+    if (!compareAFrom || !compareATo || !compareBFrom || !compareBTo) { alert("Pick both Period A and Period B first."); return; }
+    setQuickCompareBusy(true);
+    setQuickCompareResult(await fetchPeriodComparison());
+    setQuickCompareBusy(false);
   };
 
   const downloadOutletHealthPDF = async () => {
@@ -1558,6 +1601,10 @@ export default function DashboardPage() {
           <div style="font-size:28px;font-weight:900">${inr(o.thisMonthTotal)}</div>
           <div style="font-size:13px;color:${o.health === "Strong" ? C.green : o.health === "Struggling" ? C.red : C.amber};font-weight:700">${o.health}${o.pct > 0 ? ` · ${o.pct.toFixed(0)}% of target` : ""}${dd.hitRate != null ? ` · hit target ${dd.daysHit}/${dd.daysWithTarget} days (${dd.hitRate.toFixed(0)}%)` : ""}</div>
         </div>
+        <div style="background:${C.card};border:2px solid ${C.amber};border-radius:12px;padding:18px;margin-bottom:18px;page-break-inside:avoid">
+          <div style="font-size:15px;font-weight:800;margin-bottom:8px;color:${C.amber}">📈 Business Insights &amp; What To Do About It</div>
+          <ul style="margin:0;padding-left:18px">${insightRows}</ul>
+        </div>
         <div style="font-size:14px;font-weight:800;margin-bottom:8px">Revenue trend — month by month</div>
         <div style="background:${C.card};border:1px solid ${C.line};border-radius:12px;padding:16px 18px;margin-bottom:18px">
           ${chartSvg}
@@ -1567,10 +1614,6 @@ export default function DashboardPage() {
           <thead><tr style="background:${C.ink}"><th style="padding:7px 10px;text-align:left;color:#FFF6E5;font-size:9px">CHANNEL</th><th style="padding:7px 10px;text-align:right;color:#FFF6E5;font-size:9px">THIS MONTH</th><th style="padding:7px 10px;text-align:right;color:#FFF6E5;font-size:9px">LAST MONTH</th><th style="padding:7px 10px;text-align:right;color:#FFF6E5;font-size:9px">CHANGE</th></tr></thead>
           <tbody>${channelRows}</tbody>
         </table>
-        <div style="background:${C.card};border:2px solid ${C.amber};border-radius:12px;padding:16px;margin-bottom:18px;page-break-inside:avoid">
-          <div style="font-size:14px;font-weight:800;margin-bottom:6px;color:${C.amber}">What this means, and what to do about it</div>
-          <ul style="margin:0;padding-left:18px">${insightRows}</ul>
-        </div>
         ${cmp ? `<div style="font-size:14px;font-weight:800;margin-bottom:8px">Period comparison — ${compareAFrom} to ${compareATo} vs ${compareBFrom} to ${compareBTo}</div>
         <table style="width:100%;border-collapse:collapse;background:${C.card};border:1px solid ${C.line};border-radius:10px;overflow:hidden;margin-bottom:18px;page-break-inside:avoid">
           <thead><tr style="background:${C.ink}"><th style="padding:7px 10px;text-align:left;color:#FFF6E5;font-size:9px">CHANNEL</th><th style="padding:7px 10px;text-align:right;color:#FFF6E5;font-size:9px">PERIOD A</th><th style="padding:7px 10px;text-align:right;color:#FFF6E5;font-size:9px">PERIOD B</th><th style="padding:7px 10px;text-align:right;color:#FFF6E5;font-size:9px">CHANGE</th></tr></thead>
@@ -1612,9 +1655,8 @@ export default function DashboardPage() {
       }));
       const insightsSheet = outletDeepDive.insights.map((s: string) => ({ Insight: s }));
       const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(dailySheet), "Daily");
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(monthlySheet), "Monthly Summary");
       XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(insightsSheet), "Insights");
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(monthlySheet), "Monthly Summary");
       if (cmp) {
         const compareSheet = [
           { Channel: "Shop", [`Period A (${compareAFrom} to ${compareATo})`]: cmp.a.shop, [`Period B (${compareBFrom} to ${compareBTo})`]: cmp.b.shop, "Change %": cmp.shopChg == null ? "-" : cmp.shopChg.toFixed(1) + "%" },
@@ -1624,6 +1666,7 @@ export default function DashboardPage() {
         ];
         XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(compareSheet), "Period Comparison");
       }
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(dailySheet), "Daily (by month, latest last)");
       XLSX.writeFile(wb, `OutletHealth_${o.name.replace(/\s+/g, "_")}.xlsx`);
     } catch (e: any) {
       alert("Failed to generate: " + (e?.message || "error"));
@@ -3617,7 +3660,15 @@ else await fetchOutletReportsByDate(outletEntryDate);
             </>
           )}
         </div>
+        <button onClick={runQuickCompare} disabled={quickCompareBusy} className="px-3 py-1.5 border border-zinc-700 text-zinc-300 hover:border-yellow-400 hover:text-yellow-400 transition-colors text-[10px] font-mono uppercase tracking-widest disabled:opacity-50">{quickCompareBusy ? "…" : "Compare"}</button>
       </div>
+      {quickCompareResult && (
+        <p className="text-xs text-zinc-400 mt-2 font-mono">
+          A: ₹{Math.round(quickCompareResult.aTotal).toLocaleString("en-IN")} → B: ₹{Math.round(quickCompareResult.bTotal).toLocaleString("en-IN")}
+          <span className={`ml-2 font-semibold ${quickCompareResult.totalChg == null ? "text-zinc-600" : quickCompareResult.totalChg >= 0 ? "text-green-400" : "text-red-400"}`}>{quickCompareResult.totalChg == null ? "—" : `${quickCompareResult.totalChg >= 0 ? "▲" : "▼"} ${Math.abs(quickCompareResult.totalChg).toFixed(1)}%`}</span>
+          <span className="text-zinc-600 ml-2">· Shop {quickCompareResult.shopChg == null ? "—" : `${quickCompareResult.shopChg >= 0 ? "▲" : "▼"}${Math.abs(quickCompareResult.shopChg).toFixed(0)}%`} · Swiggy {quickCompareResult.swiggyChg == null ? "—" : `${quickCompareResult.swiggyChg >= 0 ? "▲" : "▼"}${Math.abs(quickCompareResult.swiggyChg).toFixed(0)}%`} · Zomato {quickCompareResult.zomatoChg == null ? "—" : `${quickCompareResult.zomatoChg >= 0 ? "▲" : "▼"}${Math.abs(quickCompareResult.zomatoChg).toFixed(0)}%`}</span>
+        </p>
+      )}
     </div>
   </div>
 
