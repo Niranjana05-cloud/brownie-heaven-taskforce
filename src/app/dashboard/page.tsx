@@ -1512,16 +1512,15 @@ export default function DashboardPage() {
     let trendLabel = "steady";
     if (monthTrendPct != null) trendLabel = monthTrendPct > 10 ? "growing" : monthTrendPct < -10 ? "declining" : "steady";
 
-    // A standing set of researched, platform-specific tactics — always included as general
-    // reference alongside the personalized points above, since these apply regardless of
-    // this month's specific numbers.
+    // Brownie Heaven-specific reference points — grounded in the brand's own known signature
+    // items, the multi-brand structure, and standing patterns already identified in past
+    // reconciliation work. Not generic internet advice; specific to how this business runs.
     const playbook: string[] = [
-      "Keep negative reviews under roughly 2% of total ratings. Even a handful of bad reviews can quietly push a listing down in Swiggy/Zomato search ranking, well before it shows up as a sales drop.",
-      "Kitchen prep speed directly affects visibility — both platforms' ranking algorithms favour restaurants with faster prep times. A slow kitchen doesn't just frustrate the customer, it actively loses future orders by ranking lower.",
-      "Menu photos and descriptions convert browsers into orders. Clear, appetizing photos with specific descriptions (ingredients, what makes a dish different) consistently outsell bare listings — this is one of the cheapest fixes available.",
-      "Time-boxed offers (a 'Meal of the Day', a 2–4pm 'Happy Hour') tend to earn better in-app placement than a blanket all-day discount, and cost the business far less margin for a similar lift in orders.",
-      "Running a paid ad slot timed to your own peak order hours usually pays back better than spreading the same ad budget across the whole day.",
-      "Offline presence still feeds online trust — customers who've noticed the outlet in person are more likely to order from its Swiggy/Zomato listing, so shop-front visibility matters even for online-heavy outlets.",
+      "The known crowd favourites — Oreo Brownie Shake, Filter Coffee Soda, Red Velvet, Mint Ice Cream, Brownie Cheesecake — are proven sellers across outlets. Pinning one as a combo add-on ('add a Filter Coffee Soda for ₹49') on Swiggy/Zomato usually lifts average order value more reliably than a fresh, untested item would.",
+      "A recurring leak flagged in past reconciliation work: a meaningful share of lost revenue (roughly ₹80K/month company-wide, historically) comes from platform cancellations *after* the order was already acknowledged — not customers cancelling upfront. That's a kitchen/ops timing issue, not a demand issue, and it's worth checking whether this outlet is contributing to that pattern.",
+      "Brownie Heaven runs three brands from largely the same kitchen — Brownie Heaven, Cakes by Brownie Heaven, and Ice Cream by Brownie Heaven. If one brand is under-target here while another is strong, cross-promoting the weaker brand's items on the stronger brand's Swiggy/Zomato listing (same kitchen, same delivery slot) is close to a free lever — no new sourcing or staffing needed.",
+      "The founder story (Chef Nishant, ex-ITC) and the zero-waste, morning-fresh-batch model are genuine differentiators worth using in menu descriptions and social content — 'freshly baked this morning, nothing held over' converts better than a plain ingredient list, and it's true rather than invented positioning.",
+      "Royapettah's own listings show a real gap between dining rating (4.6) and delivery rating (4.2) historically — dine-in and delivery are different experiences even for the same food, so a delivery-specific complaint (packaging, temperature on arrival) can drag the online listing down even while walk-in customers are happy.",
     ];
 
     return { dailyRows, byMonth, months, thisM, lastM, shopChg, swiggyChg, zomatoChg, monthTotals, hitRate, daysHit, daysWithTarget: thisMonthDays.length, bestDow, worstDow, dowNames, onlineShare, shopShare, discountPct, insights, playbook, thisMonthTotal, monthTarget, monthPct, monthTrendPct, health, trendLabel };
@@ -1644,8 +1643,8 @@ export default function DashboardPage() {
           <ul style="margin:0;padding-left:18px">${insightRows}</ul>
         </div>
         <div style="background:${C.card};border:1px solid ${C.line};border-radius:12px;padding:18px;margin-bottom:18px;page-break-inside:avoid">
-          <div style="font-size:13px;font-weight:800;margin-bottom:4px;color:${C.ink}">📚 General playbook — worth checking regardless of this month's numbers</div>
-          <div style="font-size:10px;color:${C.soft};margin-bottom:8px">Researched practices for Swiggy/Zomato/walk-in performance, not specific to this outlet's current numbers.</div>
+          <div style="font-size:13px;font-weight:800;margin-bottom:4px;color:${C.ink}">🍫 Brownie Heaven playbook — standing levers worth pulling</div>
+          <div style="font-size:10px;color:${C.soft};margin-bottom:8px">Grounded in the brand's own known sellers, multi-brand structure, and past reconciliation findings — not generic advice.</div>
           <ul style="margin:0;padding-left:18px">${playbookRows}</ul>
         </div>
         <div style="font-size:14px;font-weight:800;margin-bottom:8px">Revenue trend — month by month</div>
@@ -1698,7 +1697,7 @@ export default function DashboardPage() {
       }));
       const insightsSheet = [
         ...outletDeepDive.insights.map((s: string) => ({ Type: "This outlet, this month", Insight: s })),
-        ...outletDeepDive.playbook.map((s: string) => ({ Type: "General playbook", Insight: s })),
+        ...outletDeepDive.playbook.map((s: string) => ({ Type: "Brownie Heaven playbook", Insight: s })),
       ];
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(insightsSheet), "Insights");
@@ -3084,7 +3083,6 @@ else await fetchOutletReportsByDate(outletEntryDate);
                 </div>
               </div>
             )}
-           <p className="text-yellow-400 text-sm font-mono uppercase tracking-wide mb-2">🧾 Coming soon: Cheque Tracking System — landing in the next few days</p>
             <div className="flex justify-between items-start mb-6 pb-5 border-b border-zinc-800">
               <div>
                 <h2 className="text-2xl md:text-3xl font-black tracking-tight">{canAssign ? "Command Center" : "My Tasks"}</h2>
