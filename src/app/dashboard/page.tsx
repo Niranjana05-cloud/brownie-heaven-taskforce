@@ -711,6 +711,8 @@ export default function DashboardPage() {
   const [outletHealthXlsxBusy, setOutletHealthXlsxBusy] = useState(false);
   const [outletDeepDive, setOutletDeepDive] = useState<any>(null);
   const [outletDeepDiveLoading, setOutletDeepDiveLoading] = useState(false);
+  const [comparePresetA, setComparePresetA] = useState("none");
+  const [comparePresetB, setComparePresetB] = useState("none");
   const [compareAFrom, setCompareAFrom] = useState("");
   const [compareATo, setCompareATo] = useState("");
   const [compareBFrom, setCompareBFrom] = useState("");
@@ -1464,6 +1466,19 @@ export default function DashboardPage() {
 
   // Returns the A-vs-B period comparison if all four dates are filled in, else null.
   // Used by the PDF/Excel exports — there's no live on-screen result for this anymore.
+  // Resolves a range preset (same list as Download Custom Report) into concrete
+  // from/to dates for Period A or B. "custom" leaves the dates as-is for manual editing.
+  const applyComparePreset = (which: "A" | "B", presetId: string) => {
+    const setPreset = which === "A" ? setComparePresetA : setComparePresetB;
+    const setFrom = which === "A" ? setCompareAFrom : setCompareBFrom;
+    const setTo = which === "A" ? setCompareATo : setCompareBTo;
+    setPreset(presetId);
+    if (presetId === "none") { setFrom(""); setTo(""); return; }
+    if (presetId === "custom") return;
+    const r = resolveOutletRange({ preset: presetId });
+    setFrom(r.from); setTo(r.to);
+  };
+
   const fetchPeriodComparison = async () => {
     if (!compareAFrom || !compareATo || !compareBFrom || !compareBTo) return null;
     const { data: aRows } = await supabase.from("outlet_reports").select("shop_sales_value, swiggy_sales_value, zomato_sales_value").eq("outlet_id", outletHealthSel).gte("report_date", compareAFrom).lte("report_date", compareATo);
@@ -1519,7 +1534,21 @@ export default function DashboardPage() {
 
       const insightRows = dd.insights.map((s: string) => `<li style="margin:6px 0;font-size:12px;line-height:1.5">${s}</li>`).join("");
 
-      const dailyTableRows = [...dd.dailyRows].reverse().map((r: any) => `<tr><td style="padding:5px 8px;border-bottom:1px solid ${C.line};font-size:9px">${r.date}</td><td style="padding:5px 8px;border-bottom:1px solid ${C.line};text-align:right;font-size:9px">${inr(r.shop)}</td><td style="padding:5px 8px;border-bottom:1px solid ${C.line};text-align:right;font-size:9px">${inr(r.swiggy)}</td><td style="padding:5px 8px;border-bottom:1px solid ${C.line};text-align:right;font-size:9px">${inr(r.zomato)}</td><td style="padding:5px 8px;border-bottom:1px solid ${C.line};text-align:right;font-size:9px;font-weight:700">${inr(r.total)}</td><td style="padding:5px 8px;border-bottom:1px solid ${C.line};text-align:right;font-size:9px;color:${C.soft}">${r.target > 0 ? inr(r.target) : "-"}</td><td style="padding:5px 8px;border-bottom:1px solid ${C.line};text-align:right;font-size:9px;font-weight:700;color:${r.target === 0 ? C.soft : r.pct >= 100 ? C.green : r.pct >= 70 ? C.amber : C.red}">${r.target > 0 ? r.pct.toFixed(0) + "%" : "-"}</td></tr>`).join("");
+      const monthNames: Record<string, string> = { "01": "January", "02": "February", "03": "March", "04": "April", "05": "May", "06": "June", "07": "July", "08": "August", "09": "September", "10": "October", "11": "November", "12": "December" };
+      const byMonthRows: Record<string, any[]> = {};
+      dd.dailyRows.forEach((r: any) => { const ym = r.date.slice(0, 7); if (!byMonthRows[ym]) byMonthRows[ym] = []; byMonthRows[ym].push(r); });
+      const dailyTablesByMonth = Object.keys(byMonthRows).sort().reverse().map((ym) => {
+        const rows = [...byMonthRows[ym]].reverse();
+        const rowsHtml = rows.map((r: any) => `<tr><td style="padding:5px 8px;border-bottom:1px solid ${C.line};font-size:9px">${r.date}</td><td style="padding:5px 8px;border-bottom:1px solid ${C.line};text-align:right;font-size:9px">${inr(r.shop)}</td><td style="padding:5px 8px;border-bottom:1px solid ${C.line};text-align:right;font-size:9px">${inr(r.swiggy)}</td><td style="padding:5px 8px;border-bottom:1px solid ${C.line};text-align:right;font-size:9px">${inr(r.zomato)}</td><td style="padding:5px 8px;border-bottom:1px solid ${C.line};text-align:right;font-size:9px;font-weight:700">${inr(r.total)}</td><td style="padding:5px 8px;border-bottom:1px solid ${C.line};text-align:right;font-size:9px;color:${C.soft}">${r.target > 0 ? inr(r.target) : "-"}</td><td style="padding:5px 8px;border-bottom:1px solid ${C.line};text-align:right;font-size:9px;font-weight:700;color:${r.target === 0 ? C.soft : r.pct >= 100 ? C.green : r.pct >= 70 ? C.amber : C.red}">${r.target > 0 ? r.pct.toFixed(0) + "%" : "-"}</td></tr>`).join("");
+        const [y, m] = ym.split("-");
+        return `<div style="margin-bottom:16px;page-break-inside:avoid;break-inside:avoid;">
+          <div style="font-size:12px;font-weight:800;margin:8px 0 4px;color:${C.ink}">${monthNames[m]} ${y} (${rows[0].date.slice(8)}–${rows[rows.length - 1].date.slice(8)})</div>
+          <table style="width:100%;border-collapse:collapse;background:${C.card};border:1px solid ${C.line};border-radius:10px;overflow:hidden;page-break-inside:avoid;break-inside:avoid;">
+            <thead><tr style="background:${C.ink}"><th style="padding:6px 8px;text-align:left;color:#FFF6E5;font-size:9px">DATE</th><th style="padding:6px 8px;text-align:right;color:#FFF6E5;font-size:9px">SHOP</th><th style="padding:6px 8px;text-align:right;color:#FFF6E5;font-size:9px">SWIGGY</th><th style="padding:6px 8px;text-align:right;color:#FFF6E5;font-size:9px">ZOMATO</th><th style="padding:6px 8px;text-align:right;color:#FFF6E5;font-size:9px">TOTAL</th><th style="padding:6px 8px;text-align:right;color:#FFF6E5;font-size:9px">TARGET</th><th style="padding:6px 8px;text-align:right;color:#FFF6E5;font-size:9px">%</th></tr></thead>
+            <tbody>${rowsHtml}</tbody>
+          </table>
+        </div>`;
+      }).join("");
 
       const html = `<div style="width:794px;background:${C.bg};font-family:'Segoe UI',Arial,sans-serif;color:${C.ink};padding:34px">
         <div style="font-size:22px;font-weight:900">Brownie Heaven — Outlet Health: ${o.name}</div>
@@ -1552,11 +1581,8 @@ export default function DashboardPage() {
             <tr style="background:${C.line}"><td style="padding:8px 10px;font-size:12px;font-weight:900">TOTAL</td><td style="padding:8px 10px;text-align:right;font-size:12px;font-weight:700">${inr(cmp.aTotal)}</td><td style="padding:8px 10px;text-align:right;font-size:12px;font-weight:900">${inr(cmp.bTotal)}</td><td style="padding:8px 10px;text-align:right;font-size:12px;font-weight:900;color:${cmp.totalChg == null ? C.soft : cmp.totalChg >= 0 ? C.green : C.red}">${cmp.totalChg == null ? "—" : (cmp.totalChg >= 0 ? "Up " : "Down ") + Math.abs(cmp.totalChg).toFixed(1) + "%"}</td></tr>
           </tbody>
         </table>` : ""}
-        <div style="font-size:14px;font-weight:800;margin-bottom:8px">Full daily detail — since June 1</div>
-        <table style="width:100%;border-collapse:collapse;background:${C.card};border:1px solid ${C.line};border-radius:10px;overflow:hidden">
-          <thead><tr style="background:${C.ink}"><th style="padding:6px 8px;text-align:left;color:#FFF6E5;font-size:9px">DATE</th><th style="padding:6px 8px;text-align:right;color:#FFF6E5;font-size:9px">SHOP</th><th style="padding:6px 8px;text-align:right;color:#FFF6E5;font-size:9px">SWIGGY</th><th style="padding:6px 8px;text-align:right;color:#FFF6E5;font-size:9px">ZOMATO</th><th style="padding:6px 8px;text-align:right;color:#FFF6E5;font-size:9px">TOTAL</th><th style="padding:6px 8px;text-align:right;color:#FFF6E5;font-size:9px">TARGET</th><th style="padding:6px 8px;text-align:right;color:#FFF6E5;font-size:9px">%</th></tr></thead>
-          <tbody>${dailyTableRows}</tbody>
-        </table>
+        <div style="font-size:14px;font-weight:800;margin-bottom:8px">Full daily detail — by month</div>
+        ${dailyTablesByMonth}
       </div>`;
 
       const lib = await loadH2P();
@@ -3561,19 +3587,35 @@ else await fetchOutletReportsByDate(outletEntryDate);
       </div>
     </div>
     <div className="mb-2">
-      <label className="text-[10px] font-mono text-zinc-500 uppercase block mb-2">Compare two periods (optional — leave blank to skip)</label>
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="flex items-center gap-1">
-          <span className="text-[9px] text-zinc-600 mr-1">A:</span>
-          <input type="date" value={compareAFrom} onChange={(e) => setCompareAFrom(e.target.value)} className="bg-black border border-zinc-800 text-white px-2 py-1.5 text-xs font-mono focus:outline-none focus:border-yellow-400" />
-          <span className="text-zinc-600 text-xs">to</span>
-          <input type="date" value={compareATo} onChange={(e) => setCompareATo(e.target.value)} className="bg-black border border-zinc-800 text-white px-2 py-1.5 text-xs font-mono focus:outline-none focus:border-yellow-400" />
+      <label className="text-[10px] font-mono text-zinc-500 uppercase block mb-2">Compare two periods (optional — leave as "none" to skip)</label>
+      <div className="flex flex-wrap items-center gap-4">
+        <div className="flex items-center gap-2">
+          <span className="text-[9px] text-zinc-600">A:</span>
+          <select value={comparePresetA} onChange={(e) => applyComparePreset("A", e.target.value)} className="bg-black border border-zinc-800 text-white px-2 py-1.5 text-xs font-mono focus:outline-none focus:border-yellow-400">
+            <option value="none">None</option>
+            {RANGE_PRESETS.map(p => <option key={p.id} value={p.id}>{p.label}</option>)}
+          </select>
+          {comparePresetA === "custom" && (
+            <>
+              <input type="date" value={compareAFrom} onChange={(e) => setCompareAFrom(e.target.value)} className="bg-black border border-zinc-800 text-white px-2 py-1.5 text-xs font-mono focus:outline-none focus:border-yellow-400" />
+              <span className="text-zinc-600 text-xs">to</span>
+              <input type="date" value={compareATo} onChange={(e) => setCompareATo(e.target.value)} className="bg-black border border-zinc-800 text-white px-2 py-1.5 text-xs font-mono focus:outline-none focus:border-yellow-400" />
+            </>
+          )}
         </div>
-        <div className="flex items-center gap-1">
-          <span className="text-[9px] text-zinc-600 mr-1">B:</span>
-          <input type="date" value={compareBFrom} onChange={(e) => setCompareBFrom(e.target.value)} className="bg-black border border-zinc-800 text-white px-2 py-1.5 text-xs font-mono focus:outline-none focus:border-yellow-400" />
-          <span className="text-zinc-600 text-xs">to</span>
-          <input type="date" value={compareBTo} onChange={(e) => setCompareBTo(e.target.value)} className="bg-black border border-zinc-800 text-white px-2 py-1.5 text-xs font-mono focus:outline-none focus:border-yellow-400" />
+        <div className="flex items-center gap-2">
+          <span className="text-[9px] text-zinc-600">B:</span>
+          <select value={comparePresetB} onChange={(e) => applyComparePreset("B", e.target.value)} className="bg-black border border-zinc-800 text-white px-2 py-1.5 text-xs font-mono focus:outline-none focus:border-yellow-400">
+            <option value="none">None</option>
+            {RANGE_PRESETS.map(p => <option key={p.id} value={p.id}>{p.label}</option>)}
+          </select>
+          {comparePresetB === "custom" && (
+            <>
+              <input type="date" value={compareBFrom} onChange={(e) => setCompareBFrom(e.target.value)} className="bg-black border border-zinc-800 text-white px-2 py-1.5 text-xs font-mono focus:outline-none focus:border-yellow-400" />
+              <span className="text-zinc-600 text-xs">to</span>
+              <input type="date" value={compareBTo} onChange={(e) => setCompareBTo(e.target.value)} className="bg-black border border-zinc-800 text-white px-2 py-1.5 text-xs font-mono focus:outline-none focus:border-yellow-400" />
+            </>
+          )}
         </div>
       </div>
     </div>
