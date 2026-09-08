@@ -1480,66 +1480,37 @@ export default function DashboardPage() {
 
   const downloadOutletHealthPDF = async () => {
     const o = outletHealthData.find((x) => x.oid === outletHealthSel);
-    if (!o) { alert("No data for this outlet yet."); return; }
+    if (!o || !outletDeepDive) { alert("No data for this outlet yet."); return; }
     setOutletHealthPdfBusy(true);
     try {
-      const { data: rawRows } = await supabase.from("outlet_reports").select("report_date, shop_sales_value, swiggy_sales_value, zomato_sales_value").eq("outlet_id", outletHealthSel).gte("report_date", "2026-06-01");
-      const byMonth: Record<string, { shop: number; swiggy: number; zomato: number }> = {};
-      (rawRows || []).forEach((r: any) => {
-        const ym = r.report_date.slice(0, 7);
-        if (!byMonth[ym]) byMonth[ym] = { shop: 0, swiggy: 0, zomato: 0 };
-        byMonth[ym].shop += Number(r.shop_sales_value) || 0;
-        byMonth[ym].swiggy += Number(r.swiggy_sales_value) || 0;
-        byMonth[ym].zomato += Number(r.zomato_sales_value) || 0;
-      });
-      const months = Object.keys(byMonth).sort();
-      const nowYm = new Date().toISOString().slice(0, 7);
-      const thisM = byMonth[nowYm] || { shop: 0, swiggy: 0, zomato: 0 };
-      const prevYm = months.filter((m) => m !== nowYm).pop();
-      const lastM = prevYm ? byMonth[prevYm] : null;
-      const chg = (cur: number, prev: number | undefined) => prev == null || prev === 0 ? null : ((cur - prev) / prev) * 100;
-
+      const dd = outletDeepDive;
       const C = { bg: "#FAF3E7", card: "#FFFDF8", ink: "#3E2415", soft: "#8A6A4A", line: "#EADBC2", green: "#2E7D32", red: "#C62828", amber: "#C8901E" };
       const inr = (n: number) => "₹" + Math.round(n).toLocaleString("en-IN");
 
-      const tAll = thisM.shop + thisM.swiggy + thisM.zomato || 1;
-      const R = 60, CX = 75, CY = 75, SW = 26, CIRC = 2 * Math.PI * R;
-      let acc = 0;
-      const segs = [[thisM.shop, "#FACC15"], [thisM.swiggy, "#FB923C"], [thisM.zomato, "#EF4444"]].map(([v, c]: any) => {
-        const frac = v / tAll; const len = frac * CIRC; const off = -acc * CIRC; acc += frac;
-        return `<circle cx="${CX}" cy="${CY}" r="${R}" fill="none" stroke="${c}" stroke-width="${SW}" stroke-dasharray="${len} ${CIRC - len}" stroke-dashoffset="${off}" transform="rotate(-90 ${CX} ${CY})"></circle>`;
-      }).join("");
-      const leg = (c: string, n: string, v: number) => `<div style="display:flex;align-items:center;gap:7px;margin-bottom:5px"><span style="width:11px;height:11px;background:${c};border-radius:2px;display:inline-block"></span><span style="font-size:12px;color:${C.ink};font-weight:600;min-width:62px">${n}</span><span style="font-size:12px;color:${C.soft}">${inr(v)} · ${((v / tAll) * 100).toFixed(0)}%</span></div>`;
-
-      const shopChg = chg(thisM.shop, lastM?.shop);
-      const swiggyChg = chg(thisM.swiggy, lastM?.swiggy);
-      const zomatoChg = chg(thisM.zomato, lastM?.zomato);
       const chRow = (name: string, cur: number, prev: number | undefined, pct: number | null) => {
         const col = pct == null ? C.soft : pct >= 0 ? C.green : C.red;
         const arrow = pct == null ? "" : pct >= 0 ? "Up" : "Down";
         return `<tr><td style="padding:7px 10px;border-bottom:1px solid ${C.line};font-size:12px;font-weight:600">${name}</td><td style="padding:7px 10px;border-bottom:1px solid ${C.line};text-align:right;font-size:12px">${inr(cur)}</td><td style="padding:7px 10px;border-bottom:1px solid ${C.line};text-align:right;font-size:12px;color:${C.soft}">${prev != null ? inr(prev) : "—"}</td><td style="padding:7px 10px;border-bottom:1px solid ${C.line};text-align:right;font-size:12px;font-weight:700;color:${col}">${pct == null ? "—" : arrow + " " + Math.abs(pct).toFixed(1) + "%"}</td></tr>`;
       };
-      const channelRows = chRow("Shop", thisM.shop, lastM?.shop, shopChg) + chRow("Swiggy", thisM.swiggy, lastM?.swiggy, swiggyChg) + chRow("Zomato", thisM.zomato, lastM?.zomato, zomatoChg);
-
-      const monthTotals = months.map((m) => ({ m, total: byMonth[m].shop + byMonth[m].swiggy + byMonth[m].zomato }));
+      const channelRows = chRow("Shop", dd.thisM.shop, dd.lastM?.shop, dd.shopChg) + chRow("Swiggy", dd.thisM.swiggy, dd.lastM?.swiggy, dd.swiggyChg) + chRow("Zomato", dd.thisM.zomato, dd.lastM?.zomato, dd.zomatoChg);
 
       const chartW = 700, chartH = 220, padL = 60, padR = 20, padT = 20, padB = 34;
       const plotW = chartW - padL - padR, plotH = chartH - padT - padB;
-      const maxV = Math.max(...monthTotals.map((x) => x.total), 1);
-      const stepX = monthTotals.length > 1 ? plotW / (monthTotals.length - 1) : 0;
-      const pts = monthTotals.map((x, i) => {
+      const maxV = Math.max(...dd.monthTotals.map((x: any) => x.total), 1);
+      const stepX = dd.monthTotals.length > 1 ? plotW / (dd.monthTotals.length - 1) : 0;
+      const pts = dd.monthTotals.map((x: any, i: number) => {
         const px = padL + i * stepX;
         const py = padT + plotH - (x.total / maxV) * plotH;
         return { px, py, ...x };
       });
-      const linePath = pts.map((p, i) => (i === 0 ? "M" : "L") + p.px.toFixed(1) + " " + p.py.toFixed(1)).join(" ");
+      const linePath = pts.map((p: any, i: number) => (i === 0 ? "M" : "L") + p.px.toFixed(1) + " " + p.py.toFixed(1)).join(" ");
       const areaPath = linePath + ` L ${pts[pts.length - 1]?.px.toFixed(1) || padL} ${padT + plotH} L ${padL} ${padT + plotH} Z`;
       const gridLines = [0, 0.25, 0.5, 0.75, 1].map((f) => {
         const y = padT + plotH * f;
         const val = Math.round(maxV * (1 - f));
         return `<line x1="${padL}" y1="${y}" x2="${chartW - padR}" y2="${y}" stroke="${C.line}" stroke-width="1"></line><text x="${padL - 8}" y="${y + 4}" text-anchor="end" style="font-size:9px;fill:${C.soft}">${val >= 100000 ? (val / 100000).toFixed(1) + "L" : val}</text>`;
       }).join("");
-      const dots = pts.map((p) => `<circle cx="${p.px}" cy="${p.py}" r="4" fill="${C.amber}" stroke="${C.card}" stroke-width="2"></circle><text x="${p.px}" y="${chartH - 8}" text-anchor="middle" style="font-size:9px;fill:${C.soft}">${p.m.slice(5)}</text>`).join("");
+      const dots = pts.map((p: any) => `<circle cx="${p.px}" cy="${p.py}" r="4" fill="${C.amber}" stroke="${C.card}" stroke-width="2"></circle><text x="${p.px}" y="${chartH - 8}" text-anchor="middle" style="font-size:9px;fill:${C.soft}">${p.m.slice(5)}</text>`).join("");
       const chartSvg = `<svg width="${chartW}" height="${chartH}" viewBox="0 0 ${chartW} ${chartH}">
         <defs><linearGradient id="areaFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="${C.amber}" stop-opacity="0.35"/><stop offset="100%" stop-color="${C.amber}" stop-opacity="0"/></linearGradient></defs>
         ${gridLines}
@@ -1548,31 +1519,9 @@ export default function DashboardPage() {
         ${dots}
       </svg>`;
 
-      const insights: string[] = [];
-      const channelName = (v: number) => v === shopChg ? "Shop" : v === swiggyChg ? "Swiggy" : "Zomato";
-      const validChgs = [shopChg, swiggyChg, zomatoChg].filter((v) => v != null) as number[];
-      if (validChgs.length) {
-        const worst = Math.min(...validChgs);
-        const best = Math.max(...validChgs);
-        if (worst < -5) {
-          const nm = channelName(worst);
-          const advice = nm === "Swiggy" || nm === "Zomato" ? `check if ads are still running, ratings haven't dipped, and the menu is fully available on ${nm}` : "check walk-in footfall, local competition, or staffing at peak hours";
-          insights.push(`${nm} dropped ${Math.abs(worst).toFixed(1)}% vs last month — ${advice}.`);
-        }
-        if (best > 5 && best !== worst) {
-          const nm = channelName(best);
-          insights.push(`${nm} grew ${best.toFixed(1)}% — worth finding out what worked (a promo, better ratings, more listings) and repeating it elsewhere.`);
-        }
-      }
-      if (monthTotals.length >= 3) {
-        const last3 = monthTotals.slice(-3);
-        const decliningStreak = last3[2].total < last3[1].total && last3[1].total < last3[0].total;
-        if (decliningStreak) insights.push(`Sales have fallen for two months straight (${last3[0].m} → ${last3[2].m}) — this isn't a one-off dip, worth a closer look at what changed.`);
-      }
-      if (o.pct > 0 && o.pct < 60) insights.push(`Only ${o.pct.toFixed(0)}% of this month's target hit so far — at this pace the outlet will fall well short unless the remaining days pick up.`);
-      if (o.pct >= 90) insights.push(`Tracking at ${o.pct.toFixed(0)}% of target — on pace to hit or beat the number this month.`);
-      if (insights.length === 0) insights.push("No sharp swings this month — performance is holding steady across channels.");
-      const insightRows = insights.map((s) => `<li style="margin:6px 0;font-size:12px;line-height:1.5">${s}</li>`).join("");
+      const insightRows = dd.insights.map((s: string) => `<li style="margin:6px 0;font-size:12px;line-height:1.5">${s}</li>`).join("");
+
+      const dailyTableRows = [...dd.dailyRows].reverse().map((r: any) => `<tr><td style="padding:5px 8px;border-bottom:1px solid ${C.line};font-size:9px">${r.date}</td><td style="padding:5px 8px;border-bottom:1px solid ${C.line};text-align:right;font-size:9px">${inr(r.shop)}</td><td style="padding:5px 8px;border-bottom:1px solid ${C.line};text-align:right;font-size:9px">${inr(r.swiggy)}</td><td style="padding:5px 8px;border-bottom:1px solid ${C.line};text-align:right;font-size:9px">${inr(r.zomato)}</td><td style="padding:5px 8px;border-bottom:1px solid ${C.line};text-align:right;font-size:9px;font-weight:700">${inr(r.total)}</td><td style="padding:5px 8px;border-bottom:1px solid ${C.line};text-align:right;font-size:9px;color:${C.soft}">${r.target > 0 ? inr(r.target) : "-"}</td><td style="padding:5px 8px;border-bottom:1px solid ${C.line};text-align:right;font-size:9px;font-weight:700;color:${r.target === 0 ? C.soft : r.pct >= 100 ? C.green : r.pct >= 70 ? C.amber : C.red}">${r.target > 0 ? r.pct.toFixed(0) + "%" : "-"}</td></tr>`).join("");
 
       const html = `<div style="width:794px;background:${C.bg};font-family:'Segoe UI',Arial,sans-serif;color:${C.ink};padding:34px">
         <div style="font-size:22px;font-weight:900">Brownie Heaven — Outlet Health: ${o.name}</div>
@@ -1580,39 +1529,26 @@ export default function DashboardPage() {
         <div style="background:${C.card};border:1px solid ${C.line};border-radius:12px;padding:18px;margin-bottom:16px">
           <div style="font-size:13px;color:${C.soft}">This month</div>
           <div style="font-size:28px;font-weight:900">${inr(o.thisMonthTotal)}</div>
-          <div style="font-size:13px;color:${o.health === "Strong" ? C.green : o.health === "Struggling" ? C.red : C.amber};font-weight:700">${o.health}${o.pct > 0 ? ` · ${o.pct.toFixed(0)}% of target` : ""}</div>
+          <div style="font-size:13px;color:${o.health === "Strong" ? C.green : o.health === "Struggling" ? C.red : C.amber};font-weight:700">${o.health}${o.pct > 0 ? ` · ${o.pct.toFixed(0)}% of target` : ""}${dd.hitRate != null ? ` · hit target ${dd.daysHit}/${dd.daysWithTarget} days (${dd.hitRate.toFixed(0)}%)` : ""}</div>
         </div>
         <div style="font-size:14px;font-weight:800;margin-bottom:8px">Revenue trend — month by month</div>
         <div style="background:${C.card};border:1px solid ${C.line};border-radius:12px;padding:16px 18px;margin-bottom:18px">
           ${chartSvg}
         </div>
-        <div style="display:flex;gap:18px;align-items:flex-start;margin-bottom:18px">
-          <div style="text-align:center">
-            <div style="font-size:13px;font-weight:800;color:${C.ink};margin-bottom:6px">Channel mix — this month</div>
-            <svg width="150" height="150" viewBox="0 0 150 150">
-              <circle cx="${CX}" cy="${CY}" r="${R}" fill="none" stroke="#EADBC2" stroke-width="${SW}"></circle>
-              ${segs}
-              <text x="${CX}" y="${CY - 4}" text-anchor="middle" style="font-size:14px;font-weight:800;fill:${C.ink}">${inr(tAll)}</text>
-              <text x="${CX}" y="${CY + 12}" text-anchor="middle" style="font-size:8px;fill:${C.soft};letter-spacing:1px">TOTAL</text>
-            </svg>
-            <div style="margin-top:10px;text-align:left">
-              ${leg("#FACC15", "Shop", thisM.shop)}
-              ${leg("#FB923C", "Swiggy", thisM.swiggy)}
-              ${leg("#EF4444", "Zomato", thisM.zomato)}
-            </div>
-          </div>
-          <div style="flex:1">
-            <div style="font-size:14px;font-weight:800;margin-bottom:8px">Did we gain or lose? — vs last month</div>
-            <table style="width:100%;border-collapse:collapse;background:${C.card};border:1px solid ${C.line};border-radius:10px;overflow:hidden">
-              <thead><tr style="background:${C.ink}"><th style="padding:7px 10px;text-align:left;color:#FFF6E5;font-size:9px">CHANNEL</th><th style="padding:7px 10px;text-align:right;color:#FFF6E5;font-size:9px">THIS MONTH</th><th style="padding:7px 10px;text-align:right;color:#FFF6E5;font-size:9px">LAST MONTH</th><th style="padding:7px 10px;text-align:right;color:#FFF6E5;font-size:9px">CHANGE</th></tr></thead>
-              <tbody>${channelRows}</tbody>
-            </table>
-          </div>
-        </div>
-        <div style="background:${C.card};border:2px solid ${C.amber};border-radius:12px;padding:16px">
+        <div style="font-size:14px;font-weight:800;margin-bottom:8px">Did we gain or lose? — vs last month</div>
+        <table style="width:100%;border-collapse:collapse;background:${C.card};border:1px solid ${C.line};border-radius:10px;overflow:hidden;margin-bottom:18px;page-break-inside:avoid">
+          <thead><tr style="background:${C.ink}"><th style="padding:7px 10px;text-align:left;color:#FFF6E5;font-size:9px">CHANNEL</th><th style="padding:7px 10px;text-align:right;color:#FFF6E5;font-size:9px">THIS MONTH</th><th style="padding:7px 10px;text-align:right;color:#FFF6E5;font-size:9px">LAST MONTH</th><th style="padding:7px 10px;text-align:right;color:#FFF6E5;font-size:9px">CHANGE</th></tr></thead>
+          <tbody>${channelRows}</tbody>
+        </table>
+        <div style="background:${C.card};border:2px solid ${C.amber};border-radius:12px;padding:16px;margin-bottom:18px;page-break-inside:avoid">
           <div style="font-size:14px;font-weight:800;margin-bottom:6px;color:${C.amber}">What this means, and what to do about it</div>
           <ul style="margin:0;padding-left:18px">${insightRows}</ul>
         </div>
+        <div style="font-size:14px;font-weight:800;margin-bottom:8px">Full daily detail — since June 1</div>
+        <table style="width:100%;border-collapse:collapse;background:${C.card};border:1px solid ${C.line};border-radius:10px;overflow:hidden">
+          <thead><tr style="background:${C.ink}"><th style="padding:6px 8px;text-align:left;color:#FFF6E5;font-size:9px">DATE</th><th style="padding:6px 8px;text-align:right;color:#FFF6E5;font-size:9px">SHOP</th><th style="padding:6px 8px;text-align:right;color:#FFF6E5;font-size:9px">SWIGGY</th><th style="padding:6px 8px;text-align:right;color:#FFF6E5;font-size:9px">ZOMATO</th><th style="padding:6px 8px;text-align:right;color:#FFF6E5;font-size:9px">TOTAL</th><th style="padding:6px 8px;text-align:right;color:#FFF6E5;font-size:9px">TARGET</th><th style="padding:6px 8px;text-align:right;color:#FFF6E5;font-size:9px">%</th></tr></thead>
+          <tbody>${dailyTableRows}</tbody>
+        </table>
       </div>`;
 
       const lib = await loadH2P();
@@ -1625,6 +1561,7 @@ export default function DashboardPage() {
     }
     setOutletHealthPdfBusy(false);
   };
+
 
   const downloadOutletHealthExcel = async () => {
     const o = outletHealthData.find((x) => x.oid === outletHealthSel);
@@ -3620,15 +3557,6 @@ else await fetchOutletReportsByDate(outletEntryDate);
       const stepX = last60.length > 1 ? chartW / (last60.length - 1) : 0;
       const pathFor = (key: "total" | "target") => last60.map((r: any, i: number) => `${i === 0 ? "M" : "L"}${(i * stepX).toFixed(2)},${(chartH - (r[key] / maxV) * chartH).toFixed(2)}`).join(" ");
 
-      // Channel mix donut — this month
-      const tAll = dd.thisM.shop + dd.thisM.swiggy + dd.thisM.zomato || 1;
-      const R = 42, CX = 50, CY = 50, SW = 16, CIRC = 2 * Math.PI * R;
-      let acc = 0;
-      const segs = [[dd.thisM.shop, "#FACC15"], [dd.thisM.swiggy, "#FB923C"], [dd.thisM.zomato, "#EF4444"]].map(([v, c]: any, i: number) => {
-        const frac = v / tAll; const len = frac * CIRC; const off = -acc * CIRC; acc += frac;
-        return <circle key={i} cx={CX} cy={CY} r={R} fill="none" stroke={c} strokeWidth={SW} strokeDasharray={`${len} ${CIRC - len}`} strokeDashoffset={off} transform={`rotate(-90 ${CX} ${CY})`} />;
-      });
-
       return (
         <div className="border-t border-zinc-800 pt-4">
           <div className="flex items-center justify-between mb-2">
@@ -3648,28 +3576,46 @@ else await fetchOutletReportsByDate(outletEntryDate);
             </div>
           )}
 
-          <div className="flex flex-wrap gap-6 mb-5">
-            <div>
-              <p className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-2">Channel mix — this month</p>
-              <svg width="100" height="100" viewBox="0 0 100 100">
-                <circle cx={CX} cy={CY} r={R} fill="none" stroke="#27272a" strokeWidth={SW} />
-                {segs}
-              </svg>
-              <div className="mt-2 space-y-1">
-                <p className="text-[10px] text-zinc-400"><span className="inline-block w-2 h-2 bg-yellow-400 mr-1.5" />Shop {rs2(dd.thisM.shop)}</p>
-                <p className="text-[10px] text-zinc-400"><span className="inline-block w-2 h-2 bg-orange-400 mr-1.5" />Swiggy {rs2(dd.thisM.swiggy)}</p>
-                <p className="text-[10px] text-zinc-400"><span className="inline-block w-2 h-2 bg-red-500 mr-1.5" />Zomato {rs2(dd.thisM.zomato)}</p>
-              </div>
-            </div>
-            <div className="flex-1 min-w-[220px]">
-              <p className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-2">This vs last month</p>
+          <div className="mb-5">
+            <p className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-2">This vs last month</p>
+            <table className="w-full text-xs max-w-md">
+              <tbody>
+                {[["Shop", dd.thisM.shop, dd.shopChg], ["Swiggy", dd.thisM.swiggy, dd.swiggyChg], ["Zomato", dd.thisM.zomato, dd.zomatoChg]].map(([n, v, c]: any) => (
+                  <tr key={n} className="border-b border-zinc-800">
+                    <td className="py-1.5 text-zinc-400">{n}</td>
+                    <td className="py-1.5 text-right">{rs2(v)}</td>
+                    <td className={`py-1.5 text-right font-semibold ${c == null ? "text-zinc-600" : c >= 0 ? "text-green-400" : "text-red-400"}`}>{c == null ? "—" : `${c >= 0 ? "▲" : "▼"} ${Math.abs(c).toFixed(1)}%`}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="mb-5">
+            <p className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-2">📋 Full daily detail — since June 1</p>
+            <div className="max-h-96 overflow-y-auto border border-zinc-800">
               <table className="w-full text-xs">
+                <thead className="sticky top-0 bg-zinc-900">
+                  <tr>
+                    <th className="text-left py-2 px-2 text-zinc-500 font-mono text-[10px]">DATE</th>
+                    <th className="text-right py-2 px-2 text-zinc-500 font-mono text-[10px]">SHOP</th>
+                    <th className="text-right py-2 px-2 text-zinc-500 font-mono text-[10px]">SWIGGY</th>
+                    <th className="text-right py-2 px-2 text-zinc-500 font-mono text-[10px]">ZOMATO</th>
+                    <th className="text-right py-2 px-2 text-zinc-500 font-mono text-[10px]">TOTAL</th>
+                    <th className="text-right py-2 px-2 text-zinc-500 font-mono text-[10px]">TARGET</th>
+                    <th className="text-right py-2 px-2 text-zinc-500 font-mono text-[10px]">%</th>
+                  </tr>
+                </thead>
                 <tbody>
-                  {[["Shop", dd.thisM.shop, dd.shopChg], ["Swiggy", dd.thisM.swiggy, dd.swiggyChg], ["Zomato", dd.thisM.zomato, dd.zomatoChg]].map(([n, v, c]: any) => (
-                    <tr key={n} className="border-b border-zinc-800">
-                      <td className="py-1.5 text-zinc-400">{n}</td>
-                      <td className="py-1.5 text-right">{rs2(v)}</td>
-                      <td className={`py-1.5 text-right font-semibold ${c == null ? "text-zinc-600" : c >= 0 ? "text-green-400" : "text-red-400"}`}>{c == null ? "—" : `${c >= 0 ? "▲" : "▼"} ${Math.abs(c).toFixed(1)}%`}</td>
+                  {[...dd.dailyRows].reverse().map((r: any) => (
+                    <tr key={r.date} className="border-t border-zinc-800">
+                      <td className="py-1.5 px-2 text-zinc-400">{r.date}</td>
+                      <td className="py-1.5 px-2 text-right text-zinc-300">{rs2(r.shop)}</td>
+                      <td className="py-1.5 px-2 text-right text-zinc-300">{rs2(r.swiggy)}</td>
+                      <td className="py-1.5 px-2 text-right text-zinc-300">{rs2(r.zomato)}</td>
+                      <td className="py-1.5 px-2 text-right text-white font-semibold">{rs2(r.total)}</td>
+                      <td className="py-1.5 px-2 text-right text-zinc-500">{r.target > 0 ? rs2(r.target) : "-"}</td>
+                      <td className={`py-1.5 px-2 text-right font-semibold ${r.target === 0 ? "text-zinc-600" : r.pct >= 100 ? "text-green-400" : r.pct >= 70 ? "text-yellow-400" : "text-red-400"}`}>{r.target > 0 ? r.pct.toFixed(0) + "%" : "-"}</td>
                     </tr>
                   ))}
                 </tbody>
