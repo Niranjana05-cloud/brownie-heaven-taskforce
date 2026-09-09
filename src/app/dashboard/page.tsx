@@ -3804,7 +3804,7 @@ else await fetchOutletReportsByDate(outletEntryDate);
         </button>
       </div>
     </div>
-    <p className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-4">Pick an outlet, optionally compare two periods · full breakdown, trend &amp; verdict inside the download</p>
+        <p className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-4">Pick an outlet · full breakdown and verdict below, PDF/Excel available for sharing</p>
     <div className="mb-4">
       <div className="flex flex-wrap gap-2">
         {OUTLETS.map((o) => { const on = outletHealthSel === o; return (
@@ -3812,6 +3812,57 @@ else await fetchOutletReportsByDate(outletEntryDate);
         ); })}
       </div>
     </div>
+
+    {outletDeepDiveLoading ? (
+      <div className="mb-6 text-sm text-zinc-500 font-mono">Loading {OUTLET_NAMES[outletHealthSel] || outletHealthSel}…</div>
+    ) : outletDeepDive ? (
+      <div className="mb-6 bg-[#131316] border border-zinc-800 p-5">
+        <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+          <div>
+            <p className="text-sm font-bold uppercase tracking-widest">{OUTLET_NAMES[outletHealthSel] || outletHealthSel} — this month</p>
+            <p className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mt-0.5">
+              {outletDeepDive.health} · {outletDeepDive.trendLabel}{outletDeepDive.monthTrendPct != null ? ` (${outletDeepDive.monthTrendPct >= 0 ? "+" : ""}${outletDeepDive.monthTrendPct.toFixed(1)}% vs last month)` : ""}
+            </p>
+          </div>
+          <span className={`font-mono text-[10px] uppercase tracking-widest px-2 py-1 ${
+            outletDeepDive.health === "Strong" ? "bg-green-400/10 text-green-400" :
+            outletDeepDive.health === "On track" ? "bg-yellow-400/10 text-yellow-400" :
+            outletDeepDive.health === "Needs attention" ? "bg-orange-400/10 text-orange-400" :
+            outletDeepDive.health === "Struggling" ? "bg-red-500/10 text-red-400" : "bg-zinc-800 text-zinc-500"
+          }`}>{outletDeepDive.health}</span>
+        </div>
+
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
+          {[
+            { label: "This month", value: `₹${Math.round(outletDeepDive.thisMonthTotal).toLocaleString("en-IN")}` },
+            { label: "Target", value: outletDeepDive.monthTarget > 0 ? `₹${Math.round(outletDeepDive.monthTarget).toLocaleString("en-IN")}` : "—", sub: outletDeepDive.monthTarget > 0 ? `${outletDeepDive.monthPct.toFixed(0)}% hit` : undefined },
+            { label: "Daily target hit-rate", value: outletDeepDive.hitRate != null ? `${outletDeepDive.hitRate.toFixed(0)}%` : "—", sub: outletDeepDive.hitRate != null ? `${outletDeepDive.daysHit}/${outletDeepDive.daysWithTarget} days` : undefined },
+            { label: "Online share", value: `${outletDeepDive.onlineShare.toFixed(0)}%`, sub: `Shop ${outletDeepDive.shopShare.toFixed(0)}%` },
+          ].map((k) => (
+            <div key={k.label} className="bg-black/30 px-3 py-2">
+              <p className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest">{k.label}</p>
+              <p className="text-sm mt-1 text-white">{k.value}</p>
+              {k.sub && <p className="text-[10px] font-mono text-zinc-600 mt-0.5">{k.sub}</p>}
+            </div>
+          ))}
+        </div>
+
+        <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mb-2">This outlet, this month</p>
+        <div className="space-y-2 mb-5">
+          {outletDeepDive.insights.map((s: string, i: number) => (
+            <p key={i} className="text-sm text-zinc-300 leading-relaxed border-l-2 border-zinc-700 pl-3">{s}</p>
+          ))}
+        </div>
+
+        <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mb-2">Brownie Heaven playbook</p>
+        <div className="space-y-2">
+          {outletDeepDive.playbook.map((s: string, i: number) => (
+            <p key={i} className="text-sm text-zinc-300 leading-relaxed border-l-2 border-yellow-400/40 pl-3">{s}</p>
+          ))}
+        </div>
+      </div>
+    ) : null}
+
     <div className="mb-2">
       <label className="text-[10px] font-mono text-zinc-500 uppercase block mb-2">Compare two periods (optional — leave as "none" to skip)</label>
       <div className="flex flex-wrap items-center gap-4">
