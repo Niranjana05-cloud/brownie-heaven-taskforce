@@ -11,6 +11,7 @@ import ReconciliationTab from "./ReconciliationTab";
 import supabaseStock from "@/lib/supabaseStock";
 import { OUTLET_ID_TO_STOCK_NAME } from "@/lib/outletMap";
 import { FOOD_COST_MAP } from "@/lib/foodCosts";
+import { matchItemCost } from "@/lib/itemPerfCosts";
 import { useActivityHeartbeat } from "@/lib/useActivityHeartbeat";
 import ActivityToastStack from "@/components/ActivityToastStack";
 
@@ -1053,6 +1054,7 @@ export default function DashboardPage() {
   const [ipDays, setIpDays] = useState("30");
   const [ipBusy, setIpBusy] = useState(false);
   const [ipView, setIpView] = useState<"insights" | "data">("insights");
+  const [ipPrevRows, setIpPrevRows] = useState<any[]>([]);
   const [compPeriod, setCompPeriod] = useState("");
   const fetchCompRows = async () => {
     const { data } = await supabase.from("competitor_sales").select("*").order("period_date", { ascending: false }).order("created_at", { ascending: false });
@@ -1322,6 +1324,19 @@ export default function DashboardPage() {
     setIpDeleteBusy(false);
   };
   useEffect(() => { if (activeTab === "item_perf") fetchIpUploads(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [activeTab]);
+  // Whichever upload sits immediately before the selected one (by upload date) becomes
+  // the comparison period for the pricing/discount-discipline section — no extra picker.
+  useEffect(() => {
+    if (!ipSel || ipUploads.length < 2) { setIpPrevRows([]); return; }
+    const idx = ipUploads.findIndex((u) => u.id === ipSel);
+    const prevUpload = idx >= 0 ? ipUploads[idx + 1] : null;
+    if (!prevUpload) { setIpPrevRows([]); return; }
+    (async () => {
+      const { data } = await supabase.from("item_perf_rows").select("name, net_revenue, units_sold, avg_price").eq("upload_id", prevUpload.id);
+      setIpPrevRows(data || []);
+    })();
+    /* eslint-disable-next-line react-hooks/exhaustive-deps */
+  }, [ipSel, ipUploads]);
   const parseItemFile = async (file: File) => {
     const buf = await file.arrayBuffer();
     const wb = XLSX.read(buf, { type: "array" });
@@ -1350,7 +1365,7 @@ export default function DashboardPage() {
   };
   // Real price-vs-demand classification, extracted so both the Item Performance tab and
   // Outlet Health use the exact same analysis — not two versions that can drift apart.
-  const classifyItemPerf = (rawRows: any[]) => {
+   const classifyItemPerf = (rawRows: any[]) => {
     const rows = rawRows.map((r: any) => ({ name: r.name as string, category: r.category as string, rev: Number(r.net_revenue) || 0, units: Number(r.units_sold) || 0, price: Number(r.avg_price) || 0, lost: Number(r.lost_orders) || 0, opd: Number(r.avg_orders_day) || 0 }));
     if (!rows.length) return null;
     const med = (arr: number[]) => { const a = [...arr].sort((x, y) => x - y); return a.length ? a[Math.floor(a.length / 2)] : 0; };
@@ -1372,9 +1387,74 @@ export default function DashboardPage() {
       sweet: w0 ? `${w0.name} at ${inr(w0.price)} is quietly crushing it — ${w0.units.toLocaleString("en-IN")} sold. The people's champion 👏` : "",
       dead: d0 ? `${d0.name}? ${d0.units} whole units this window. It's giving "forgotten leftover" 💀` : "",
     };
-    return { rows, stars, moneyLeft, suspects, sweet, dead, funny, inr };
+
+    // Revenue concentration (Pareto/ABC) — which items actually carry the menu.
+    const totalRev = rows.reduce((s, r) => s + r.rev, 0);
+    const byRevDesc = [...rows].sort((a, b) => b.rev - a.rev);
+    let cum = 0;
+    const tiered = byRevDesc.map((r) => {
+      const share = totalRev > 0 ? (r.rev / totalRev) * 100 : 0;
+      cum += share;
+      const tier = cum <= 70 ? "A" : cum <= 90 ? "B" : "C";
+      return { ...r, share, cumShare: cum, tier };
+    });
+    const abc = (["A", "B", "C"] as const).reduce((acc, t) => {
+      const items = tiered.filter((r) => r.tier === t);
+      acc[t] = { count: items.length, share: items.reduce((s, r) => s + r.share, 0) };
+      return acc;
+    }, {} as Record<"A" | "B" | "C", { count: number; share: number }>);
+
+    // Real margin, matched from the actual costing sheet — never guessed for
+    // items that don't confidently match (Assorted Boxes, combos, etc).
+    const margin = rows
+      .map((r) => {
+        const m = matchItemCost(r.name);
+        if (!m || r.price <= 0) return null;
+        const marginRs = r.price - m.cost;
+        const marginPct = (marginRs / r.price) * 100;
+        return { name: r.name, price: r.price, cost: m.cost, matchedName: m.matchedName, method: m.method, marginRs, marginPct };
+      })
+      .filter((x): x is NonNullable<typeof x> => !!x)
+      .sort((a, b) => a.marginPct - b.marginPct);
+    const marginRevCovered = margin.reduce((s, m) => { const row = rows.find((r) => r.name === m.name); return s + (row ? row.rev : 0); }, 0);
+    const marginCoverage = { matched: margin.length, total: rows.length, revSharePct: totalRev > 0 ? (marginRevCovered / totalRev) * 100 : 0 };
+
+    return { rows, stars, moneyLeft, suspects, sweet, dead, funny, inr, tiered, abc, margin, marginCoverage };
+  };
+
+  // Price-vs-volume read between two uploads: if price rose and volume held or grew,
+  // that's demand absorbing the increase — no discount needed. If price fell while
+  // volume jumped, that's the shape of a discount or platform promo — worth checking
+  // the real margin before repeating it. Matched by name since UrbanPiper's own
+  // item IDs aren't in this export.
+  const compareItemPeriods = (curRows: any[], prevRows: any[]) => {
+    if (!curRows?.length || !prevRows?.length) return null;
+    const prevByName: Record<string, any> = {};
+    prevRows.forEach((r: any) => { prevByName[r.name] = r; });
+    const curByName: Record<string, boolean> = {};
+    const out: any[] = [];
+    curRows.forEach((r: any) => {
+      curByName[r.name] = true;
+      const p = prevByName[r.name];
+      const curPrice = Number(r.avg_price) || 0, curUnits = Number(r.units_sold) || 0;
+      if (!p) { out.push({ name: r.name, curPrice, curUnits, bucket: "new" }); return; }
+      const prevPrice = Number(p.avg_price) || 0, prevUnits = Number(p.units_sold) || 0;
+      if (prevPrice <= 0 || prevUnits <= 0) return;
+      const priceChg = ((curPrice - prevPrice) / prevPrice) * 100;
+      const unitsChg = ((curUnits - prevUnits) / prevUnits) * 100;
+      let bucket = "mixed";
+      if (priceChg > 2 && unitsChg >= -2) bucket = "priceLedGrowth";
+      else if (priceChg < -2 && unitsChg > 5) bucket = "possibleDiscount";
+      else if (Math.abs(priceChg) <= 2 && unitsChg < -10) bucket = "decliningStable";
+      else if (priceChg > 2 && unitsChg < -10) bucket = "priceResistance";
+      else if (Math.abs(priceChg) <= 2 && Math.abs(unitsChg) <= 5) bucket = "stable";
+      out.push({ name: r.name, curPrice, curUnits, prevPrice, prevUnits, priceChg, unitsChg, bucket });
+    });
+    const dropped = prevRows.filter((p: any) => !curByName[p.name]).map((p: any) => ({ name: p.name, prevUnits: Number(p.units_sold) || 0 }));
+    return { rows: out, dropped };
   };
   const ipStats = classifyItemPerf(ipRows);
+  const ipComparison = compareItemPeriods(ipRows, ipPrevRows);
   const downloadIpPDF = async () => {
     if (!ipStats) { alert("No data to report."); return; }
     window.scrollTo(0, 0);
@@ -4632,12 +4712,13 @@ else await fetchOutletReportsByDate(outletEntryDate);
               <button onClick={() => setIpView("data")} className={`px-4 py-2 text-sm font-semibold transition-colors ${ipView === "data" ? "bg-yellow-400 text-black" : "bg-zinc-900 text-zinc-400 hover:text-white"}`}>Data</button>
             </div>
             {ipRows.length === 0 ? <p className="text-sm text-zinc-500">No data yet. {canUploadItemPerf ? "Upload an export above." : "Waiting for an upload."}</p> : ipView === "insights" ? (
-              <div>
+                           <div>
                 {ipStats && (<>
                   <div className="flex items-center justify-between mb-4 max-w-3xl gap-3 flex-wrap">
-                    <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest">{(ipUploads.find((u) => u.id === ipSel)?.label) || ""}</p>
+                    <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest">{(ipUploads.find((u) => u.id === ipSel)?.label) || ""} · {ipStats.rows.length} items · {ipStats.inr(ipStats.rows.reduce((s: number, r: any) => s + r.rev, 0))}</p>
                     <button onClick={downloadIpPDF} className="bg-zinc-800 text-white px-4 py-2 text-sm font-semibold hover:bg-zinc-700 transition-colors">Download report (PDF)</button>
                   </div>
+
                   <div className="mb-6 border border-zinc-800 p-5 max-w-3xl">
                     <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mb-2">Headline</p>
                     <p className="text-lg md:text-xl mb-3">{ipStats.funny.headline}</p>
@@ -4645,30 +4726,153 @@ else await fetchOutletReportsByDate(outletEntryDate);
                     {ipStats.funny.sweet && <p className="text-sm text-green-400 mb-1">{ipStats.funny.sweet}</p>}
                     {ipStats.funny.dead && <p className="text-sm text-red-400">{ipStats.funny.dead}</p>}
                   </div>
+
+                  {(() => {
+                    const aTier = ipStats.abc.A, bTier = ipStats.abc.B, cTier = ipStats.abc.C;
+                    const top8 = ipStats.tiered.slice(0, 8);
+                    const tierColor = (t: string) => t === "A" ? "#FACC15" : t === "B" ? "#C89A2E" : "#52525b";
+                    return (
+                      <div className="mb-8 max-w-3xl">
+                        <p className="text-sm font-bold uppercase tracking-widest mb-1">Where the revenue actually comes from</p>
+                        <p className="text-xs text-zinc-500 mb-4"><b className="text-zinc-300">{aTier.count} items</b> ({(aTier.count / ipStats.rows.length * 100).toFixed(0)}% of the menu) bring in <b className="text-zinc-300">{aTier.share.toFixed(0)}% of revenue</b>. Protect those before anything else — a price or availability problem here costs far more than the same problem on a C-tier item.</p>
+                        <div className="flex h-6 mb-3 gap-0.5">
+                          <div style={{ flexBasis: `${aTier.share}%`, background: tierColor("A") }} className="flex items-center justify-center text-[10px] font-bold text-black">{aTier.share >= 8 ? `A ${aTier.share.toFixed(0)}%` : ""}</div>
+                          <div style={{ flexBasis: `${bTier.share}%`, background: tierColor("B") }} className="flex items-center justify-center text-[10px] font-bold text-black">{bTier.share >= 8 ? `B ${bTier.share.toFixed(0)}%` : ""}</div>
+                          <div style={{ flexBasis: `${cTier.share}%`, background: tierColor("C") }} className="flex items-center justify-center text-[10px] font-bold text-white">{cTier.share >= 8 ? `C ${cTier.share.toFixed(0)}%` : ""}</div>
+                        </div>
+                        <div className="space-y-1">
+                          {top8.map((r: any, i: number) => (
+                            <div key={i} className="flex items-baseline gap-3 text-xs">
+                              <span className="w-4 text-zinc-600 font-mono">{r.tier}</span>
+                              <span className="flex-1 text-zinc-300">{r.name}</span>
+                              <span className="font-mono text-zinc-500">{r.share.toFixed(1)}%</span>
+                              <span className="font-mono text-zinc-400 w-24 text-right">{ipStats.inr(r.rev)}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })()}
+
                   {[
-                    { title: "🏆 Stars", sub: "The workhorses — protect these", rows: ipStats.stars, border: "border-green-500/30" },
-                    { title: "👀 Priced-too-high suspects", sub: "High price, shy demand — worth a rethink", rows: ipStats.suspects, border: "border-orange-500/30" },
-                    { title: "💚 Sweet-spot winners", sub: "Great price, flying off shelves", rows: ipStats.sweet, border: "border-green-500/30" },
-                    { title: "💸 Money left on the table", sub: "People wanted it, didn't get it", rows: ipStats.moneyLeft, border: "border-yellow-500/30" },
-                    { title: "💀 Dead weight", sub: "Barely moving — rework or retire?", rows: ipStats.dead, border: "border-red-500/30" },
+                    { title: "🏆 Stars", sub: "The workhorses — protect these", rows: ipStats.stars, border: "border-green-500/30", explain: (r: any) => `${r.units.toLocaleString("en-IN")} sold at ${ipStats!.inr(r.price)} — above-median demand and one of the biggest revenue lines on the menu. The only real risk here is running out of stock.` },
+                    { title: "👀 Priced-too-high suspects", sub: "High price, shy demand — worth a rethink", rows: ipStats.suspects, border: "border-orange-500/30", explain: (r: any) => `Priced above the median for its category but selling below the category's median volume${r.lost ? `, and ${r.lost} lost orders on top` : ""}. Worth testing a small price step-down or a combo to see if demand was actually price-sensitive here.` },
+                    { title: "💚 Sweet-spot winners", sub: "Great price, flying off shelves", rows: ipStats.sweet, border: "border-green-500/30", explain: (r: any) => `At or below the median price and still moving ${r.units.toLocaleString("en-IN")} units — this is the price doing its job. Leave it alone rather than "optimising" it.` },
+                    { title: "💸 Money left on the table", sub: "People wanted it, didn't get it", rows: ipStats.moneyLeft, border: "border-yellow-500/30", explain: (r: any) => `${r.lost} lost order${r.lost === 1 ? "" : "s"} — people tried to order this and couldn't. Usually a stock/availability problem on the platform, not a demand problem, so it's normally the cheapest fix on this whole page.` },
+                    { title: "💀 Dead weight", sub: "Barely moving — rework or retire?", rows: ipStats.dead, border: "border-red-500/30", explain: (r: any) => `Only ${r.units} sold this window, and below-median revenue to match. Either this needs a menu-photo/description refresh, a price cut, or it's honestly not earning its spot on the menu.` },
                   ].map((b) => (
                     <div key={b.title} className={`mb-4 border ${b.border} p-4 max-w-3xl`}>
                       <p className="text-sm font-semibold">{b.title}</p>
                       <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mb-2">{b.sub}</p>
                       {b.rows.length === 0 ? <p className="text-sm text-zinc-600">None.</p> : (
-                        <div className="space-y-1">
-                          {b.rows.map((r, i) => (
-                            <div key={i} className="flex items-baseline gap-3 text-sm">
-                              <span className="flex-1">{r.name}</span>
-                              <span className="font-mono text-zinc-400">{ipStats!.inr(r.price)}</span>
-                              <span className="font-mono text-zinc-300 w-16 text-right">{r.units.toLocaleString("en-IN")}u</span>
-                              <span className="font-mono text-zinc-500 w-16 text-right">{r.lost} lost</span>
+                        <div className="space-y-3">
+                          {b.rows.map((r: any, i: number) => (
+                            <div key={i} className="text-sm">
+                              <div className="flex items-baseline gap-3">
+                                <span className="flex-1 font-semibold">{r.name}</span>
+                                <span className="font-mono text-zinc-400">{ipStats!.inr(r.price)}</span>
+                                <span className="font-mono text-zinc-300 w-16 text-right">{r.units.toLocaleString("en-IN")}u</span>
+                                <span className="font-mono text-zinc-500 w-16 text-right">{r.lost} lost</span>
+                              </div>
+                              <p className="text-xs text-zinc-500 mt-0.5">{b.explain(r)}</p>
                             </div>
                           ))}
                         </div>
                       )}
                     </div>
                   ))}
+
+                  {(() => {
+                    if (!ipComparison) {
+                      return (
+                        <div className="mb-8 max-w-3xl border border-dashed border-zinc-700 p-5 text-sm text-zinc-500">
+                          <p className="font-semibold text-zinc-300 mb-1">Pricing &amp; discount discipline</p>
+                          <p>Upload one more period — this section will then check every item against your own rule of thumb: if price went up and sales held or grew, it flags "don't discount this." If a price drop lines up with a sales jump, it flags a possible discount worth double-checking against real margin.</p>
+                        </div>
+                      );
+                    }
+                    const buckets: Record<string, any[]> = { priceLedGrowth: [], possibleDiscount: [], priceResistance: [], decliningStable: [] };
+                    ipComparison.rows.forEach((r: any) => { if (buckets[r.bucket]) buckets[r.bucket].push(r); });
+                    Object.values(buckets).forEach((arr) => arr.sort((a, b) => b.curPrice * b.curUnits - a.curPrice * a.curUnits));
+                    const pct = (n: number) => `${n >= 0 ? "+" : ""}${n.toFixed(1)}%`;
+                    const rowsFor = (arr: any[], color: string, sentence: (r: any) => string) => arr.slice(0, 6).map((r: any, i: number) => (
+                      <div key={i} className={`border-l-2 ${color} bg-zinc-900/60 pl-3 py-2 mb-2 text-sm`}>
+                        <span className="font-semibold">{r.name}</span> — {sentence(r)}
+                      </div>
+                    ));
+                    const priceLed = rowsFor(buckets.priceLedGrowth, "border-green-500", (r) => `price moved ${pct(r.priceChg)}, units moved ${pct(r.unitsChg)}. Demand absorbed the increase — don't discount this one.`);
+                    const possibleDisc = rowsFor(buckets.possibleDiscount, "border-orange-400", (r) => `price fell ${pct(r.priceChg)} while units jumped ${pct(r.unitsChg)}. Looks like a discount or platform offer ran here — worth checking it actually made margin.`);
+                    const resistance = rowsFor(buckets.priceResistance, "border-red-500", (r) => `price went up ${pct(r.priceChg)} and units dropped ${pct(r.unitsChg)}. The increase wasn't absorbed — reconsider it or pair it with something that justifies the new price.`);
+                    const declining = rowsFor(buckets.decliningStable, "border-orange-400", (r) => `price barely moved (${pct(r.priceChg)}) but units fell ${pct(r.unitsChg)}. Not a pricing problem — something else is pulling demand away.`);
+                    const dropped = ipComparison.dropped.slice(0, 6);
+                    const nothing = !priceLed.length && !possibleDisc.length && !resistance.length && !declining.length && !dropped.length;
+                    return (
+                      <div className="mb-8 max-w-3xl">
+                        <p className="text-sm font-bold uppercase tracking-widest mb-1">Pricing &amp; discount discipline</p>
+                        <p className="text-xs text-zinc-500 mb-4">If price went up and people still bought it, don't discount it. If a price drop lines up with a volume jump, that's worth double-checking.</p>
+                        {nothing && <p className="text-sm text-zinc-600">Nothing swung hard enough between the two uploads to flag.</p>}
+                        {!!priceLed.length && <><p className="text-[11px] font-mono text-green-400 uppercase tracking-widest mb-1">Priced up, demand held — don't discount</p>{priceLed}</>}
+                        {!!possibleDisc.length && <><p className="text-[11px] font-mono text-orange-400 uppercase tracking-widest mb-1 mt-3">Possible discounting — verify the margin</p>{possibleDisc}</>}
+                        {!!resistance.length && <><p className="text-[11px] font-mono text-red-400 uppercase tracking-widest mb-1 mt-3">Price increase not absorbed</p>{resistance}</>}
+                        {!!declining.length && <><p className="text-[11px] font-mono text-orange-400 uppercase tracking-widest mb-1 mt-3">Falling without a price change</p>{declining}</>}
+                        {!!dropped.length && (
+                          <div className="border-l-2 border-red-500 bg-zinc-900/60 pl-3 py-2 mt-3 text-sm">
+                            <span className="font-semibold">{dropped.length} item{dropped.length > 1 ? "s" : ""} sold last period, nothing this period:</span> {dropped.map((d: any) => d.name).join(", ")}. Worth checking whether these were pulled off the menu on purpose.
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
+
+                  {(() => {
+                    if (!ipStats.margin.length) {
+                      return (
+                        <div className="mb-8 max-w-3xl border border-dashed border-zinc-700 p-5 text-sm text-zinc-500">
+                          <p className="font-semibold text-zinc-300 mb-1">Cost &amp; margin</p>
+                          <p>None of this upload's items matched the costing sheet by name — check src/lib/itemPerfCosts.ts covers this menu, or that item names here are close to the ones in Master Pricing.</p>
+                        </div>
+                      );
+                    }
+                    const thin = ipStats.margin.filter((m: any) => m.marginPct < 15);
+                    const avg = ipStats.margin.reduce((s: number, m: any) => s + m.marginPct, 0) / ipStats.margin.length;
+                    return (
+                      <div className="mb-8 max-w-3xl">
+                        <p className="text-sm font-bold uppercase tracking-widest mb-1">Cost &amp; margin</p>
+                        <p className="text-xs text-zinc-500 mb-4">Real landed cost from Master Pricing, matched to {ipStats.marginCoverage.matched} of {ipStats.marginCoverage.total} items on this upload ({ipStats.marginCoverage.revSharePct.toFixed(0)}% of revenue) — average margin across those: <b className="text-zinc-300">{avg.toFixed(1)}%</b>.</p>
+                        {thin.length === 0 ? (
+                          <p className="text-sm text-green-400">No thin margins in what matched — everything costed is clearing at least 15%.</p>
+                        ) : thin.slice(0, 8).map((m: any, i: number) => (
+                          <div key={i} className="border-l-2 border-red-500 bg-zinc-900/60 pl-3 py-2 mb-2 text-sm">
+                            <span className="font-semibold">{m.name}</span> — sells at {ipStats!.inr(m.price)}, costs {ipStats!.inr(m.cost)} to make. That's {m.marginPct.toFixed(1)}% margin{m.marginPct < 0 ? " — currently sold at a loss" : ""}. If cocoa, Maida or butter has moved recently, this is one of the first prices worth revisiting.
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  })()}
+
+                  {(() => {
+                    const paras: string[] = [];
+                    const aTier = ipStats.abc.A;
+                    paras.push(`The menu is carried by a small core: ${aTier.count} items (${aTier.share.toFixed(0)}% of revenue) do most of the work. That's the first place to look when deciding what to feature, restock aggressively, or protect from a stock-out — a problem on one of these costs far more than the same problem on a C-tier item.`);
+                    if (ipComparison) {
+                      const n = ipComparison.rows.filter((r: any) => r.bucket === "priceLedGrowth").length;
+                      const d = ipComparison.rows.filter((r: any) => r.bucket === "possibleDiscount").length;
+                      if (n) paras.push(`${n} item${n > 1 ? "s" : ""} took a price increase and kept or grew volume since the last upload — the textbook case for leaving well alone rather than discounting.`);
+                      if (d) paras.push(`${d} item${d > 1 ? "s" : ""} show the opposite shape — price down, volume up — worth checking those against real margin before running the same offer again.`);
+                    } else {
+                      paras.push(`This read is from a single upload, so it can say what's selling well right now but not yet whether a price move is being absorbed or resisted. Upload a second period and this section sharpens considerably.`);
+                    }
+                    if (ipStats.margin.length) {
+                      const thinCount = ipStats.margin.filter((m: any) => m.marginPct < 15).length;
+                      if (thinCount) paras.push(`On cost: ${thinCount} item${thinCount > 1 ? "s are" : " is"} running under 15% margin against real landed cost. If ingredient prices have moved, the fix is usually a small price adjustment on exactly these items, not a blanket increase across the menu.`);
+                    }
+                    return (
+                      <div className="mb-4 max-w-3xl border border-zinc-800 bg-zinc-900/40 p-5">
+                        <p className="text-sm font-bold uppercase tracking-widest mb-3">Improvement actions</p>
+                        {paras.map((p, i) => <p key={i} className="text-sm text-zinc-300 leading-relaxed mb-3 last:mb-0">{p}</p>)}
+                      </div>
+                    );
+                  })()}
                 </>)}
               </div>
             ) : (
