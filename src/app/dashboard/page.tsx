@@ -725,6 +725,7 @@ export default function DashboardPage() {
   const [outletHealthPdfBusy, setOutletHealthPdfBusy] = useState(false);
   const [outletHealthXlsxBusy, setOutletHealthXlsxBusy] = useState(false);
   const [outletDeepDive, setOutletDeepDive] = useState<any>(null);
+  const [itemPerfContext, setItemPerfContext] = useState<any>(null);
   const [outletDeepDiveLoading, setOutletDeepDiveLoading] = useState(false);
   const [comparePresetA, setComparePresetA] = useState("none");
   const [comparePresetB, setComparePresetB] = useState("none");
@@ -1425,7 +1426,32 @@ export default function DashboardPage() {
 
   // Builds the full daily series + monthly aggregates + rule-based insights for one
   // outlet. Shared by the in-app deep-dive view and the PDF export so both stay in sync.
-  const computeOutletAnalysis = (oid: string, rawRows: any[]) => {
+  // Fetches real item-level sales data (from actual Prime/billing exports, via the
+  // Item Performance feature) — the latest upload and the one before it, so we can flag
+  // real top sellers, real availability/lost-order problems, and real trend shifts.
+  // Not tied to a specific outlet (company-wide), but genuinely current, not researched.
+  const fetchItemPerfContext = async () => {
+    const { data: uploads } = await supabase.from("item_perf_uploads").select("*").order("created_at", { ascending: false }).limit(2);
+    if (!uploads || uploads.length === 0) { setItemPerfContext({ available: false }); return; }
+    const { data: latestRows } = await supabase.from("item_perf_rows").select("name, category, net_revenue, units_sold, lost_orders").eq("upload_id", uploads[0].id);
+    const rows = latestRows || [];
+    const topSellers = [...rows].filter(r => r.net_revenue != null).sort((a, b) => (b.net_revenue || 0) - (a.net_revenue || 0)).slice(0, 3);
+    const lostOrderItems = [...rows].filter(r => (r.lost_orders || 0) > 0).sort((a, b) => (b.lost_orders || 0) - (a.lost_orders || 0)).slice(0, 3);
+
+    let gainers: any[] = [], decliners: any[] = [];
+    if (uploads.length > 1) {
+      const { data: prevRows } = await supabase.from("item_perf_rows").select("name, net_revenue").eq("upload_id", uploads[1].id);
+      const prevByName: Record<string, number> = {};
+      (prevRows || []).forEach((r: any) => { if (r.net_revenue != null) prevByName[r.name] = r.net_revenue; });
+      const changes = rows.filter(r => r.net_revenue != null && prevByName[r.name] != null && prevByName[r.name] > 0).map(r => ({ name: r.name, cur: r.net_revenue, prev: prevByName[r.name], chg: ((r.net_revenue - prevByName[r.name]) / prevByName[r.name]) * 100 }));
+      gainers = changes.filter(c => c.chg > 15).sort((a, b) => b.chg - a.chg).slice(0, 2);
+      decliners = changes.filter(c => c.chg < -15).sort((a, b) => a.chg - b.chg).slice(0, 2);
+    }
+    setItemPerfContext({ available: true, label: uploads[0].label, periodDays: uploads[0].period_days, topSellers, lostOrderItems, gainers, decliners, prevLabel: uploads[1]?.label || null });
+  };
+  useEffect(() => { if (activeTab === "owner_outlets" && itemPerfContext === null) fetchItemPerfContext(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [activeTab]);
+
+  const computeOutletAnalysis = (oid: string, rawRows: any[], itemPerf: any) => {
     const daily = [...rawRows].sort((a, b) => (a.report_date as string).localeCompare(b.report_date));
     const dailyRows = daily.map((r: any) => {
       const ym = r.report_date.slice(0, 7);
@@ -1512,16 +1538,34 @@ export default function DashboardPage() {
     let trendLabel = "steady";
     if (monthTrendPct != null) trendLabel = monthTrendPct > 10 ? "growing" : monthTrendPct < -10 ? "declining" : "steady";
 
-    // Brownie Heaven-specific reference points — grounded in the brand's own known signature
-    // items, the multi-brand structure, and standing patterns already identified in past
-    // reconciliation work. Not generic internet advice; specific to how this business runs.
-    const playbook: string[] = [
-      "The known crowd favourites — Oreo Brownie Shake, Filter Coffee Soda, Red Velvet, Mint Ice Cream, Brownie Cheesecake — are proven sellers across outlets. Pinning one as a combo add-on ('add a Filter Coffee Soda for ₹49') on Swiggy/Zomato usually lifts average order value more reliably than a fresh, untested item would.",
-      "A recurring leak flagged in past reconciliation work: a meaningful share of lost revenue (roughly ₹80K/month company-wide, historically) comes from platform cancellations *after* the order was already acknowledged — not customers cancelling upfront. That's a kitchen/ops timing issue, not a demand issue, and it's worth checking whether this outlet is contributing to that pattern.",
-      "Brownie Heaven runs three brands from largely the same kitchen — Brownie Heaven, Cakes by Brownie Heaven, and Ice Cream by Brownie Heaven. If one brand is under-target here while another is strong, cross-promoting the weaker brand's items on the stronger brand's Swiggy/Zomato listing (same kitchen, same delivery slot) is close to a free lever — no new sourcing or staffing needed.",
-      "The founder story (Chef Nishant, ex-ITC) and the zero-waste, morning-fresh-batch model are genuine differentiators worth using in menu descriptions and social content — 'freshly baked this morning, nothing held over' converts better than a plain ingredient list, and it's true rather than invented positioning.",
-      "Royapettah's own listings show a real gap between dining rating (4.6) and delivery rating (4.2) historically — dine-in and delivery are different experiences even for the same food, so a delivery-specific complaint (packaging, temperature on arrival) can drag the online listing down even while walk-in customers are happy.",
-    ];
+    // Built from real, current Item Performance data (your own Prime/billing exports) —
+    // not researched or web-sourced, so it won't go stale as the menu changes over time.
+    const playbook: string[] = [];
+    if (itemPerf && itemPerf.available) {
+      if (itemPerf.topSellers.length) {
+        const names = itemPerf.topSellers.map((r: any) => r.name).join(", ");
+        playbook.push(`Real top sellers from Item Performance (${itemPerf.label}): ${names}. These are proven, current bestsellers — pinning one as a combo add-on on Swiggy/Zomato usually lifts order value more reliably than pushing an untested item.`);
+      }
+      if (itemPerf.lostOrderItems.length) {
+        const names = itemPerf.lostOrderItems.map((r: any) => `${r.name} (${r.lost_orders} lost orders)`).join(", ");
+        playbook.push(`${itemPerf.lostOrderItems.length > 1 ? "Items" : "An item"} with real lost-order counts in the latest data: ${names}. Lost orders usually mean the item was unavailable when someone tried to order it — worth checking prep stock or listing status for these specifically.`);
+      }
+      if (itemPerf.gainers.length) {
+        const names = itemPerf.gainers.map((r: any) => `${r.name} (+${r.chg.toFixed(0)}%)`).join(", ");
+        playbook.push(`Genuinely trending up vs the previous period (${itemPerf.prevLabel} → ${itemPerf.label}): ${names}. Worth understanding what changed and whether it can be repeated elsewhere.`);
+      }
+      if (itemPerf.decliners.length) {
+        const names = itemPerf.decliners.map((r: any) => `${r.name} (${r.chg.toFixed(0)}%)`).join(", ");
+        playbook.push(`Genuinely declining vs the previous period: ${names}. Worth checking whether this is a quality dip, menu fatigue, or just seasonal before assuming it's a lost cause.`);
+      }
+      if (playbook.length === 0) playbook.push(`Item Performance data exists (${itemPerf.label}) but nothing stood out sharply this period — no item swung hard enough in either direction to flag.`);
+    } else {
+      playbook.push("No Item Performance data uploaded yet — once a Prime/billing export is uploaded under the Item Performance tab, this section will show real top sellers, lost-order items, and trend shifts instead of this note.");
+    }
+    // Structural points — about how the business is set up, not which items are trending,
+    // so these stay valid even as the specific bestsellers change over time.
+    playbook.push("Brownie Heaven runs three brands from largely the same kitchen — Brownie Heaven, Cakes by Brownie Heaven, and Ice Cream by Brownie Heaven. If one brand is under-target here while another is strong, cross-promoting the weaker brand's items on the stronger brand's listing (same kitchen, same delivery slot) is close to a free lever.");
+    playbook.push("A recurring leak flagged in past reconciliation work: a meaningful share of lost revenue (roughly ₹80K/month company-wide, historically) comes from platform cancellations after the order was already acknowledged — a kitchen/ops timing issue, not a demand issue.");
 
     return { dailyRows, byMonth, months, thisM, lastM, shopChg, swiggyChg, zomatoChg, monthTotals, hitRate, daysHit, daysWithTarget: thisMonthDays.length, bestDow, worstDow, dowNames, onlineShare, shopShare, discountPct, insights, playbook, thisMonthTotal, monthTarget, monthPct, monthTrendPct, health, trendLabel };
   };
@@ -1529,10 +1573,10 @@ export default function DashboardPage() {
   const fetchOutletDeepDive = async (oid: string) => {
     setOutletDeepDiveLoading(true);
     const { data } = await supabase.from("outlet_reports").select("report_date, shop_sales_value, swiggy_sales_value, zomato_sales_value, discount_given").eq("outlet_id", oid).gte("report_date", "2026-06-01");
-    setOutletDeepDive(computeOutletAnalysis(oid, data || []));
+    setOutletDeepDive(computeOutletAnalysis(oid, data || [], itemPerfContext));
     setOutletDeepDiveLoading(false);
   };
-  useEffect(() => { if (activeTab === "owner_outlets" && outletHealthSel) fetchOutletDeepDive(outletHealthSel); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [activeTab, outletHealthSel]);
+  useEffect(() => { if (activeTab === "owner_outlets" && outletHealthSel) fetchOutletDeepDive(outletHealthSel); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [activeTab, outletHealthSel, itemPerfContext]);
 
   // Returns the A-vs-B period comparison if all four dates are filled in, else null.
   // Used by the PDF/Excel exports — there's no live on-screen result for this anymore.
@@ -1643,8 +1687,8 @@ export default function DashboardPage() {
           <ul style="margin:0;padding-left:18px">${insightRows}</ul>
         </div>
         <div style="background:${C.card};border:1px solid ${C.line};border-radius:12px;padding:18px;margin-bottom:18px;page-break-inside:avoid">
-          <div style="font-size:13px;font-weight:800;margin-bottom:4px;color:${C.ink}">🍫 Brownie Heaven playbook — standing levers worth pulling</div>
-          <div style="font-size:10px;color:${C.soft};margin-bottom:8px">Grounded in the brand's own known sellers, multi-brand structure, and past reconciliation findings — not generic advice.</div>
+          <div style="font-size:13px;font-weight:800;margin-bottom:4px;color:${C.ink}">🍫 Real sellers &amp; item-level signals</div>
+          <div style="font-size:10px;color:${C.soft};margin-bottom:8px">From actual Item Performance uploads (Prime/billing exports) and standing operational structure — not researched or generic.</div>
           <ul style="margin:0;padding-left:18px">${playbookRows}</ul>
         </div>
         <div style="font-size:14px;font-weight:800;margin-bottom:8px">Revenue trend — month by month</div>
