@@ -1309,6 +1309,18 @@ export default function DashboardPage() {
   useEffect(() => { if (user) { fetchCompRows(); fetchCompProducts(); fetchCompHeadline(); } /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [user]);
   const fetchIpRows = async (uploadId: string) => { const { data } = await supabase.from("item_perf_rows").select("*").eq("upload_id", uploadId).order("net_revenue", { ascending: false, nullsFirst: false }); setIpRows(data || []); };
   const fetchIpUploads = async () => { const { data } = await supabase.from("item_perf_uploads").select("*").order("created_at", { ascending: false }); setIpUploads(data || []); if (data && data.length) { setIpSel((cur) => cur || data[0].id); if (!ipSel) fetchIpRows(data[0].id); } };
+  const [ipDeleteBusy, setIpDeleteBusy] = useState(false);
+  const deleteIpUpload = async () => {
+    if (!ipSel) return;
+    const up = ipUploads.find((u) => u.id === ipSel);
+    if (!confirm(`Delete "${up?.label || "this upload"}" and all its ${up?.row_count || ""} item rows? This can't be undone.`)) return;
+    setIpDeleteBusy(true);
+    await supabase.from("item_perf_rows").delete().eq("upload_id", ipSel);
+    await supabase.from("item_perf_uploads").delete().eq("id", ipSel);
+    setIpSel(""); setIpRows([]);
+    await fetchIpUploads();
+    setIpDeleteBusy(false);
+  };
   useEffect(() => { if (activeTab === "item_perf") fetchIpUploads(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [activeTab]);
   const parseItemFile = async (file: File) => {
     const buf = await file.arrayBuffer();
@@ -1336,8 +1348,10 @@ export default function DashboardPage() {
     setIpParsed(null); setIpLabel("");
     await fetchIpUploads(); setIpSel(up.id); fetchIpRows(up.id);
   };
-  const ipStats = (() => {
-    const rows = ipRows.map((r: any) => ({ name: r.name as string, category: r.category as string, rev: Number(r.net_revenue) || 0, units: Number(r.units_sold) || 0, price: Number(r.avg_price) || 0, lost: Number(r.lost_orders) || 0, opd: Number(r.avg_orders_day) || 0 }));
+  // Real price-vs-demand classification, extracted so both the Item Performance tab and
+  // Outlet Health use the exact same analysis — not two versions that can drift apart.
+  const classifyItemPerf = (rawRows: any[]) => {
+    const rows = rawRows.map((r: any) => ({ name: r.name as string, category: r.category as string, rev: Number(r.net_revenue) || 0, units: Number(r.units_sold) || 0, price: Number(r.avg_price) || 0, lost: Number(r.lost_orders) || 0, opd: Number(r.avg_orders_day) || 0 }));
     if (!rows.length) return null;
     const med = (arr: number[]) => { const a = [...arr].sort((x, y) => x - y); return a.length ? a[Math.floor(a.length / 2)] : 0; };
     const mU = med(rows.map((r) => r.units)), mP = med(rows.map((r) => r.price)), mR = med(rows.map((r) => r.rev));
@@ -1359,7 +1373,8 @@ export default function DashboardPage() {
       dead: d0 ? `${d0.name}? ${d0.units} whole units this window. It's giving "forgotten leftover" 💀` : "",
     };
     return { rows, stars, moneyLeft, suspects, sweet, dead, funny, inr };
-  })();
+  };
+  const ipStats = classifyItemPerf(ipRows);
   const downloadIpPDF = async () => {
     if (!ipStats) { alert("No data to report."); return; }
     window.scrollTo(0, 0);
@@ -1433,21 +1448,20 @@ export default function DashboardPage() {
   const fetchItemPerfContext = async () => {
     const { data: uploads } = await supabase.from("item_perf_uploads").select("*").order("created_at", { ascending: false }).limit(2);
     if (!uploads || uploads.length === 0) { setItemPerfContext({ available: false }); return; }
-    const { data: latestRows } = await supabase.from("item_perf_rows").select("name, category, net_revenue, units_sold, lost_orders").eq("upload_id", uploads[0].id);
+    const { data: latestRows } = await supabase.from("item_perf_rows").select("name, category, net_revenue, units_sold, avg_price, lost_orders, avg_orders_day").eq("upload_id", uploads[0].id);
     const rows = latestRows || [];
-    const topSellers = [...rows].filter(r => r.net_revenue != null).sort((a, b) => (b.net_revenue || 0) - (a.net_revenue || 0)).slice(0, 3);
-    const lostOrderItems = [...rows].filter(r => (r.lost_orders || 0) > 0).sort((a, b) => (b.lost_orders || 0) - (a.lost_orders || 0)).slice(0, 3);
+    const classified = classifyItemPerf(rows);
 
     let gainers: any[] = [], decliners: any[] = [];
     if (uploads.length > 1) {
       const { data: prevRows } = await supabase.from("item_perf_rows").select("name, net_revenue").eq("upload_id", uploads[1].id);
       const prevByName: Record<string, number> = {};
       (prevRows || []).forEach((r: any) => { if (r.net_revenue != null) prevByName[r.name] = r.net_revenue; });
-      const changes = rows.filter(r => r.net_revenue != null && prevByName[r.name] != null && prevByName[r.name] > 0).map(r => ({ name: r.name, cur: r.net_revenue, prev: prevByName[r.name], chg: ((r.net_revenue - prevByName[r.name]) / prevByName[r.name]) * 100 }));
-      gainers = changes.filter(c => c.chg > 15).sort((a, b) => b.chg - a.chg).slice(0, 2);
-      decliners = changes.filter(c => c.chg < -15).sort((a, b) => a.chg - b.chg).slice(0, 2);
+      const changes = rows.filter((r: any) => r.net_revenue != null && prevByName[r.name] != null && prevByName[r.name] > 0).map((r: any) => ({ name: r.name, cur: r.net_revenue, prev: prevByName[r.name], chg: ((r.net_revenue - prevByName[r.name]) / prevByName[r.name]) * 100 }));
+      gainers = changes.filter((c) => c.chg > 15).sort((a, b) => b.chg - a.chg).slice(0, 2);
+      decliners = changes.filter((c) => c.chg < -15).sort((a, b) => a.chg - b.chg).slice(0, 2);
     }
-    setItemPerfContext({ available: true, label: uploads[0].label, periodDays: uploads[0].period_days, topSellers, lostOrderItems, gainers, decliners, prevLabel: uploads[1]?.label || null });
+    setItemPerfContext({ available: !!classified, label: uploads[0].label, periodDays: uploads[0].period_days, classified, gainers, decliners, prevLabel: uploads[1]?.label || null });
   };
   useEffect(() => { if (activeTab === "owner_outlets" && itemPerfContext === null) fetchItemPerfContext(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [activeTab]);
 
@@ -1538,29 +1552,30 @@ export default function DashboardPage() {
     let trendLabel = "steady";
     if (monthTrendPct != null) trendLabel = monthTrendPct > 10 ? "growing" : monthTrendPct < -10 ? "declining" : "steady";
 
-    // Built from real, current Item Performance data (your own Prime/billing exports) —
-    // not researched or web-sourced, so it won't go stale as the menu changes over time.
+    // Built from the same real price-vs-demand classification used in the Item Performance
+    // tab (classifyItemPerf) — not a separate, simpler version. Same engine, same voice.
     const playbook: string[] = [];
-    if (itemPerf && itemPerf.available) {
-      if (itemPerf.topSellers.length) {
-        const names = itemPerf.topSellers.map((r: any) => r.name).join(", ");
-        playbook.push(`Real top sellers from Item Performance (${itemPerf.label}): ${names}. These are proven, current bestsellers — pinning one as a combo add-on on Swiggy/Zomato usually lifts order value more reliably than pushing an untested item.`);
-      }
-      if (itemPerf.lostOrderItems.length) {
-        const names = itemPerf.lostOrderItems.map((r: any) => `${r.name} (${r.lost_orders} lost orders)`).join(", ");
-        playbook.push(`${itemPerf.lostOrderItems.length > 1 ? "Items" : "An item"} with real lost-order counts in the latest data: ${names}. Lost orders usually mean the item was unavailable when someone tried to order it — worth checking prep stock or listing status for these specifically.`);
+    if (itemPerf && itemPerf.available && itemPerf.classified) {
+      const c = itemPerf.classified;
+      if (c.funny.headline) playbook.push(`🏆 Stars (${itemPerf.label}): ${c.funny.headline}`);
+      if (c.funny.sweet) playbook.push(`💰 Sweet-spot winner: ${c.funny.sweet}`);
+      if (c.funny.suspect) playbook.push(`⚠️ Priced-too-high suspect: ${c.funny.suspect}`);
+      if (c.funny.dead) playbook.push(`💀 Dead weight: ${c.funny.dead}`);
+      if (c.moneyLeft.length) {
+        const names = c.moneyLeft.slice(0, 2).map((r: any) => `${r.name} (${r.lost} lost orders)`).join(", ");
+        playbook.push(`📉 Money left on the table: ${names} — people wanted these and didn't get them. Usually a stock/availability problem, not a demand problem.`);
       }
       if (itemPerf.gainers.length) {
         const names = itemPerf.gainers.map((r: any) => `${r.name} (+${r.chg.toFixed(0)}%)`).join(", ");
-        playbook.push(`Genuinely trending up vs the previous period (${itemPerf.prevLabel} → ${itemPerf.label}): ${names}. Worth understanding what changed and whether it can be repeated elsewhere.`);
+        playbook.push(`📈 Genuinely trending up vs the previous period (${itemPerf.prevLabel} → ${itemPerf.label}): ${names}. Worth understanding what changed and whether it can be repeated.`);
       }
       if (itemPerf.decliners.length) {
         const names = itemPerf.decliners.map((r: any) => `${r.name} (${r.chg.toFixed(0)}%)`).join(", ");
-        playbook.push(`Genuinely declining vs the previous period: ${names}. Worth checking whether this is a quality dip, menu fatigue, or just seasonal before assuming it's a lost cause.`);
+        playbook.push(`📉 Genuinely declining vs the previous period: ${names}. Worth checking whether this is a quality dip, menu fatigue, or just seasonal.`);
       }
       if (playbook.length === 0) playbook.push(`Item Performance data exists (${itemPerf.label}) but nothing stood out sharply this period — no item swung hard enough in either direction to flag.`);
     } else {
-      playbook.push("No Item Performance data uploaded yet — once a Prime/billing export is uploaded under the Item Performance tab, this section will show real top sellers, lost-order items, and trend shifts instead of this note.");
+      playbook.push("No Item Performance data uploaded yet — once a Prime/billing export is uploaded under the Item Performance tab, this section will show real Stars, Suspects, and Dead-weight items instead of this note.");
     }
     // Structural points — about how the business is set up, not which items are trending,
     // so these stay valid even as the specific bestsellers change over time.
@@ -4606,6 +4621,11 @@ else await fetchOutletReportsByDate(outletEntryDate);
               <select value={ipSel} onChange={(e) => { setIpSel(e.target.value); fetchIpRows(e.target.value); }} className="bg-black border border-zinc-800 text-white px-3 py-2 focus:outline-none focus:border-yellow-400 text-sm">
                 {ipUploads.length === 0 ? <option value="">No uploads yet</option> : ipUploads.map((u) => <option key={u.id} value={u.id}>{u.label} · {new Date(u.created_at).toLocaleDateString("en-IN")} · {u.row_count} items</option>)}
               </select>
+              {ipSel && (
+                <button onClick={deleteIpUpload} disabled={ipDeleteBusy} className="text-[10px] font-mono text-red-400 uppercase tracking-widest border border-red-900 px-3 py-2 hover:bg-red-950 disabled:opacity-50">
+                  {ipDeleteBusy ? "…" : "🗑 Clear data"}
+                </button>
+              )}
             </div>
             <div className="flex gap-2 mb-6">
               <button onClick={() => setIpView("insights")} className={`px-4 py-2 text-sm font-semibold transition-colors ${ipView === "insights" ? "bg-yellow-400 text-black" : "bg-zinc-900 text-zinc-400 hover:text-white"}`}>Insights</button>
