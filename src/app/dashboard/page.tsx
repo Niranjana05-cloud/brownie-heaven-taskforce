@@ -1708,7 +1708,7 @@ export default function DashboardPage() {
     setQuickCompareBusy(false);
   };
 
-  const downloadOutletHealthPDF = async () => {
+    const downloadOutletHealthPDF = async () => {
     const outletName = OUTLET_NAMES[outletHealthSel] || outletHealthSel;
     if (!outletDeepDive) { alert("No data for this outlet yet."); return; }
     setOutletHealthPdfBusy(true);
@@ -1717,6 +1717,33 @@ export default function DashboardPage() {
       const cmp = await fetchPeriodComparison();
       const C = { bg: "#FAF3E7", card: "#FFFDF8", ink: "#3E2415", soft: "#8A6A4A", line: "#EADBC2", green: "#2E7D32", red: "#C62828", amber: "#C8901E" };
       const inr = (n: number) => "₹" + Math.round(n).toLocaleString("en-IN");
+      const CH_COLS = ["#FACC15", "#FB923C", "#EF4444"];
+
+      // Donut for a Shop/Swiggy/Zomato split — same segmented-circle technique used
+      // for the on-screen channel donuts, rendered as raw SVG for the PDF capture.
+      const donut = (shop: number, swiggy: number, zomato: number, size = 108) => {
+        const total = shop + swiggy + zomato || 1;
+        const R = size * 0.34, CX = size / 2, CY = size / 2, SW = size * 0.17, CIRC = 2 * Math.PI * R;
+        let acc = 0;
+        const segs = [shop, swiggy, zomato].map((v, i) => {
+          const frac = v / total, len = frac * CIRC, off = -acc * CIRC;
+          acc += frac;
+          return { len, gap: CIRC - len, off, col: CH_COLS[i] };
+        });
+        const circles = segs.map((s) => `<circle cx="${CX}" cy="${CY}" r="${R}" fill="none" stroke="${s.col}" stroke-width="${SW}" stroke-dasharray="${s.len.toFixed(2)} ${s.gap.toFixed(2)}" stroke-dashoffset="${s.off.toFixed(2)}" transform="rotate(-90 ${CX} ${CY})"></circle>`).join("");
+        return `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}"><circle cx="${CX}" cy="${CY}" r="${R}" fill="none" stroke="${C.line}" stroke-width="${SW}"></circle>${circles}</svg>`;
+      };
+      const donutLegend = (shop: number, swiggy: number, zomato: number) => {
+        const total = shop + swiggy + zomato || 1;
+        const rows = [["Shop", shop], ["Swiggy", swiggy], ["Zomato", zomato]] as [string, number][];
+        return rows.map(([name, v], i) => `<div style="display:flex;align-items:center;gap:5px;font-size:9px;color:${C.soft};margin-top:2px"><span style="width:8px;height:8px;border-radius:2px;background:${CH_COLS[i]};display:inline-block"></span>${name} ${((v / total) * 100).toFixed(0)}%</div>`).join("");
+      };
+      const donutCard = (title: string, shop: number, swiggy: number, zomato: number) => `
+        <div style="text-align:center">
+          <div style="font-size:10px;font-weight:700;color:${C.ink};margin-bottom:6px">${title}</div>
+          ${donut(shop, swiggy, zomato)}
+          <div style="margin-top:6px;text-align:left;display:inline-block">${donutLegend(shop, swiggy, zomato)}</div>
+        </div>`;
 
       const chRow = (name: string, cur: number, prev: number | undefined, pct: number | null) => {
         const col = pct == null ? C.soft : pct >= 0 ? C.green : C.red;
@@ -1724,7 +1751,6 @@ export default function DashboardPage() {
         return `<tr><td style="padding:7px 10px;border-bottom:1px solid ${C.line};font-size:12px;font-weight:600">${name}</td><td style="padding:7px 10px;border-bottom:1px solid ${C.line};text-align:right;font-size:12px">${inr(cur)}</td><td style="padding:7px 10px;border-bottom:1px solid ${C.line};text-align:right;font-size:12px;color:${C.soft}">${prev != null ? inr(prev) : "—"}</td><td style="padding:7px 10px;border-bottom:1px solid ${C.line};text-align:right;font-size:12px;font-weight:700;color:${col}">${pct == null ? "—" : arrow + " " + Math.abs(pct).toFixed(1) + "%"}</td></tr>`;
       };
       const channelRows = chRow("Shop", dd.thisM.shop, dd.lastM?.shop, dd.shopChg) + chRow("Swiggy", dd.thisM.swiggy, dd.lastM?.swiggy, dd.swiggyChg) + chRow("Zomato", dd.thisM.zomato, dd.lastM?.zomato, dd.zomatoChg);
-
       const chartW = 700, chartH = 220, padL = 60, padR = 20, padT = 20, padB = 34;
       const plotW = chartW - padL - padR, plotH = chartH - padT - padB;
       const maxV = Math.max(...dd.monthTotals.map((x: any) => x.total), 1);
@@ -1769,6 +1795,16 @@ export default function DashboardPage() {
         </div>`;
       }).join("");
 
+           const monthDonuts = `<div style="background:${C.card};border:1px solid ${C.line};border-radius:12px;padding:16px 18px;margin-bottom:18px;display:flex;justify-content:space-around;flex-wrap:wrap;gap:12px;page-break-inside:avoid">
+        ${donutCard("This month", dd.thisM.shop, dd.thisM.swiggy, dd.thisM.zomato)}
+        ${dd.lastM ? donutCard("Last month", dd.lastM.shop, dd.lastM.swiggy, dd.lastM.zomato) : ""}
+      </div>`;
+
+      const periodDonuts = cmp ? `<div style="background:${C.card};border:1px solid ${C.line};border-radius:12px;padding:16px 18px;margin-bottom:12px;display:flex;justify-content:space-around;flex-wrap:wrap;gap:12px;page-break-inside:avoid">
+        ${donutCard(`Period A (${compareAFrom} – ${compareATo})`, cmp.a.shop, cmp.a.swiggy, cmp.a.zomato)}
+        ${donutCard(`Period B (${compareBFrom} – ${compareBTo})`, cmp.b.shop, cmp.b.swiggy, cmp.b.zomato)}
+      </div>` : "";
+
       const html = `<div style="width:794px;background:${C.bg};font-family:'Segoe UI',Arial,sans-serif;color:${C.ink};padding:34px">
         <div style="font-size:22px;font-weight:900">Brownie Heaven — Outlet Health: ${outletName}</div>
         <div style="font-size:11px;color:${C.soft};margin-bottom:16px">Since June launch · generated ${new Date().toISOString().split("T")[0]}</div>
@@ -1777,6 +1813,7 @@ export default function DashboardPage() {
           <div style="font-size:28px;font-weight:900">${inr(dd.thisMonthTotal)}</div>
           <div style="font-size:13px;color:${dd.health === "Strong" ? C.green : dd.health === "Struggling" ? C.red : C.amber};font-weight:700">${dd.health}${dd.monthPct > 0 ? ` · ${dd.monthPct.toFixed(0)}% of target` : ""}${dd.hitRate != null ? ` · hit target ${dd.daysHit}/${dd.daysWithTarget} days (${dd.hitRate.toFixed(0)}%)` : ""}</div>
         </div>
+        ${monthDonuts}
         <div style="background:${C.card};border:2px solid ${C.amber};border-radius:12px;padding:18px;margin-bottom:18px;page-break-inside:avoid">
           <div style="font-size:15px;font-weight:800;margin-bottom:8px;color:${C.amber}">📈 Business Insights &amp; What To Do About It</div>
           <ul style="margin:0;padding-left:18px">${insightRows}</ul>
@@ -1795,7 +1832,8 @@ export default function DashboardPage() {
           <thead><tr style="background:${C.ink}"><th style="padding:7px 10px;text-align:left;color:#FFF6E5;font-size:9px">CHANNEL</th><th style="padding:7px 10px;text-align:right;color:#FFF6E5;font-size:9px">THIS MONTH</th><th style="padding:7px 10px;text-align:right;color:#FFF6E5;font-size:9px">LAST MONTH</th><th style="padding:7px 10px;text-align:right;color:#FFF6E5;font-size:9px">CHANGE</th></tr></thead>
           <tbody>${channelRows}</tbody>
         </table>
-        ${cmp ? `<div style="font-size:14px;font-weight:800;margin-bottom:8px">Period comparison — ${compareAFrom} to ${compareATo} vs ${compareBFrom} to ${compareBTo}</div>
+          ${cmp ? `<div style="font-size:14px;font-weight:800;margin-bottom:8px">Period comparison — ${compareAFrom} to ${compareATo} vs ${compareBFrom} to ${compareBTo}</div>
+        ${periodDonuts}
         <table style="width:100%;border-collapse:collapse;background:${C.card};border:1px solid ${C.line};border-radius:10px;overflow:hidden;margin-bottom:18px;page-break-inside:avoid">
           <thead><tr style="background:${C.ink}"><th style="padding:7px 10px;text-align:left;color:#FFF6E5;font-size:9px">CHANNEL</th><th style="padding:7px 10px;text-align:right;color:#FFF6E5;font-size:9px">PERIOD A</th><th style="padding:7px 10px;text-align:right;color:#FFF6E5;font-size:9px">PERIOD B</th><th style="padding:7px 10px;text-align:right;color:#FFF6E5;font-size:9px">CHANGE</th></tr></thead>
           <tbody>
@@ -3804,7 +3842,7 @@ else await fetchOutletReportsByDate(outletEntryDate);
         </button>
       </div>
     </div>
-        <p className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-4">Pick an outlet · full breakdown and verdict below, PDF/Excel available for sharing</p>
+       <p className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-4">Pick an outlet, optionally compare two periods · full breakdown, trend &amp; verdict inside the download</p>
     <div className="mb-4">
       <div className="flex flex-wrap gap-2">
         {OUTLETS.map((o) => { const on = outletHealthSel === o; return (
@@ -3812,58 +3850,9 @@ else await fetchOutletReportsByDate(outletEntryDate);
         ); })}
       </div>
     </div>
+    <div className="mb-2">    
 
-    {outletDeepDiveLoading ? (
-      <div className="mb-6 text-sm text-zinc-500 font-mono">Loading {OUTLET_NAMES[outletHealthSel] || outletHealthSel}…</div>
-    ) : outletDeepDive ? (
-      <div className="mb-6 bg-[#131316] border border-zinc-800 p-5">
-        <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
-          <div>
-            <p className="text-sm font-bold uppercase tracking-widest">{OUTLET_NAMES[outletHealthSel] || outletHealthSel} — this month</p>
-            <p className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mt-0.5">
-              {outletDeepDive.health} · {outletDeepDive.trendLabel}{outletDeepDive.monthTrendPct != null ? ` (${outletDeepDive.monthTrendPct >= 0 ? "+" : ""}${outletDeepDive.monthTrendPct.toFixed(1)}% vs last month)` : ""}
-            </p>
-          </div>
-          <span className={`font-mono text-[10px] uppercase tracking-widest px-2 py-1 ${
-            outletDeepDive.health === "Strong" ? "bg-green-400/10 text-green-400" :
-            outletDeepDive.health === "On track" ? "bg-yellow-400/10 text-yellow-400" :
-            outletDeepDive.health === "Needs attention" ? "bg-orange-400/10 text-orange-400" :
-            outletDeepDive.health === "Struggling" ? "bg-red-500/10 text-red-400" : "bg-zinc-800 text-zinc-500"
-          }`}>{outletDeepDive.health}</span>
-        </div>
-
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
-          {[
-            { label: "This month", value: `₹${Math.round(outletDeepDive.thisMonthTotal).toLocaleString("en-IN")}` },
-            { label: "Target", value: outletDeepDive.monthTarget > 0 ? `₹${Math.round(outletDeepDive.monthTarget).toLocaleString("en-IN")}` : "—", sub: outletDeepDive.monthTarget > 0 ? `${outletDeepDive.monthPct.toFixed(0)}% hit` : undefined },
-            { label: "Daily target hit-rate", value: outletDeepDive.hitRate != null ? `${outletDeepDive.hitRate.toFixed(0)}%` : "—", sub: outletDeepDive.hitRate != null ? `${outletDeepDive.daysHit}/${outletDeepDive.daysWithTarget} days` : undefined },
-            { label: "Online share", value: `${outletDeepDive.onlineShare.toFixed(0)}%`, sub: `Shop ${outletDeepDive.shopShare.toFixed(0)}%` },
-          ].map((k) => (
-            <div key={k.label} className="bg-black/30 px-3 py-2">
-              <p className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest">{k.label}</p>
-              <p className="text-sm mt-1 text-white">{k.value}</p>
-              {k.sub && <p className="text-[10px] font-mono text-zinc-600 mt-0.5">{k.sub}</p>}
-            </div>
-          ))}
-        </div>
-
-        <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mb-2">This outlet, this month</p>
-        <div className="space-y-2 mb-5">
-          {outletDeepDive.insights.map((s: string, i: number) => (
-            <p key={i} className="text-sm text-zinc-300 leading-relaxed border-l-2 border-zinc-700 pl-3">{s}</p>
-          ))}
-        </div>
-
-        <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mb-2">Brownie Heaven playbook</p>
-        <div className="space-y-2">
-          {outletDeepDive.playbook.map((s: string, i: number) => (
-            <p key={i} className="text-sm text-zinc-300 leading-relaxed border-l-2 border-yellow-400/40 pl-3">{s}</p>
-          ))}
-        </div>
-      </div>
-    ) : null}
-
-    <div className="mb-2">
+    
       <label className="text-[10px] font-mono text-zinc-500 uppercase block mb-2">Compare two periods (optional — leave as "none" to skip)</label>
       <div className="flex flex-wrap items-center gap-4">
         <div className="flex items-center gap-2">
