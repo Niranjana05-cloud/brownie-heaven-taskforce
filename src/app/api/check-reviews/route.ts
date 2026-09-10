@@ -31,6 +31,7 @@ export async function GET() {
   const skipReasons: Record<string, number> = {};
   const sampleSkips: any[] = [];
   let candidateCount = 0;
+  let timedOut = false;
 
   try {
     await client.connect();
@@ -52,7 +53,15 @@ export async function GET() {
       );
       candidateCount = (uids || []).length;
 
+      // Hard time budget, not just a candidate-count cap — some emails take longer
+      // to download than others, so this adapts instead of guessing a fixed batch
+      // size. Stops with plenty of margin before Vercel's own 60s limit kicks in
+      // and returns its own (non-JSON) timeout page instead of our response.
+      const startedAt = Date.now();
+      const TIME_BUDGET_MS = 45000;
+
       for (const uid of (uids || []) as number[]) {
+        if (Date.now() - startedAt > TIME_BUDGET_MS) { timedOut = true; break; }
         const raw = await client.download(uid.toString(), undefined, { uid: true });
         if (!raw || !raw.content) {
           const reason = "download returned no content";
@@ -118,7 +127,16 @@ export async function GET() {
 
     await client.logout();
 
-    return NextResponse.json({ success: true, inserted, skipped, candidateCount, skipReasons, sampleSkips });
+    return NextResponse.json({
+      success: true,
+      inserted,
+      skipped,
+      candidateCount,
+      skipReasons,
+      sampleSkips,
+      timedOut,
+      remaining: timedOut ? candidateCount - inserted.length - skipped.length : 0,
+    });
   } catch (err: any) {
     return NextResponse.json({ success: false, error: err.message || String(err) }, { status: 500 });
   }
