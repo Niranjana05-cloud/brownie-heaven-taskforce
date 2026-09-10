@@ -79,7 +79,14 @@ export async function GET() {
           const reason = "could not parse";
           skipReasons[reason] = (skipReasons[reason] || 0) + 1;
           skipped.push({ uid, reason, subject });
-          if (sampleSkips.length < 5) sampleSkips.push({ reason, subject, textPreview: plainText.slice(0, 300) });
+          if (sampleSkips.length < 3) {
+            // Show the section around "Read review" specifically — that's the exact
+            // zone the parser regex needs to match, not just the start of the email.
+            const anchor = plainText.search(/Read review/i);
+            const start = anchor >= 0 ? Math.max(0, anchor - 20) : 0;
+            const textPreview = plainText.slice(start, start + 1200);
+            sampleSkips.push({ reason, subject, foundReadReview: anchor >= 0, textPreview });
+          }
           continue;
         }
 
