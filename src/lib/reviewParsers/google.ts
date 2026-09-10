@@ -34,7 +34,7 @@ export function parseGoogleReview(subject: string, plainTextBody: string): Parse
   //   (blank line)
   //   Reply to review
   const bodyMatch = plainTextBody.match(
-    /Read review\s*\r?\n<[\s\S]+?>\r?\n\r?\n(.+?)\r?\n\r?\n([\s\S]+?)\r?\n\r?\nReply to review/i
+    /Read review\s+<[\s\S]+?>\r?\n\r?\n(.+?)\r?\n\r?\n([\s\S]+?)\r?\n\r?\nReply to review/i
   );
   if (!bodyMatch) return null;
 
