@@ -28,28 +28,36 @@ export async function GET() {
 
   const inserted: any[] = [];
   const skipped: any[] = [];
+  const skipReasons: Record<string, number> = {};
+  const sampleSkips: any[] = [];
+  let candidateCount = 0;
 
   try {
     await client.connect();
     const lock = await client.getMailboxLock("INBOX");
 
     try {
-      // Look at ALL emails from Google's review notification sender that we haven't
-      // processed yet — using our own private marker (a custom IMAP keyword), not
-      // read/unread status. This means an email someone already opened (e.g. during
-      // testing) still gets picked up, since "read" and "processed by us" are
-      // different things. Must pass { uid: true } here, or the numbers returned are
-      // sequence numbers, not UIDs — and everything downstream expects UIDs.
+      // Look at emails from Google's review sender whose SUBJECT already looks like
+      // a review notification ("X left a review for Y") — narrowing by subject too,
+      // not just sender, cuts the candidate list drastically (Google Business Profile
+      // also sends weekly summaries, Q&A alerts, etc. from the same address that
+      // aren't reviews at all, and downloading every one of those was what made this
+      // slow). We still track "processed" via our own private keyword, not
+      // read/unread, so an already-opened email is still picked up. Must pass
+      // { uid: true } here, or the numbers returned are sequence numbers, not UIDs.
       const PROCESSED_FLAG = "TASKFORCEPROCESSED";
       const uids = await client.search(
-        { from: "businessprofile-noreply@google.com", unKeyword: PROCESSED_FLAG } as any,
+        { from: "businessprofile-noreply@google.com", subject: "left a review for", unKeyword: PROCESSED_FLAG } as any,
         { uid: true }
       );
+      candidateCount = (uids || []).length;
 
       for (const uid of (uids || []) as number[]) {
         const raw = await client.download(uid.toString(), undefined, { uid: true });
         if (!raw || !raw.content) {
-          skipped.push({ uid, reason: "download returned no content" });
+          const reason = "download returned no content";
+          skipReasons[reason] = (skipReasons[reason] || 0) + 1;
+          skipped.push({ uid, reason });
           continue;
         }
         const parsedEmail = await simpleParser(raw.content);
@@ -59,13 +67,19 @@ export async function GET() {
 
         const review = parseGoogleReview(subject, plainText);
         if (!review) {
-          skipped.push({ uid, reason: "could not parse", subject });
+          const reason = "could not parse";
+          skipReasons[reason] = (skipReasons[reason] || 0) + 1;
+          skipped.push({ uid, reason, subject });
+          if (sampleSkips.length < 5) sampleSkips.push({ reason, subject, textPreview: plainText.slice(0, 300) });
           continue;
         }
 
         const outletId = matchReviewOutletId(review.outletNameRaw);
         if (!outletId) {
-          skipped.push({ uid, reason: "outlet not matched", outletNameRaw: review.outletNameRaw });
+          const reason = "outlet not matched";
+          skipReasons[reason] = (skipReasons[reason] || 0) + 1;
+          skipped.push({ uid, reason, outletNameRaw: review.outletNameRaw });
+          if (sampleSkips.length < 5) sampleSkips.push({ reason, outletNameRaw: review.outletNameRaw, subject });
           continue;
         }
 
@@ -85,8 +99,11 @@ export async function GET() {
         });
 
         if (error) {
-          skipped.push({ uid, reason: "db insert failed", error: error.message });
-          continue;
+          const reason = "db insert failed";
+          skipReasons[reason] = (skipReasons[reason] || 0) + 1;
+          skipped.push({ uid, reason, error: error.message });
+          if (sampleSkips.length < 5) sampleSkips.push({ reason, error: error.message });
+          continue; // don't mark as processed — worth retrying once the DB issue is fixed
         }
 
         inserted.push({ outletId, rating: review.rating, reviewer: review.reviewerName });
@@ -101,7 +118,7 @@ export async function GET() {
 
     await client.logout();
 
-    return NextResponse.json({ success: true, inserted, skipped });
+    return NextResponse.json({ success: true, inserted, skipped, candidateCount, skipReasons, sampleSkips });
   } catch (err: any) {
     return NextResponse.json({ success: false, error: err.message || String(err) }, { status: 500 });
   }
