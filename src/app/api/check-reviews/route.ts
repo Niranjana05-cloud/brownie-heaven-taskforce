@@ -34,11 +34,15 @@ export async function GET() {
     const lock = await client.getMailboxLock("INBOX");
 
     try {
-      // Only look at unread emails from Google's review notification sender
-      // (must pass { uid: true } here, or the numbers returned are sequence
-      // numbers, not UIDs — and everything downstream expects UIDs)
+      // Look at ALL emails from Google's review notification sender that we haven't
+      // processed yet — using our own private marker (a custom IMAP keyword), not
+      // read/unread status. This means an email someone already opened (e.g. during
+      // testing) still gets picked up, since "read" and "processed by us" are
+      // different things. Must pass { uid: true } here, or the numbers returned are
+      // sequence numbers, not UIDs — and everything downstream expects UIDs.
+      const PROCESSED_FLAG = "TASKFORCEPROCESSED";
       const uids = await client.search(
-        { seen: false, from: "businessprofile-noreply@google.com" },
+        { from: "businessprofile-noreply@google.com", unKeyword: PROCESSED_FLAG } as any,
         { uid: true }
       );
 
@@ -66,13 +70,13 @@ export async function GET() {
         }
 
         const staffId = staffIdForReviewOutlet(outletId);
-        const today = new Date().toISOString().split("T")[0];
+        const emailDate = parsedEmail.date ? parsedEmail.date.toISOString().split("T")[0] : new Date().toISOString().split("T")[0];
         const note = `${review.reviewerName}: ${review.reviewText}`.trim();
 
         const { error } = await supabase.from("outlet_reviews").insert({
           outlet_id: outletId,
           staff_id: staffId,
-          report_date: today,
+          report_date: emailDate,
           platform: "Google",
           rating: review.rating,
           valid_complaint: false,
@@ -87,8 +91,9 @@ export async function GET() {
 
         inserted.push({ outletId, rating: review.rating, reviewer: review.reviewerName });
 
-        // Mark as read so we don't process it again next time
-        await client.messageFlagsAdd(uid.toString(), ["\\Seen"], { uid: true });
+        // Mark as processed with our own private flag — leaves the email's actual
+        // read/unread status untouched either way.
+        await client.messageFlagsAdd(uid.toString(), [PROCESSED_FLAG], { uid: true });
       }
     } finally {
       lock.release();
