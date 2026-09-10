@@ -4391,11 +4391,31 @@ else await fetchOutletReportsByDate(outletEntryDate);
                 {autoReviewsResult.success ? (
                   <>
                     <p className="font-semibold mb-1">
-                      ✅ Found {autoReviewsResult.inserted.length} new review{autoReviewsResult.inserted.length === 1 ? "" : "s"}
+                      ✅ Checked {autoReviewsResult.candidateCount ?? autoReviewsResult.inserted.length + autoReviewsResult.skipped.length} review-shaped emails — found {autoReviewsResult.inserted.length} new review{autoReviewsResult.inserted.length === 1 ? "" : "s"}
                       {autoReviewsResult.skipped.length > 0 ? `, skipped ${autoReviewsResult.skipped.length}` : ""}
                     </p>
-                    {autoReviewsResult.skipped.length > 0 && (
-                      <p className="text-xs text-zinc-400 mt-1">Skipped items usually mean the outlet name in the email didn't match, or it wasn't a review email — safe to ignore unless it happens a lot.</p>
+                    {autoReviewsResult.skipReasons && Object.keys(autoReviewsResult.skipReasons).length > 0 && (
+                      <ul className="text-xs text-zinc-400 mt-2 space-y-0.5">
+                        {Object.entries(autoReviewsResult.skipReasons).map(([reason, count]: any) => (
+                          <li key={reason}>• {count} skipped — {reason}</li>
+                        ))}
+                      </ul>
+                    )}
+                    {autoReviewsResult.sampleSkips && autoReviewsResult.sampleSkips.length > 0 && (
+                      <details className="mt-2">
+                        <summary className="text-xs text-zinc-500 cursor-pointer hover:text-zinc-300">Show example skipped emails</summary>
+                        <div className="mt-2 space-y-2">
+                          {autoReviewsResult.sampleSkips.map((s: any, i: number) => (
+                            <div key={i} className="bg-black/40 p-2 text-[11px] text-zinc-400">
+                              <p className="text-zinc-300">{s.reason}</p>
+                              {s.subject && <p>Subject: {s.subject}</p>}
+                              {s.outletNameRaw && <p>Outlet text found: "{s.outletNameRaw}"</p>}
+                              {s.textPreview && <p className="text-zinc-500 mt-1">{s.textPreview}</p>}
+                              {s.error && <p className="text-red-400">{s.error}</p>}
+                            </div>
+                          ))}
+                        </div>
+                      </details>
                     )}
                   </>
                 ) : (
