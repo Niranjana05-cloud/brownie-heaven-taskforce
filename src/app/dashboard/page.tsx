@@ -4426,7 +4426,7 @@ else await fetchOutletReportsByDate(outletEntryDate);
                               <p className="text-zinc-300">{s.reason}</p>
                               {s.subject && <p>Subject: {s.subject}</p>}
                               {s.outletNameRaw && <p>Outlet text found: "{s.outletNameRaw}"</p>}
-                              {s.textPreview && <p className="text-zinc-500 mt-1">{s.textPreview}</p>}
+                              {s.textPreview && <pre className="text-zinc-500 mt-1 whitespace-pre-wrap font-mono text-[10px]">{s.textPreview}</pre>}
                               {s.error && <p className="text-red-400">{s.error}</p>}
                             </div>
                           ))}
