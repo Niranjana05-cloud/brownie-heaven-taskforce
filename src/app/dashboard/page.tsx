@@ -784,7 +784,20 @@ export default function DashboardPage() {
     const timeoutId = setTimeout(() => controller.abort(), 65000); // safety cap
     try {
       const res = await fetch("/api/check-reviews", { signal: controller.signal });
-      const json = await res.json();
+      const rawText = await res.text();
+      let json: any;
+      try {
+        json = JSON.parse(rawText);
+      } catch {
+        // The server returned something that isn't JSON — usually the platform's own
+        // timeout page, not our route's response. Show a plain message instead of a
+        // confusing "not valid JSON" parse error.
+        setAutoReviewsResult({
+          success: false,
+          error: `The check took too long and the server cut it off before finishing (this can happen with a very large backlog). Click Check Now again — it picks up where it left off, since already-checked emails are remembered.`,
+        });
+        return;
+      }
       setAutoReviewsResult(json);
       fetchAutoReviews();
     } catch (err: any) {
@@ -4394,6 +4407,9 @@ else await fetchOutletReportsByDate(outletEntryDate);
                       ✅ Checked {autoReviewsResult.candidateCount ?? autoReviewsResult.inserted.length + autoReviewsResult.skipped.length} review-shaped emails — found {autoReviewsResult.inserted.length} new review{autoReviewsResult.inserted.length === 1 ? "" : "s"}
                       {autoReviewsResult.skipped.length > 0 ? `, skipped ${autoReviewsResult.skipped.length}` : ""}
                     </p>
+                    {autoReviewsResult.timedOut && (
+                      <p className="text-xs text-yellow-400 mt-1">⏱️ Ran out of time before finishing this batch — roughly {autoReviewsResult.remaining} still unchecked. Click "Check Now" again to continue; it picks up right where it left off.</p>
+                    )}
                     {autoReviewsResult.skipReasons && Object.keys(autoReviewsResult.skipReasons).length > 0 && (
                       <ul className="text-xs text-zinc-400 mt-2 space-y-0.5">
                         {Object.entries(autoReviewsResult.skipReasons).map(([reason, count]: any) => (
