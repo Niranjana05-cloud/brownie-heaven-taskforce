@@ -719,6 +719,7 @@ export default function DashboardPage() {
   const [anFrom, setAnFrom] = useState<string>(() => { const d = new Date(); d.setDate(d.getDate() - 29); return d.toISOString().slice(0, 10); });
   const [anTo, setAnTo] = useState<string>(() => new Date().toISOString().slice(0, 10));
   const [anRows, setAnRows] = useState<any[]>([]);
+  const [anCard, setAnCard] = useState<string>("revenue_received");
   const [anLoading, setAnLoading] = useState(false);
   const [outletHealthData, setOutletHealthData] = useState<any[]>([]);
   const [outletHealthLoading, setOutletHealthLoading] = useState(false);
@@ -1476,7 +1477,7 @@ export default function DashboardPage() {
     (async () => {
       setAnLoading(true);
       const { data } = await supabase.from("outlet_reports")
-        .select("shop_sales_count,shop_sales_value,swiggy_sales_count,swiggy_sales_value,zomato_sales_count,zomato_sales_value,report_date")
+        .select("outlet_id,shop_sales_count,shop_sales_value,swiggy_sales_count,swiggy_sales_value,zomato_sales_count,zomato_sales_value,discount_given,report_date")
         .gte("report_date", anFrom).lte("report_date", anTo);
       if (cancelled) return;
       setAnRows(data || []);
@@ -1898,14 +1899,20 @@ export default function DashboardPage() {
 
   const anAgg = (() => {
     const ch = { shop: { c: 0, v: 0 }, swiggy: { c: 0, v: 0 }, zomato: { c: 0, v: 0 } };
+    const byOutlet: Record<string, number> = {};
+    let discountTotal = 0;
     anRows.forEach((r: any) => {
       ch.shop.c += Number(r.shop_sales_count) || 0; ch.shop.v += Number(r.shop_sales_value) || 0;
       ch.swiggy.c += Number(r.swiggy_sales_count) || 0; ch.swiggy.v += Number(r.swiggy_sales_value) || 0;
       ch.zomato.c += Number(r.zomato_sales_count) || 0; ch.zomato.v += Number(r.zomato_sales_value) || 0;
+      discountTotal += Number(r.discount_given) || 0;
+      const rowTotal = (Number(r.shop_sales_value) || 0) + (Number(r.swiggy_sales_value) || 0) + (Number(r.zomato_sales_value) || 0);
+      if (r.outlet_id) byOutlet[r.outlet_id] = (byOutlet[r.outlet_id] || 0) + rowTotal;
     });
     const totalV = ch.shop.v + ch.swiggy.v + ch.zomato.v;
     const totalC = ch.shop.c + ch.swiggy.c + ch.zomato.c;
-    return { ch, totalV, totalC };
+    const outletRanked = Object.entries(byOutlet).map(([oid, v]) => ({ oid, name: OUTLET_NAMES[oid] || oid, v })).sort((a, b) => b.v - a.v);
+    return { ch, totalV, totalC, discountTotal, outletRanked };
   })();
   const anINR = (v: number) => "₹" + Math.round(v || 0).toLocaleString("en-IN");
   const anPct = (part: number, whole: number) => (whole > 0 ? Math.round((part / whole) * 100) : 0);
@@ -5127,8 +5134,46 @@ else await fetchOutletReportsByDate(outletEntryDate);
                         <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mt-1">Sales performance · channel mix</p>
             </div>
 
+            {/* Atlas-style overview grid — click a square to jump to its detail below */}
+            <div className="mb-10 space-y-6">
+              {[
+                { heading: "💰 Revenue", cards: [
+                  { id: "an-revenue", title: "Revenue Received", value: anINR(anAgg.totalV), sub: `${anRows.length} report-days` },
+                  { id: "an-channel", title: "Revenue by Channel", value: `${anPct(anAgg.ch.swiggy.v + anAgg.ch.zomato.v, anAgg.totalV)}% online`, sub: "Shop / Swiggy / Zomato split" },
+                  { id: "an-outlet", title: "Revenue by Outlet", value: anAgg.outletRanked[0] ? anAgg.outletRanked[0].name : "—", sub: anAgg.outletRanked[0] ? `top outlet · ${anINR(anAgg.outletRanked[0].v)}` : "no data" },
+                ]},
+                { heading: "🛒 Orders", cards: [
+                  { id: "an-revenue", title: "Orders Received", value: anAgg.totalC.toLocaleString("en-IN"), sub: "across all channels" },
+                  { id: "an-channel", title: "Average Order Value", value: anINR(anAgg.totalC ? anAgg.totalV / anAgg.totalC : 0), sub: "blended, all channels" },
+                  { id: "an-channel", title: "Orders by Channel", value: `${anAgg.ch.shop.c}/${anAgg.ch.swiggy.c}/${anAgg.ch.zomato.c}`, sub: "Shop / Swiggy / Zomato" },
+                ]},
+                { heading: "⚙️ Operations", cards: [
+                  { id: "an-discount", title: "Discounts Given", value: anINR(anAgg.discountTotal), sub: `${anPct(anAgg.discountTotal, anAgg.totalV)}% of revenue` },
+                  { id: "an-funnel", title: "Order Completion Funnel", value: "🔒 Needs Atlas export", sub: "Pre-Ack / Post-Ack cancellations", locked: true },
+                  { id: "an-lost", title: "Lost Orders", value: "🔒 Needs Atlas export", sub: "not visible to staff entry", locked: true },
+                ]},
+              ].map((section) => (
+                <div key={section.heading}>
+                  <p className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-2">{section.heading}</p>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    {section.cards.map((c, i) => (
+                      <button
+                        key={c.title + i}
+                        onClick={() => { setAnCard(c.id); document.getElementById(c.id)?.scrollIntoView({ behavior: "smooth", block: "start" }); }}
+                        className={`text-left bg-[#131316] border p-4 transition-colors ${c.locked ? "border-zinc-800 opacity-60" : "border-zinc-800 hover:border-yellow-400"}`}
+                      >
+                        <p className="text-[9px] font-mono text-zinc-500 uppercase tracking-widest mb-1.5">{c.title}</p>
+                        <p className={`font-black tracking-tight mb-1 ${c.locked ? "text-sm text-zinc-500" : "text-lg"}`}>{c.value}</p>
+                        <p className="text-[10px] text-zinc-600">{c.sub}</p>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+
             {/* Sales performance (date range) */}
-            <div className="mb-10">
+            <div id="an-revenue" className="mb-10">
               <div className="flex flex-wrap items-end gap-3 mb-6">
                 <div>
                   <label className="block text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-1">From</label>
@@ -5160,7 +5205,7 @@ else await fetchOutletReportsByDate(outletEntryDate);
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div id="an-channel" className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 {([["shop", "Shop / Store", "text-blue-400", "bg-blue-400"], ["swiggy", "Swiggy", "text-orange-400", "bg-orange-400"], ["zomato", "Zomato", "text-red-400", "bg-red-400"]] as const).map(([key, label, tc, bc]) => {
                   const c = anAgg.ch[key];
                   const share = anPct(c.v, anAgg.totalV);
@@ -5180,6 +5225,56 @@ else await fetchOutletReportsByDate(outletEntryDate);
                     </div>
                   );
                 })}
+              </div>
+            </div>
+
+            <div id="an-outlet" className="mb-10">
+              <p className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-4">Revenue by Outlet — this range, ranked</p>
+              {anAgg.outletRanked.length === 0 ? (
+                <p className="text-sm text-zinc-600">No data for this range.</p>
+              ) : (
+                <div className="space-y-2">
+                  {anAgg.outletRanked.map((o, i) => {
+                    const share = anPct(o.v, anAgg.totalV);
+                    return (
+                      <div key={o.oid} className="flex items-center gap-3 bg-[#131316] border border-zinc-800 p-3">
+                        <span className="text-xs font-mono text-zinc-600 w-5">{i + 1}</span>
+                        <span className="text-sm flex-1">{o.name}</span>
+                        <div className="h-2 bg-zinc-800 border border-zinc-700 w-32"><div className="h-full bg-yellow-400" style={{ width: `${share}%` }} /></div>
+                        <span className="text-xs font-mono text-zinc-500 w-12 text-right">{share}%</span>
+                        <span className="text-sm font-mono w-28 text-right">{anINR(o.v)}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            <div id="an-discount" className="mb-10">
+              <p className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-4">Discounts Given — this range</p>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 max-w-2xl">
+                <div className="bg-[#131316] border border-zinc-800 p-5">
+                  <p className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-2">Total Discounts</p>
+                  <p className="text-xl font-black tracking-tight">{anINR(anAgg.discountTotal)}</p>
+                </div>
+                <div className="bg-[#131316] border border-zinc-800 p-5">
+                  <p className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-2">% of Revenue</p>
+                  <p className="text-xl font-black tracking-tight">{anPct(anAgg.discountTotal, anAgg.totalV)}%</p>
+                </div>
+              </div>
+            </div>
+
+            <div id="an-funnel" className="mb-10">
+              <p className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-4">🔒 Order Completion Funnel</p>
+              <div className="bg-[#131316] border border-zinc-800 p-5 max-w-xl">
+                <p className="text-sm text-zinc-400">This needs order-level data (Received → Completed → Cancelled Pre-Ack / Post-Ack) that only exists inside Atlas/UrbanPiper — staff daily entry only captures totals, not individual order outcomes. Once an Atlas export upload is built (same pattern as Item Performance), this section will show a real funnel here.</p>
+              </div>
+            </div>
+
+            <div id="an-lost" className="mb-10">
+              <p className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-4">🔒 Lost Orders</p>
+              <div className="bg-[#131316] border border-zinc-800 p-5 max-w-xl">
+                <p className="text-sm text-zinc-400">Same limitation as above — lost/cancelled order counts aren't visible to staff at entry time, only inside Atlas. Will populate once Atlas exports can be uploaded.</p>
               </div>
             </div>
 
