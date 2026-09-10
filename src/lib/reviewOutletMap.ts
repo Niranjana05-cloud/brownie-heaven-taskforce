@@ -36,6 +36,12 @@ export function matchReviewOutletId(rawOutletName: string): string | null {
       return outletId;
     }
   }
+
+  // Some review emails just say "Brownie Heaven" with no location at all — this
+  // appears to be Royapettah's default Google listing name (it's the flagship
+  // outlet). Only apply this fallback for the bare name, not a partial/garbled one.
+  if (cleaned === "brownie heaven") return "royapettah";
+
   return null;
 }
 
