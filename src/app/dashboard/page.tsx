@@ -5137,33 +5137,34 @@ else await fetchOutletReportsByDate(outletEntryDate);
             {/* Atlas-style overview grid — click a square to jump to its detail below */}
             <div className="mb-10 space-y-6">
               {[
-                { heading: "💰 Revenue", cards: [
+                { heading: "💰 Revenue", accent: "#FACC15", cards: [
                   { id: "an-revenue", title: "Revenue Received", value: anINR(anAgg.totalV), sub: `${anRows.length} report-days` },
                   { id: "an-channel", title: "Revenue by Channel", value: `${anPct(anAgg.ch.swiggy.v + anAgg.ch.zomato.v, anAgg.totalV)}% online`, sub: "Shop / Swiggy / Zomato split" },
-                  { id: "an-outlet", title: "Revenue by Outlet", value: anAgg.outletRanked[0] ? anAgg.outletRanked[0].name : "—", sub: anAgg.outletRanked[0] ? `top outlet · ${anINR(anAgg.outletRanked[0].v)}` : "no data" },
+                  { id: "an-outlet", title: "Revenue by Outlet", value: anAgg.outletRanked[0] ? anAgg.outletRanked[0].name : "—", sub: anAgg.outletRanked[0] ? `top of ${anAgg.outletRanked.length} · ${anINR(anAgg.outletRanked[0].v)} · see full list ↓` : "no data" },
                 ]},
-                { heading: "🛒 Orders", cards: [
+                { heading: "🛒 Orders", accent: "#60A5FA", cards: [
                   { id: "an-revenue", title: "Orders Received", value: anAgg.totalC.toLocaleString("en-IN"), sub: "across all channels" },
                   { id: "an-channel", title: "Average Order Value", value: anINR(anAgg.totalC ? anAgg.totalV / anAgg.totalC : 0), sub: "blended, all channels" },
                   { id: "an-channel", title: "Orders by Channel", value: `${anAgg.ch.shop.c}/${anAgg.ch.swiggy.c}/${anAgg.ch.zomato.c}`, sub: "Shop / Swiggy / Zomato" },
                 ]},
-                { heading: "⚙️ Operations", cards: [
+                { heading: "⚙️ Operations", accent: "#FB923C", cards: [
                   { id: "an-discount", title: "Discounts Given", value: anINR(anAgg.discountTotal), sub: `${anPct(anAgg.discountTotal, anAgg.totalV)}% of revenue` },
                   { id: "an-funnel", title: "Order Completion Funnel", value: "🔒 Needs Atlas export", sub: "Pre-Ack / Post-Ack cancellations", locked: true },
                   { id: "an-lost", title: "Lost Orders", value: "🔒 Needs Atlas export", sub: "not visible to staff entry", locked: true },
                 ]},
               ].map((section) => (
                 <div key={section.heading}>
-                  <p className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-2">{section.heading}</p>
+                  <p className="text-[10px] font-mono uppercase tracking-widest mb-2" style={{ color: section.accent }}>{section.heading}</p>
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                     {section.cards.map((c, i) => (
                       <button
                         key={c.title + i}
                         onClick={() => { setAnCard(c.id); document.getElementById(c.id)?.scrollIntoView({ behavior: "smooth", block: "start" }); }}
-                        className={`text-left bg-[#131316] border p-4 transition-colors ${c.locked ? "border-zinc-800 opacity-60" : "border-zinc-800 hover:border-yellow-400"}`}
+                        style={{ borderTopColor: c.locked ? "#78716c" : section.accent, borderTopWidth: 3, borderTopStyle: c.locked ? "dashed" : "solid" }}
+                        className={`text-left bg-[#131316] border border-zinc-800 p-4 transition-colors ${c.locked ? "opacity-70 hover:border-amber-700/50" : "hover:border-zinc-600"}`}
                       >
                         <p className="text-[9px] font-mono text-zinc-500 uppercase tracking-widest mb-1.5">{c.title}</p>
-                        <p className={`font-black tracking-tight mb-1 ${c.locked ? "text-sm text-zinc-500" : "text-lg"}`}>{c.value}</p>
+                        <p className={`font-black tracking-tight mb-1 ${c.locked ? "text-sm text-amber-500/80" : "text-lg"}`}>{c.value}</p>
                         <p className="text-[10px] text-zinc-600">{c.sub}</p>
                       </button>
                     ))}
