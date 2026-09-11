@@ -953,6 +953,71 @@ export default function DashboardPage() {
     setNrLoading(false);
   };
   useEffect(() => { if (activeTab === "net_realisation") fetchNetRealisation(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [activeTab, nrFrom, nrTo]);
+
+  // --- Swiggy payout upload (feeds outlet_payouts, which fetchNetRealisation reads) ---
+  const [spOutlet, setSpOutlet] = useState("");
+  const [spPeriodFrom, setSpPeriodFrom] = useState(() => { const d = new Date(); d.setDate(d.getDate() - 6); return d.toISOString().slice(0, 10); });
+  const [spPeriodTo, setSpPeriodTo] = useState(() => new Date().toISOString().slice(0, 10));
+  const [spFile, setSpFile] = useState<File | null>(null);
+  const [spParsed, setSpParsed] = useState<{ gross: number; net: number } | null>(null);
+  const [spBusy, setSpBusy] = useState(false);
+  const [spMsg, setSpMsg] = useState("");
+
+  // Reads the "Payout Breakup" sheet of a Swiggy monthly/weekly annexure export.
+  // Finds "Total Customer Paid" (gross) and "Net Payout" (net) by label, taking the
+  // value in the column right after the label — this is the "Delivered Orders"
+  // column, which is what should feed realisation (not cancelled/other columns).
+  const parseSwiggyPayoutFile = async (file: File): Promise<{ gross: number; net: number } | null> => {
+    const buf = await file.arrayBuffer();
+    const wb = XLSX.read(buf, { type: "array" });
+    const sheetName = wb.SheetNames.find((n) => n.toLowerCase().includes("payout breakup")) || wb.SheetNames[0];
+    const rows = XLSX.utils.sheet_to_json(wb.Sheets[sheetName], { header: 1, blankrows: false }) as any[][];
+    const findValue = (label: string): number | null => {
+      for (const row of rows) {
+        const idx = row.findIndex((c: any) => typeof c === "string" && c.trim().toLowerCase() === label.toLowerCase());
+        if (idx >= 0 && idx + 1 < row.length) {
+          const v = row[idx + 1];
+          const n = typeof v === "number" ? v : parseFloat(String(v).replace(/[,₹\s]/g, ""));
+          if (!isNaN(n)) return n;
+        }
+      }
+      return null;
+    };
+    const gross = findValue("Total Customer Paid");
+    const net = findValue("Net Payout");
+    if (gross == null || net == null) return null;
+    return { gross, net };
+  };
+
+  const onSpFile = async (e: any) => {
+    const f = e.target.files?.[0]; if (!f) return;
+    setSpFile(f); setSpMsg(""); setSpParsed(null);
+    try {
+      const result = await parseSwiggyPayoutFile(f);
+      if (!result) { setSpMsg("Couldn't find \"Total Customer Paid\" or \"Net Payout\" in a \"Payout Breakup\" sheet — check this is the right file."); return; }
+      setSpParsed(result);
+    } catch (err: any) { setSpMsg("Couldn't read the file: " + (err?.message || "")); }
+    e.target.value = "";
+  };
+
+  const saveSwiggyPayout = async () => {
+    if (!spOutlet) { alert("Pick which outlet this file is for."); return; }
+    if (!spParsed) { alert("Upload and parse a file first."); return; }
+    setSpBusy(true);
+    const { error } = await supabase.from("outlet_payouts").insert({
+      outlet_id: spOutlet,
+      platform: "swiggy",
+      period_start: spPeriodFrom,
+      period_end: spPeriodTo,
+      customer_payable: spParsed.gross,
+      amount_transferable: spParsed.net,
+    });
+    setSpBusy(false);
+    if (error) { setSpMsg("Save failed: " + error.message); return; }
+    setSpFile(null); setSpParsed(null); setSpOutlet("");
+    fetchNetRealisation();
+  };
+
   const [cmProductRows, setCmProductRows] = useState<any[]>([]);
   const [cmLoading, setCmLoading] = useState(false);
   const fetchContributionMargins = async () => {
@@ -2738,7 +2803,7 @@ else await fetchOutletReportsByDate(outletEntryDate);
               <span>📐</span> Contribution Margins
             </div>
           )}
-                  {user?.role === "Financial Analyst" && (
+                  {(user?.role === "Financial Analyst" || isFO || isOwner) && (
             <div onClick={() => { setActiveTab("net_realisation"); setSidebarOpen(false); fetchNetRealisation(); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "net_realisation" ? "text-white bg-zinc-900 border-l-2 border-yellow-400" : "text-zinc-500 hover:text-white"}`}>
               <span>🧾</span> Net Realisation
             </div>
@@ -3103,7 +3168,7 @@ else await fetchOutletReportsByDate(outletEntryDate);
             )}
           </div>
        )}
-       {activeTab === "net_realisation" && user?.role === "Financial Analyst" && (
+       {activeTab === "net_realisation" && (user?.role === "Financial Analyst" || isFO || isOwner) && (
           <div>
             <div className="flex justify-between items-start mb-6 pb-5 border-b border-zinc-800">
               <div>
@@ -3115,6 +3180,47 @@ else await fetchOutletReportsByDate(outletEntryDate);
                 <input type="date" value={nrTo} onChange={(e) => setNrTo(e.target.value)} className="bg-black border border-zinc-800 text-white px-3 py-2 focus:outline-none focus:border-yellow-400 text-sm font-mono" />
               </div>
             </div>
+
+            {(isFO || isOwner) && (
+              <div className="mb-8 border border-zinc-800 p-5 max-w-2xl">
+                <p className="text-sm font-semibold mb-1">📥 Upload Swiggy payout report</p>
+                <p className="text-xs text-zinc-500 mb-4">The weekly/monthly annexure Excel Swiggy emails — reads the "Payout Breakup" sheet, pulls Total Customer Paid (gross) and Net Payout (net) from the Delivered Orders column.</p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
+                  <div>
+                    <label className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest">Outlet</label>
+                    <select value={spOutlet} onChange={(e) => setSpOutlet(e.target.value)} className="w-full bg-black border border-zinc-800 text-white px-3 py-2 focus:outline-none focus:border-yellow-400 transition-colors text-sm mt-1">
+                      <option value="">— which outlet is this for —</option>
+                      {OUTLETS.map((o) => <option key={o} value={o}>{OUTLET_NAMES[o] || o}</option>)}
+                    </select>
+                  </div>
+                  <div className="flex gap-2">
+                    <div className="flex-1">
+                      <label className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest">Period start</label>
+                      <input type="date" value={spPeriodFrom} onChange={(e) => setSpPeriodFrom(e.target.value)} className="w-full bg-black border border-zinc-800 text-white px-3 py-2 focus:outline-none focus:border-yellow-400 transition-colors text-sm mt-1" />
+                    </div>
+                    <div className="flex-1">
+                      <label className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest">Period end</label>
+                      <input type="date" value={spPeriodTo} onChange={(e) => setSpPeriodTo(e.target.value)} className="w-full bg-black border border-zinc-800 text-white px-3 py-2 focus:outline-none focus:border-yellow-400 transition-colors text-sm mt-1" />
+                    </div>
+                  </div>
+                </div>
+                <label className="bg-zinc-800 text-white px-4 py-2 text-sm font-semibold hover:bg-zinc-700 cursor-pointer transition-colors inline-block">Choose file<input type="file" accept=".xlsx,.xls" onChange={onSpFile} className="hidden" /></label>
+                {spFile && <span className="text-xs text-zinc-500 ml-3">{spFile.name}</span>}
+                {spMsg && <p className="text-xs text-yellow-400 mt-2">{spMsg}</p>}
+                {spParsed && (
+                  <div className="mt-4 bg-black/30 border border-zinc-800 p-3">
+                    <p className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-2">Found — check before saving</p>
+                    <div className="grid grid-cols-2 gap-2 text-sm mb-3">
+                      <div className="flex justify-between bg-black/40 px-2 py-1"><span className="text-zinc-400">Total Customer Paid (gross)</span><span className="font-mono text-green-400">₹{spParsed.gross.toLocaleString("en-IN")}</span></div>
+                      <div className="flex justify-between bg-black/40 px-2 py-1"><span className="text-zinc-400">Net Payout (net)</span><span className="font-mono text-green-400">₹{spParsed.net.toLocaleString("en-IN")}</span></div>
+                    </div>
+                    <p className="text-xs text-zinc-500 mb-3">Realisation: {((spParsed.net / spParsed.gross) * 100).toFixed(1)}%</p>
+                    <button onClick={saveSwiggyPayout} disabled={spBusy} className="bg-yellow-400 text-black px-5 py-2 text-sm font-semibold hover:bg-yellow-300 disabled:opacity-50 transition-colors">{spBusy ? "Saving…" : "Save to Net Realisation"}</button>
+                  </div>
+                )}
+              </div>
+            )}
+
             {nrLoading ? (
               <p className="text-sm text-zinc-500">Loading…</p>
             ) : nrRows.length === 0 ? (
