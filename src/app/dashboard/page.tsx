@@ -2803,7 +2803,7 @@ else await fetchOutletReportsByDate(outletEntryDate);
               <span>📐</span> Contribution Margins
             </div>
           )}
-                  {(user?.role === "Financial Analyst" || isFO || isOwner) && (
+                  {user?.role === "Financial Analyst" && (
             <div onClick={() => { setActiveTab("net_realisation"); setSidebarOpen(false); fetchNetRealisation(); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "net_realisation" ? "text-white bg-zinc-900 border-l-2 border-yellow-400" : "text-zinc-500 hover:text-white"}`}>
               <span>🧾</span> Net Realisation
             </div>
@@ -3168,7 +3168,7 @@ else await fetchOutletReportsByDate(outletEntryDate);
             )}
           </div>
        )}
-       {activeTab === "net_realisation" && (user?.role === "Financial Analyst" || isFO || isOwner) && (
+       {activeTab === "net_realisation" && user?.role === "Financial Analyst" && (
           <div>
             <div className="flex justify-between items-start mb-6 pb-5 border-b border-zinc-800">
               <div>
@@ -3181,7 +3181,7 @@ else await fetchOutletReportsByDate(outletEntryDate);
               </div>
             </div>
 
-            {(isFO || isOwner) && (
+            {user?.role === "Financial Analyst" && (
               <div className="mb-8 border border-zinc-800 p-5 max-w-2xl">
                 <p className="text-sm font-semibold mb-1">📥 Upload Swiggy payout report</p>
                 <p className="text-xs text-zinc-500 mb-4">The weekly/monthly annexure Excel Swiggy emails — reads the "Payout Breakup" sheet, pulls Total Customer Paid (gross) and Net Payout (net) from the Delivered Orders column.</p>
