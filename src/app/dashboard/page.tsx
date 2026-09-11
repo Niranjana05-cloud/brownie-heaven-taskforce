@@ -14,6 +14,8 @@ import { FOOD_COST_MAP } from "@/lib/foodCosts";
 import { matchItemCost } from "@/lib/itemPerfCosts";
 import { useActivityHeartbeat } from "@/lib/useActivityHeartbeat";
 import ActivityToastStack from "@/components/ActivityToastStack";
+import NudgeButton from "@/components/NudgeButton";
+import NudgeToast from "@/components/NudgeToast";
 
 
 const supabase = createClient(
@@ -2732,6 +2734,8 @@ else await fetchOutletReportsByDate(outletEntryDate);
   return (
     <div className="min-h-screen bg-[#0a0a0b] text-white flex">
       {(user?.role === "Owner" || (user as any)?.isFO) && <ActivityToastStack />}
+      {isOwner && <NudgeButton />}
+      {isFO && <NudgeToast />}
       {sidebarOpen && <div className="fixed inset-0 bg-black/50 z-30 md:hidden" onClick={() => setSidebarOpen(false)} />}
       {targetCheck && targetCheck.length > 0 && !targetReaction && (() => {
         const wins = targetCheck.filter((r: any) => r.status === "win").length;
