@@ -118,7 +118,7 @@ function parseZomato(rows: unknown[][]): Parsed {
 }
 
 export default function PayoutTab({ user }: { user: Staff }) {
-  const canViewAll = user.role === "Owner" || user.role === "Manager";
+  const canViewAll = user.role === "Owner" || user.role === "Manager" || user.role === "Financial Analyst";
   const myOutlets = user.outlets || [];
   const visibleOutlets = canViewAll ? OUTLETS : myOutlets;
 
