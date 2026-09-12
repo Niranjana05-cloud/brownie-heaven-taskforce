@@ -65,7 +65,22 @@ export async function GET() {
         }
         const parsedEmail = await simpleParser(raw.content);
         const subject = parsedEmail.subject || "";
-        const plainText = parsedEmail.text || "";
+        // Some Swiggy report emails (the fancier card-style ones) don't include a
+        // real plain-text part at all — only HTML. If the plain text is empty or
+        // too short to be useful, fall back to stripping the HTML down to text.
+        const htmlToText = (html: string) => html
+          .replace(/<br\s*\/?>/gi, "\n")
+          .replace(/<\/(p|div|tr|li|h[1-6]|td)>/gi, "\n")
+          .replace(/<[^>]+>/g, "")
+          .replace(/&nbsp;/gi, " ")
+          .replace(/&amp;/gi, "&")
+          .replace(/&lt;/gi, "<")
+          .replace(/&gt;/gi, ">")
+          .replace(/&#39;/g, "'")
+          .replace(/[ \t]+/g, " ")
+          .replace(/\n{3,}/g, "\n\n")
+          .trim();
+        const plainText = (parsedEmail.text && parsedEmail.text.length > 50) ? parsedEmail.text : htmlToText(parsedEmail.html || "");
 
         const parsed = parseSwiggyPayoutEmail(plainText);
         if (!parsed.restId) {
