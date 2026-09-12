@@ -37,14 +37,16 @@ export async function GET() {
     const lock = await client.getMailboxLock("INBOX");
 
     try {
-      // Swiggy's payout emails all come from the same address and always have
-      // "Payout" somewhere in the subject (weekly or monthly). We identify exactly
-      // which outlet + brand each one belongs to from the Rest. ID inside the email
-      // body itself, not from the subject or sender — much more reliable than name
+      // The real automated payout report always comes from dip-prod@swiggy.in with
+      // "Swiggy Payout Report" in the subject — narrowing to exactly this (not just
+      // any email from swiggy.in) avoids catching human support correspondence
+      // ("Fwd: Need Payout details" threads etc.) which have no Rest ID at all.
+      // We identify exactly which outlet + brand each real report belongs to from
+      // the Rest. ID inside the email body itself — more reliable than name
       // matching, since Swiggy's own outlet names don't always match TASKFORCE's.
       const PROCESSED_FLAG = "TASKFORCEPAYOUTPROCESSED";
       const uids = await client.search(
-        { from: "swiggy.in", subject: "Payout", unKeyword: PROCESSED_FLAG } as any,
+        { from: "dip-prod@swiggy.in", subject: "Swiggy Payout Report", unKeyword: PROCESSED_FLAG } as any,
         { uid: true }
       );
       candidateCount = (uids || []).length;
