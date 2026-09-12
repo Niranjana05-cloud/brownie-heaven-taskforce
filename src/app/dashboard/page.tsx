@@ -3642,6 +3642,17 @@ else await fetchOutletReportsByDate(outletEntryDate);
                   const nMargin = totalSales ? netProfit / totalSales : 0;
                   const cmSame = cMargin > 0 ? cMargin : 0.156;
                   const cmDine = 0.656;
+                  // Today's P&L — same cost logic as the monthly one, but using just
+                  // today's sales, and the monthly fixed cost divided by however many
+                  // days are actually in this month (28/29/30/31), not a flat 30.
+                  const stYear = Number(stDate.slice(0, 4)), stMonthNum = Number(stDate.slice(5, 7));
+                  const daysInThisMonth = new Date(stYear, stMonthNum, 0).getDate();
+                  const todayTotalSales = dayNet + dayOnline;
+                  const todayCogs = 0.294 * todayTotalSales, todayWastage = 0.05 * todayTotalSales, todayComm = 0.5 * dayOnline;
+                  const todayContrib = todayTotalSales - todayCogs - todayWastage - todayComm;
+                  const todayFixedShare = totalFixed / daysInThisMonth;
+                  const todayNetProfit = todayContrib - todayFixedShare;
+                  const todayMargin = todayTotalSales ? todayNetProfit / todayTotalSales : 0;
                   const ta = Number(t.a) || 0, tb = Number(t.b) || 0;
                   const req = (p: number, cm: number) => cm > 0 ? (totalFixed + p) / cm : 0;
                   const m = (n: number) => Math.round(n).toLocaleString("en-IN");
@@ -3673,6 +3684,15 @@ else await fetchOutletReportsByDate(outletEntryDate);
                         <tbody>
                          {row(`Net Sales (excl GST) · ${dayLbl}`, inp("net", dayNet))}
                           {row(`Online Sales (Swiggy+Zomato) · ${dayLbl}`, inp("online", dayOnline))}
+                          <tr key="_tpldiv" className="border-t border-zinc-800"><td colSpan={2} className="px-4 pt-3 pb-1 text-[10px] font-mono text-yellow-400 uppercase tracking-widest">Today's P&amp;L · {dayLbl} (fixed cost ÷ {daysInThisMonth} days this month)</td></tr>
+                          {row("Today's Total Sales", m(todayTotalSales), { bold: true })}
+                          {row("Less: COGS @ 29.4%", m(todayCogs), { neg: true })}
+                          {row("Less: Wastage @ 5%", m(todayWastage), { neg: true })}
+                          {row("Less: Commission @ 50% (online)", m(todayComm), { neg: true })}
+                          {row("Today's Contribution", m(todayContrib), { bold: true })}
+                          {row(`Less: Fixed cost share (monthly ÷ ${daysInThisMonth})`, m(todayFixedShare), { neg: true })}
+                          {row("TODAY'S NET PROFIT / (LOSS)", m(todayNetProfit), { bold: true })}
+                          {row("   Today's margin %", (todayMargin * 100).toFixed(1) + "%")}
                           <tr key="_pldiv" className="border-t border-zinc-800"><td colSpan={2} className="px-4 pt-3 pb-1 text-[10px] font-mono text-zinc-500 uppercase tracking-widest">Month-to-date P&amp;L · {ml}</td></tr>
                           {row(`Net Sales — ${ml} total ${editing ? "✏️ (whole-month override)" : ""}`, editing ? inp("mnet", Number(_moNet) || 0) : m(net))}
                           {row(`Online Sales — ${ml} total ${editing ? "✏️ (whole-month override)" : ""}`, editing ? inp("monline", Number(_moOnline) || 0) : m(online))}
