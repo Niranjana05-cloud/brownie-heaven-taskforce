@@ -44,9 +44,16 @@ export async function GET() {
       // We identify exactly which outlet + brand each real report belongs to from
       // the Rest. ID inside the email body itself — more reliable than name
       // matching, since Swiggy's own outlet names don't always match TASKFORCE's.
+      //
+      // Also restricted to the last 90 days: Swiggy changed their report template
+      // at some point and added the Rest ID — older reports (e.g. a plain "Total
+      // Orders / Total Revenue" summary with no ID at all) are a genuinely
+      // different, older format that simply doesn't have what we need. No point
+      // scanning through potentially a year of those every single check.
+      const ninetyDaysAgo = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
       const PROCESSED_FLAG = "TASKFORCEPAYOUTPROCESSED";
       const uids = await client.search(
-        { from: "dip-prod@swiggy.in", subject: "Swiggy Payout Report", unKeyword: PROCESSED_FLAG } as any,
+        { from: "dip-prod@swiggy.in", subject: "Swiggy Payout Report", since: ninetyDaysAgo, unKeyword: PROCESSED_FLAG } as any,
         { uid: true }
       );
       candidateCount = (uids || []).length;
