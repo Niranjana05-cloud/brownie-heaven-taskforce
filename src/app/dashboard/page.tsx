@@ -944,11 +944,11 @@ export default function DashboardPage() {
       if (p.platform === "swiggy") {
         const gross = Number(p.customer_payable) || 0;
         const net = Number(p.amount_transferable) || 0;
-        return { outlet: OUTLET_NAMES[p.outlet_id] || p.outlet_id, brand: p.brand || "—", platform: "Swiggy", periodStart: p.period_start, periodEnd: p.period_end, gross, net, pct: gross > 0 ? (net / gross) * 100 : null, verified: true };
+        return { outletId: p.outlet_id, outlet: OUTLET_NAMES[p.outlet_id] || p.outlet_id, brand: p.brand || "—", platform: "Swiggy", periodStart: p.period_start, periodEnd: p.period_end, gross, net, pct: gross > 0 ? (net / gross) * 100 : null, verified: true };
       } else {
         const gross = (repRows || []).filter((r: any) => r.outlet_id === p.outlet_id && r.report_date >= p.period_start && r.report_date <= p.period_end).reduce((a: number, r: any) => a + (Number(r.zomato_sales_value) || 0), 0);
         const net = Number(p.net_payout) || 0;
-        return { outlet: OUTLET_NAMES[p.outlet_id] || p.outlet_id, brand: p.brand || "—", platform: "Zomato", periodStart: p.period_start, periodEnd: p.period_end, gross, net, pct: gross > 0 ? (net / gross) * 100 : null, verified: false };
+        return { outletId: p.outlet_id, outlet: OUTLET_NAMES[p.outlet_id] || p.outlet_id, brand: p.brand || "—", platform: "Zomato", periodStart: p.period_start, periodEnd: p.period_end, gross, net, pct: gross > 0 ? (net / gross) * 100 : null, verified: false };
       }
     }).sort((a: any, b: any) => (a.periodStart < b.periodStart ? 1 : -1));
     setNrRows(rows);
@@ -3214,46 +3214,71 @@ else await fetchOutletReportsByDate(outletEntryDate);
             </div>
 
             {user?.role === "Financial Analyst" && (
-              <div className="mb-6 border border-yellow-400/30 p-5 max-w-2xl">
-                <div className="flex items-center justify-between mb-1">
-                  <p className="text-sm font-semibold">📨 Auto-check Swiggy payout emails</p>
-                  <button onClick={checkNewPayouts} disabled={autoPayoutChecking} className="bg-yellow-400 text-black px-4 py-2 text-sm font-semibold hover:bg-yellow-300 disabled:opacity-50 transition-colors">
-                    {autoPayoutChecking ? "Checking…" : "🔄 Check Now"}
-                  </button>
-                </div>
-                <p className="text-xs text-zinc-500 mb-3">Reads Swiggy's weekly payout emails straight from the inbox — matches each one to the right outlet + brand (BH/CBH/ICBH) using the Rest. ID inside the email, no manual upload needed.</p>
+              <div className="mb-6 flex items-center gap-3 relative">
+                <button onClick={checkNewPayouts} disabled={autoPayoutChecking} className="bg-yellow-400 text-black px-4 py-2 text-sm font-semibold hover:bg-yellow-300 disabled:opacity-50 transition-colors">
+                  {autoPayoutChecking ? "Checking…" : "🔄 Check Swiggy inbox"}
+                </button>
                 {autoPayoutResult && (
-                  <div className={`border p-3 text-sm ${autoPayoutResult.success ? "border-green-700 bg-green-950/30 text-green-300" : "border-red-700 bg-red-950/30 text-red-300"}`}>
-                    {autoPayoutResult.success ? (
-                      <>
-                        <p className="font-semibold mb-1">✅ Checked {autoPayoutResult.candidateCount} email(s) — saved {autoPayoutResult.inserted.length}{autoPayoutResult.skipped.length > 0 ? `, skipped ${autoPayoutResult.skipped.length}` : ""}</p>
-                        {autoPayoutResult.timedOut && <p className="text-xs text-yellow-400 mt-1">⏱️ Ran out of time this batch — ~{autoPayoutResult.remaining} still unchecked. Click Check Now again.</p>}
-                        {autoPayoutResult.skipReasons && Object.keys(autoPayoutResult.skipReasons).length > 0 && (
-                          <ul className="text-xs text-zinc-400 mt-2 space-y-0.5">
-                            {Object.entries(autoPayoutResult.skipReasons).map(([reason, count]: any) => <li key={reason}>• {count} skipped — {reason}</li>)}
-                          </ul>
-                        )}
-                        {autoPayoutResult.sampleSkips && autoPayoutResult.sampleSkips.length > 0 && (
-                          <details className="mt-2">
-                            <summary className="text-xs text-zinc-500 cursor-pointer hover:text-zinc-300">Show example skipped emails</summary>
-                            <div className="mt-2 space-y-2">
-                              {autoPayoutResult.sampleSkips.map((s: any, i: number) => (
-                                <div key={i} className="bg-black/40 p-2 text-[11px] text-zinc-400">
-                                  <p className="text-zinc-300">{s.reason}</p>
-                                  {s.restId && <p>Rest ID: {s.restId}</p>}
-                                  {s.subject && <p>Subject: {s.subject}</p>}
-                                  {s.textPreview && <pre className="text-zinc-500 mt-1 whitespace-pre-wrap font-mono text-[10px]">{s.textPreview}</pre>}
-                                </div>
-                              ))}
-                            </div>
-                          </details>
-                        )}
-                      </>
-                    ) : (
-                      <p className="font-semibold">⚠️ {autoPayoutResult.error}</p>
-                    )}
-                  </div>
+                  autoPayoutResult.success ? (
+                    <span className="text-xs text-green-400">✅ Saved {autoPayoutResult.inserted.length}{autoPayoutResult.skipped.length > 0 ? ` · ${autoPayoutResult.skipped.length} not matched yet` : ""}</span>
+                  ) : (
+                    <span className="text-xs text-red-400">⚠️ {autoPayoutResult.error}</span>
+                  )
                 )}
+                {autoPayoutResult?.success && (autoPayoutResult.sampleSkips?.length > 0 || autoPayoutResult.skipReasons) && (
+                  <details className="text-xs text-zinc-600">
+                    <summary className="cursor-pointer hover:text-zinc-400">Advanced</summary>
+                    <div className="absolute mt-2 bg-neutral-900 border border-zinc-800 p-3 z-10 max-w-md">
+                      {autoPayoutResult.timedOut && <p className="text-yellow-400 mb-1">⏱️ Ran out of time this batch — ~{autoPayoutResult.remaining} still unchecked. Check again.</p>}
+                      {autoPayoutResult.skipReasons && Object.keys(autoPayoutResult.skipReasons).length > 0 && (
+                        <ul className="text-zinc-400 space-y-0.5 mb-2">
+                          {Object.entries(autoPayoutResult.skipReasons).map(([reason, count]: any) => <li key={reason}>• {count} skipped — {reason}</li>)}
+                        </ul>
+                      )}
+                      {autoPayoutResult.sampleSkips?.map((s: any, i: number) => (
+                        <div key={i} className="bg-black/40 p-2 mb-1 text-[11px] text-zinc-500">
+                          <p className="text-zinc-300">{s.reason}</p>
+                          {s.restId && <p>Rest ID: {s.restId}</p>}
+                          {s.subject && <p>Subject: {s.subject}</p>}
+                        </div>
+                      ))}
+                    </div>
+                  </details>
+                )}
+              </div>
+            )}
+
+            {user?.role === "Financial Analyst" && (
+              <div className="mb-8 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                {OUTLETS.map((oid) => (
+                  <div key={oid} className="border border-zinc-800 p-4">
+                    <p className="text-sm font-bold uppercase tracking-widest mb-3">{OUTLET_NAMES[oid] || oid}</p>
+                    <div className="grid grid-cols-3 gap-2">
+                      {(["BH", "CBH", "ICBH"] as const).map((brand) => {
+                        const matches = nrRows.filter((r: any) => r.outletId === oid && r.brand === brand && r.platform === "Swiggy");
+                        const latest = matches.length ? matches.reduce((a: any, b: any) => (a.periodEnd > b.periodEnd ? a : b)) : null;
+                        if (!latest) {
+                          return (
+                            <div key={brand} className="bg-black/30 border border-dashed border-zinc-800 p-2 text-center">
+                              <p className="text-[9px] font-mono text-zinc-600 uppercase tracking-widest mb-1">{brand}</p>
+                              <p className="text-[10px] text-zinc-700">No data yet</p>
+                            </div>
+                          );
+                        }
+                        const pctColor = latest.pct == null ? "text-zinc-600" : latest.pct < 50 ? "text-red-500" : latest.pct < 65 ? "text-yellow-400" : "text-green-400";
+                        return (
+                          <div key={brand} className="bg-[#131316] border border-zinc-800 p-2">
+                            <p className="text-[9px] font-mono text-yellow-400 uppercase tracking-widest mb-1">{brand}</p>
+                            <p className="text-[9px] text-zinc-600 mb-1">{latest.periodStart.slice(5)} → {latest.periodEnd.slice(5)}</p>
+                            <p className="text-xs font-mono text-zinc-300">₹{Math.round(latest.gross).toLocaleString("en-IN")}</p>
+                            <p className="text-xs font-mono text-white font-bold">₹{Math.round(latest.net).toLocaleString("en-IN")}</p>
+                            <p className={`text-xs font-mono font-bold ${pctColor}`}>{latest.pct == null ? "—" : latest.pct.toFixed(0) + "%"}</p>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
               </div>
             )}
 
