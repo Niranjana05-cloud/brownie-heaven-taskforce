@@ -3240,6 +3240,7 @@ else await fetchOutletReportsByDate(outletEntryDate);
                           <p className="text-zinc-300">{s.reason}</p>
                           {s.restId && <p>Rest ID: {s.restId}</p>}
                           {s.subject && <p>Subject: {s.subject}</p>}
+                          {s.textPreview && <pre className="text-zinc-500 mt-1 whitespace-pre-wrap font-mono text-[10px] max-w-md overflow-x-auto">{s.textPreview}</pre>}
                         </div>
                       ))}
                     </div>
