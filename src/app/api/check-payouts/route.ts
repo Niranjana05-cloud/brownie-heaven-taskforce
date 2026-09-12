@@ -69,6 +69,8 @@ export async function GET() {
         // real plain-text part at all — only HTML. If the plain text is empty or
         // too short to be useful, fall back to stripping the HTML down to text.
         const htmlToText = (html: string) => html
+          .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "")
+          .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, "")
           .replace(/<br\s*\/?>/gi, "\n")
           .replace(/<\/(p|div|tr|li|h[1-6]|td)>/gi, "\n")
           .replace(/<[^>]+>/g, "")
