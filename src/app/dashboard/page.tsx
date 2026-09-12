@@ -3250,35 +3250,44 @@ else await fetchOutletReportsByDate(outletEntryDate);
 
             {user?.role === "Financial Analyst" && (
               <div className="mb-8 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-                {OUTLETS.map((oid) => (
-                  <div key={oid} className="border border-zinc-800 p-4">
-                    <p className="text-sm font-bold uppercase tracking-widest mb-3">{OUTLET_NAMES[oid] || oid}</p>
-                    <div className="grid grid-cols-3 gap-2">
-                      {(["BH", "CBH", "ICBH"] as const).map((brand) => {
-                        const matches = nrRows.filter((r: any) => r.outletId === oid && r.brand === brand && r.platform === "Swiggy");
-                        const latest = matches.length ? matches.reduce((a: any, b: any) => (a.periodEnd > b.periodEnd ? a : b)) : null;
-                        if (!latest) {
+                {OUTLETS.map((oid) => {
+                  const renderPlatformRow = (platform: "Swiggy" | "Zomato") => (
+                    <div>
+                      <p className="text-[9px] font-mono text-zinc-600 uppercase tracking-widest mb-1.5">{platform}</p>
+                      <div className="grid grid-cols-3 gap-2">
+                        {(["BH", "CBH", "ICBH"] as const).map((brand) => {
+                          const matches = nrRows.filter((r: any) => r.outletId === oid && r.brand === brand && r.platform === platform);
+                          const latest = matches.length ? matches.reduce((a: any, b: any) => (a.periodEnd > b.periodEnd ? a : b)) : null;
+                          if (!latest) {
+                            return (
+                              <div key={brand} className="bg-black/30 border border-dashed border-zinc-800 p-2 text-center">
+                                <p className="text-[9px] font-mono text-zinc-600 uppercase tracking-widest mb-1">{brand}</p>
+                                <p className="text-[10px] text-zinc-700">No data yet</p>
+                              </div>
+                            );
+                          }
+                          const pctColor = latest.pct == null ? "text-zinc-600" : latest.pct < 50 ? "text-red-500" : latest.pct < 65 ? "text-yellow-400" : "text-green-400";
                           return (
-                            <div key={brand} className="bg-black/30 border border-dashed border-zinc-800 p-2 text-center">
-                              <p className="text-[9px] font-mono text-zinc-600 uppercase tracking-widest mb-1">{brand}</p>
-                              <p className="text-[10px] text-zinc-700">No data yet</p>
+                            <div key={brand} className={`bg-[#131316] border p-2 ${platform === "Swiggy" ? "border-orange-500/20" : "border-red-500/20"}`}>
+                              <p className={`text-[9px] font-mono uppercase tracking-widest mb-1 ${platform === "Swiggy" ? "text-orange-400" : "text-red-400"}`}>{brand}</p>
+                              <p className="text-[9px] text-zinc-600 mb-1">{latest.periodStart.slice(5)} → {latest.periodEnd.slice(5)}</p>
+                              <p className="text-xs font-mono text-zinc-300">₹{Math.round(latest.gross).toLocaleString("en-IN")}</p>
+                              <p className="text-xs font-mono text-white font-bold">₹{Math.round(latest.net).toLocaleString("en-IN")}</p>
+                              <p className={`text-xs font-mono font-bold ${pctColor}`}>{latest.pct == null ? "—" : latest.pct.toFixed(0) + "%"}</p>
                             </div>
                           );
-                        }
-                        const pctColor = latest.pct == null ? "text-zinc-600" : latest.pct < 50 ? "text-red-500" : latest.pct < 65 ? "text-yellow-400" : "text-green-400";
-                        return (
-                          <div key={brand} className="bg-[#131316] border border-zinc-800 p-2">
-                            <p className="text-[9px] font-mono text-yellow-400 uppercase tracking-widest mb-1">{brand}</p>
-                            <p className="text-[9px] text-zinc-600 mb-1">{latest.periodStart.slice(5)} → {latest.periodEnd.slice(5)}</p>
-                            <p className="text-xs font-mono text-zinc-300">₹{Math.round(latest.gross).toLocaleString("en-IN")}</p>
-                            <p className="text-xs font-mono text-white font-bold">₹{Math.round(latest.net).toLocaleString("en-IN")}</p>
-                            <p className={`text-xs font-mono font-bold ${pctColor}`}>{latest.pct == null ? "—" : latest.pct.toFixed(0) + "%"}</p>
-                          </div>
-                        );
-                      })}
+                        })}
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                  return (
+                    <div key={oid} className="border border-zinc-800 p-4 space-y-3">
+                      <p className="text-sm font-bold uppercase tracking-widest">{OUTLET_NAMES[oid] || oid}</p>
+                      {renderPlatformRow("Swiggy")}
+                      {renderPlatformRow("Zomato")}
+                    </div>
+                  );
+                })}
               </div>
             )}
 
