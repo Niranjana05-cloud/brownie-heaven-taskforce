@@ -944,11 +944,11 @@ export default function DashboardPage() {
       if (p.platform === "swiggy") {
         const gross = Number(p.customer_payable) || 0;
         const net = Number(p.amount_transferable) || 0;
-        return { outlet: OUTLET_NAMES[p.outlet_id] || p.outlet_id, platform: "Swiggy", periodStart: p.period_start, periodEnd: p.period_end, gross, net, pct: gross > 0 ? (net / gross) * 100 : null, verified: true };
+        return { outlet: OUTLET_NAMES[p.outlet_id] || p.outlet_id, brand: p.brand || "—", platform: "Swiggy", periodStart: p.period_start, periodEnd: p.period_end, gross, net, pct: gross > 0 ? (net / gross) * 100 : null, verified: true };
       } else {
         const gross = (repRows || []).filter((r: any) => r.outlet_id === p.outlet_id && r.report_date >= p.period_start && r.report_date <= p.period_end).reduce((a: number, r: any) => a + (Number(r.zomato_sales_value) || 0), 0);
         const net = Number(p.net_payout) || 0;
-        return { outlet: OUTLET_NAMES[p.outlet_id] || p.outlet_id, platform: "Zomato", periodStart: p.period_start, periodEnd: p.period_end, gross, net, pct: gross > 0 ? (net / gross) * 100 : null, verified: false };
+        return { outlet: OUTLET_NAMES[p.outlet_id] || p.outlet_id, brand: p.brand || "—", platform: "Zomato", periodStart: p.period_start, periodEnd: p.period_end, gross, net, pct: gross > 0 ? (net / gross) * 100 : null, verified: false };
       }
     }).sort((a: any, b: any) => (a.periodStart < b.periodStart ? 1 : -1));
     setNrRows(rows);
@@ -957,10 +957,37 @@ export default function DashboardPage() {
   useEffect(() => { if (activeTab === "net_realisation") fetchNetRealisation(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [activeTab, nrFrom, nrTo]);
 
   // --- Swiggy payout upload (feeds outlet_payouts, which fetchNetRealisation reads) ---
+  const [autoPayoutChecking, setAutoPayoutChecking] = useState(false);
+  const [autoPayoutResult, setAutoPayoutResult] = useState<any>(null);
+  const checkNewPayouts = async () => {
+    setAutoPayoutChecking(true);
+    setAutoPayoutResult(null);
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 65000);
+    try {
+      const res = await fetch("/api/check-payouts", { signal: controller.signal });
+      const rawText = await res.text();
+      let json: any;
+      try { json = JSON.parse(rawText); }
+      catch {
+        setAutoPayoutResult({ success: false, error: "The check took too long and the server cut it off before finishing. Click Check Now again — it picks up where it left off." });
+        return;
+      }
+      setAutoPayoutResult(json);
+      fetchNetRealisation();
+    } catch (err: any) {
+      const timedOut = err.name === "AbortError";
+      setAutoPayoutResult({ success: false, error: timedOut ? "Timed out after 65 seconds — try again." : (err.message || String(err)) });
+    } finally {
+      clearTimeout(timeoutId);
+      setAutoPayoutChecking(false);
+    }
+  };
   const [spOutlet, setSpOutlet] = useState("");
   const [spPeriodFrom, setSpPeriodFrom] = useState(() => { const d = new Date(); d.setDate(d.getDate() - 6); return d.toISOString().slice(0, 10); });
   const [spPeriodTo, setSpPeriodTo] = useState(() => new Date().toISOString().slice(0, 10));
   const [spFile, setSpFile] = useState<File | null>(null);
+  const [spBrand, setSpBrand] = useState<"BH" | "CBH" | "ICBH">("BH");
   const [spParsed, setSpParsed] = useState<{ gross: number; net: number } | null>(null);
   const [spBusy, setSpBusy] = useState(false);
   const [spMsg, setSpMsg] = useState("");
@@ -1008,6 +1035,7 @@ export default function DashboardPage() {
     setSpBusy(true);
     const { error } = await supabase.from("outlet_payouts").insert({
       outlet_id: spOutlet,
+      brand: spBrand,
       platform: "swiggy",
       period_start: spPeriodFrom,
       period_end: spPeriodTo,
@@ -3186,15 +3214,67 @@ else await fetchOutletReportsByDate(outletEntryDate);
             </div>
 
             {user?.role === "Financial Analyst" && (
+              <div className="mb-6 border border-yellow-400/30 p-5 max-w-2xl">
+                <div className="flex items-center justify-between mb-1">
+                  <p className="text-sm font-semibold">📨 Auto-check Swiggy payout emails</p>
+                  <button onClick={checkNewPayouts} disabled={autoPayoutChecking} className="bg-yellow-400 text-black px-4 py-2 text-sm font-semibold hover:bg-yellow-300 disabled:opacity-50 transition-colors">
+                    {autoPayoutChecking ? "Checking…" : "🔄 Check Now"}
+                  </button>
+                </div>
+                <p className="text-xs text-zinc-500 mb-3">Reads Swiggy's weekly payout emails straight from the inbox — matches each one to the right outlet + brand (BH/CBH/ICBH) using the Rest. ID inside the email, no manual upload needed.</p>
+                {autoPayoutResult && (
+                  <div className={`border p-3 text-sm ${autoPayoutResult.success ? "border-green-700 bg-green-950/30 text-green-300" : "border-red-700 bg-red-950/30 text-red-300"}`}>
+                    {autoPayoutResult.success ? (
+                      <>
+                        <p className="font-semibold mb-1">✅ Checked {autoPayoutResult.candidateCount} email(s) — saved {autoPayoutResult.inserted.length}{autoPayoutResult.skipped.length > 0 ? `, skipped ${autoPayoutResult.skipped.length}` : ""}</p>
+                        {autoPayoutResult.timedOut && <p className="text-xs text-yellow-400 mt-1">⏱️ Ran out of time this batch — ~{autoPayoutResult.remaining} still unchecked. Click Check Now again.</p>}
+                        {autoPayoutResult.skipReasons && Object.keys(autoPayoutResult.skipReasons).length > 0 && (
+                          <ul className="text-xs text-zinc-400 mt-2 space-y-0.5">
+                            {Object.entries(autoPayoutResult.skipReasons).map(([reason, count]: any) => <li key={reason}>• {count} skipped — {reason}</li>)}
+                          </ul>
+                        )}
+                        {autoPayoutResult.sampleSkips && autoPayoutResult.sampleSkips.length > 0 && (
+                          <details className="mt-2">
+                            <summary className="text-xs text-zinc-500 cursor-pointer hover:text-zinc-300">Show example skipped emails</summary>
+                            <div className="mt-2 space-y-2">
+                              {autoPayoutResult.sampleSkips.map((s: any, i: number) => (
+                                <div key={i} className="bg-black/40 p-2 text-[11px] text-zinc-400">
+                                  <p className="text-zinc-300">{s.reason}</p>
+                                  {s.restId && <p>Rest ID: {s.restId}</p>}
+                                  {s.subject && <p>Subject: {s.subject}</p>}
+                                  {s.textPreview && <pre className="text-zinc-500 mt-1 whitespace-pre-wrap font-mono text-[10px]">{s.textPreview}</pre>}
+                                </div>
+                              ))}
+                            </div>
+                          </details>
+                        )}
+                      </>
+                    ) : (
+                      <p className="font-semibold">⚠️ {autoPayoutResult.error}</p>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {user?.role === "Financial Analyst" && (
               <div className="mb-8 border border-zinc-800 p-5 max-w-2xl">
                 <p className="text-sm font-semibold mb-1">📥 Upload Swiggy payout report</p>
-                <p className="text-xs text-zinc-500 mb-4">The weekly/monthly annexure Excel Swiggy emails — reads the "Payout Breakup" sheet, pulls Total Customer Paid (gross) and Net Payout (net) from the Delivered Orders column.</p>
+                <p className="text-xs text-zinc-500 mb-4">Manual alternative to the auto-checker above — the weekly/monthly annexure Excel Swiggy emails. Reads the "Payout Breakup" sheet, pulls Total Customer Paid (gross) and Net Payout (net) from the Delivered Orders column.</p>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
                   <div>
                     <label className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest">Outlet</label>
                     <select value={spOutlet} onChange={(e) => setSpOutlet(e.target.value)} className="w-full bg-black border border-zinc-800 text-white px-3 py-2 focus:outline-none focus:border-yellow-400 transition-colors text-sm mt-1">
                       <option value="">— which outlet is this for —</option>
                       {OUTLETS.map((o) => <option key={o} value={o}>{OUTLET_NAMES[o] || o}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest">Brand</label>
+                    <select value={spBrand} onChange={(e) => setSpBrand(e.target.value as any)} className="w-full bg-black border border-zinc-800 text-white px-3 py-2 focus:outline-none focus:border-yellow-400 transition-colors text-sm mt-1">
+                      <option value="BH">Brownie Heaven (BH)</option>
+                      <option value="CBH">Cakes by Brownie Heaven (CBH)</option>
+                      <option value="ICBH">Ice Cream by Brownie Heaven (ICBH)</option>
                     </select>
                   </div>
                   <div className="flex gap-2">
@@ -3235,6 +3315,7 @@ else await fetchOutletReportsByDate(outletEntryDate);
                   <thead>
                     <tr className="text-left text-[10px] font-mono text-zinc-500 uppercase border-b border-zinc-800">
                       <th className="py-2 pr-3">Outlet</th>
+                      <th className="py-2 pr-3">Brand</th>
                       <th className="py-2 pr-3">Platform</th>
                       <th className="py-2 pr-3">Period</th>
                       <th className="py-2 pr-3 text-right">Order Value</th>
@@ -3246,6 +3327,7 @@ else await fetchOutletReportsByDate(outletEntryDate);
                     {nrRows.map((r, i) => (
                       <tr key={i} className="border-b border-zinc-900">
                         <td className="py-2 pr-3 font-semibold">{r.outlet}</td>
+                        <td className="py-2 pr-3 font-mono text-xs text-zinc-400">{r.brand}</td>
                         <td className="py-2 pr-3">
                           <span className={`font-mono text-[10px] uppercase px-1.5 py-0.5 ${r.platform === "Swiggy" ? "bg-orange-500/10 text-orange-400" : "bg-red-500/10 text-red-400"}`}>{r.platform}</span>
                         </td>
