@@ -16,6 +16,7 @@ import { useActivityHeartbeat } from "@/lib/useActivityHeartbeat";
 import ActivityToastStack from "@/components/ActivityToastStack";
 import NudgeButton from "@/components/NudgeButton";
 import NudgeToast from "@/components/NudgeToast";
+import { parseSwiggyPayoutEmail } from "@/lib/swiggyPayoutParser";
 
 
 const supabase = createClient(
@@ -959,6 +960,47 @@ export default function DashboardPage() {
   // --- Swiggy payout upload (feeds outlet_payouts, which fetchNetRealisation reads) ---
   const [autoPayoutChecking, setAutoPayoutChecking] = useState(false);
   const [autoPayoutResult, setAutoPayoutResult] = useState<any>(null);
+  const [manualAssignPick, setManualAssignPick] = useState<Record<number, { outlet: string; brand: string }>>({});
+  const [manualAssignBusy, setManualAssignBusy] = useState<Record<number, boolean>>({});
+  const [manualAssignDone, setManualAssignDone] = useState<Record<number, boolean>>({});
+  const saveManualPayout = async (item: any, idx: number) => {
+    const pick = manualAssignPick[idx];
+    if (!pick?.outlet || !pick?.brand) { alert("Pick both an outlet and a brand first."); return; }
+    setManualAssignBusy((m) => ({ ...m, [idx]: true }));
+    const parsedData = item.parsed || parseSwiggyPayoutEmail(item.fullText || "");
+    const num = (s: any) => { const v = parseFloat(String(s ?? "").replace(/,/g, "")); return isNaN(v) ? null : v; };
+    const int = (s: any) => { const v = parseInt(String(s ?? "").replace(/,/g, "")); return isNaN(v) ? null : v; };
+    const payload: any = {
+      outlet_id: pick.outlet,
+      brand: pick.brand,
+      platform: "swiggy",
+      period_start: parsedData.period_start,
+      period_end: parsedData.period_end,
+      total_orders: int(parsedData.total_orders),
+      customer_payable: num(parsedData.customer_payable),
+      swiggy_service_fee: num(parsedData.swiggy_service_fee),
+      other_charges_refund: num(parsedData.other_charges_refund),
+      govt_taxes: num(parsedData.govt_taxes),
+      amount_transferable: num(parsedData.amount_transferable),
+      next_payout_cycle: parsedData.next_payout_cycle || null,
+      next_payout_date: parsedData.next_payout_date || null,
+      entry_method: "manual_assign",
+      updated_at: new Date().toISOString(),
+    };
+    if (!payload.period_start || !payload.period_end) {
+      alert("Couldn't find the payout period dates in this email — can't save without them.");
+      setManualAssignBusy((m) => ({ ...m, [idx]: false }));
+      return;
+    }
+    const { data: existing } = await supabase.from("outlet_payouts").select("id").eq("outlet_id", pick.outlet).eq("brand", pick.brand).eq("platform", "swiggy").eq("period_start", payload.period_start).eq("period_end", payload.period_end).maybeSingle();
+    const { error } = existing
+      ? await supabase.from("outlet_payouts").update(payload).eq("id", existing.id)
+      : await supabase.from("outlet_payouts").insert(payload);
+    setManualAssignBusy((m) => ({ ...m, [idx]: false }));
+    if (error) { alert("Save failed: " + error.message); return; }
+    setManualAssignDone((m) => ({ ...m, [idx]: true }));
+    fetchNetRealisation();
+  };
   const checkNewPayouts = async () => {
     setAutoPayoutChecking(true);
     setAutoPayoutResult(null);
@@ -3228,7 +3270,7 @@ else await fetchOutletReportsByDate(outletEntryDate);
                 {autoPayoutResult?.success && (autoPayoutResult.sampleSkips?.length > 0 || autoPayoutResult.skipReasons) && (
                   <details className="text-xs text-zinc-600">
                     <summary className="cursor-pointer hover:text-zinc-400">Advanced</summary>
-                    <div className="absolute mt-2 bg-neutral-900 border border-zinc-800 p-3 z-10 max-w-md">
+                    <div className="absolute mt-2 bg-neutral-900 border border-zinc-800 p-3 z-10 max-w-2xl max-h-[70vh] overflow-y-auto">
                       {autoPayoutResult.timedOut && <p className="text-yellow-400 mb-1">⏱️ Ran out of time this batch — ~{autoPayoutResult.remaining} still unchecked. Check again.</p>}
                       {autoPayoutResult.skipReasons && Object.keys(autoPayoutResult.skipReasons).length > 0 && (
                         <ul className="text-zinc-400 space-y-0.5 mb-2">
@@ -3236,11 +3278,34 @@ else await fetchOutletReportsByDate(outletEntryDate);
                         </ul>
                       )}
                       {autoPayoutResult.sampleSkips?.map((s: any, i: number) => (
-                        <div key={i} className="bg-black/40 p-2 mb-1 text-[11px] text-zinc-500">
+                        <div key={i} className="bg-black/40 p-2 mb-2 text-[11px] text-zinc-500">
                           <p className="text-zinc-300">{s.reason}</p>
                           {s.restId && <p>Rest ID: {s.restId}</p>}
                           {s.subject && <p>Subject: {s.subject}</p>}
-                          {s.textPreview && <pre className="text-zinc-500 mt-1 whitespace-pre-wrap font-mono text-[10px] max-w-md overflow-x-auto">{s.textPreview}</pre>}
+                          {s.fullText && <pre className="text-zinc-500 mt-1 whitespace-pre-wrap font-mono text-[10px] max-h-48 overflow-y-auto border border-zinc-800 p-2">{s.fullText}</pre>}
+                          {(s.reason === "no Rest ID found in email" || s.reason === "Rest ID not in outlet map yet") && (
+                            <div className="mt-2 pt-2 border-t border-zinc-800 flex flex-wrap items-center gap-2">
+                              {manualAssignDone[i] ? (
+                                <span className="text-green-400">✓ Saved</span>
+                              ) : (
+                                <>
+                                  <select value={manualAssignPick[i]?.outlet || ""} onChange={(e) => setManualAssignPick((m) => ({ ...m, [i]: { outlet: e.target.value, brand: m[i]?.brand || "" } }))} className="bg-black border border-zinc-800 text-white px-2 py-1 text-[10px]">
+                                    <option value="">Outlet…</option>
+                                    {OUTLETS.map((o) => <option key={o} value={o}>{OUTLET_NAMES[o] || o}</option>)}
+                                  </select>
+                                  <select value={manualAssignPick[i]?.brand || ""} onChange={(e) => setManualAssignPick((m) => ({ ...m, [i]: { outlet: m[i]?.outlet || "", brand: e.target.value } }))} className="bg-black border border-zinc-800 text-white px-2 py-1 text-[10px]">
+                                    <option value="">Brand…</option>
+                                    <option value="BH">BH</option>
+                                    <option value="CBH">CBH</option>
+                                    <option value="ICBH">ICBH</option>
+                                  </select>
+                                  <button onClick={() => saveManualPayout(s, i)} disabled={manualAssignBusy[i]} className="bg-yellow-400 text-black px-2 py-1 text-[10px] font-semibold hover:bg-yellow-300 disabled:opacity-50">
+                                    {manualAssignBusy[i] ? "Saving…" : "Save to this box"}
+                                  </button>
+                                </>
+                              )}
+                            </div>
+                          )}
                         </div>
                       ))}
                     </div>
