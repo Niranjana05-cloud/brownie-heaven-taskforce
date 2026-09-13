@@ -2,8 +2,8 @@ import type { MetadataRoute } from "next";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "TASKFORCE — Brownie Heaven",
-    short_name: "TASKFORCE",
+    name: "TASKFORCE IQ — Brownie Heaven",
+    short_name: "TASKFORCE IQ",
     description: "Staff accountability system",
     start_url: "/",
     display: "standalone",
