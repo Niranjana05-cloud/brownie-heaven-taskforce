@@ -1125,7 +1125,7 @@ export default function DashboardPage() {
     const totals = pnlRows.reduce((a, r) => ({ shop: a.shop + r.shop.sales, swiggy: a.swiggy + r.swiggy.sales, zomato: a.zomato + r.zomato.sales, sales: a.sales + r.totalSales, contrib: a.contrib + r.totalContrib, fixed: a.fixed + r.fixed, net: a.net + r.netProfit }), { shop: 0, swiggy: 0, zomato: 0, sales: 0, contrib: 0, fixed: 0, net: 0 });
     const rowsHtml = pnlRows.map((r) => `<tr><td style="padding:6px 8px;border-bottom:1px solid ${C.line};font-size:10px;font-weight:600">${r.name}</td><td style="padding:6px 8px;border-bottom:1px solid ${C.line};text-align:right;font-size:10px">${inr(r.shop.sales)}</td><td style="padding:6px 8px;border-bottom:1px solid ${C.line};text-align:right;font-size:10px">${inr(r.swiggy.sales)}</td><td style="padding:6px 8px;border-bottom:1px solid ${C.line};text-align:right;font-size:10px">${inr(r.zomato.sales)}</td><td style="padding:6px 8px;border-bottom:1px solid ${C.line};text-align:right;font-size:10px;font-weight:700">${inr(r.totalSales)}</td><td style="padding:6px 8px;border-bottom:1px solid ${C.line};text-align:right;font-size:10px;color:${C.soft}">${inr(r.totalContrib)}</td><td style="padding:6px 8px;border-bottom:1px solid ${C.line};text-align:right;font-size:10px;color:${C.soft}">${inr(r.fixed)}</td><td style="padding:6px 8px;border-bottom:1px solid ${C.line};text-align:right;font-size:10px;font-weight:700;color:${r.netProfit >= 0 ? C.green : C.red}">${inr(r.netProfit)}</td><td style="padding:6px 8px;border-bottom:1px solid ${C.line};text-align:right;font-size:10px;font-weight:700;color:${r.netMargin >= 0 ? C.green : C.red}">${r.netMargin.toFixed(1)}%</td></tr>`).join("");
     const totalRow = `<tr style="background:${C.line};border-top:2px solid ${C.ink}"><td style="padding:8px;font-size:10px;font-weight:900">TOTAL</td><td style="padding:8px;text-align:right;font-size:10px;font-weight:700">${inr(totals.shop)}</td><td style="padding:8px;text-align:right;font-size:10px;font-weight:700">${inr(totals.swiggy)}</td><td style="padding:8px;text-align:right;font-size:10px;font-weight:700">${inr(totals.zomato)}</td><td style="padding:8px;text-align:right;font-size:10px;font-weight:900">${inr(totals.sales)}</td><td style="padding:8px;text-align:right;font-size:10px;font-weight:700">${inr(totals.contrib)}</td><td style="padding:8px;text-align:right;font-size:10px;font-weight:700">${inr(totals.fixed)}</td><td style="padding:8px;text-align:right;font-size:10px;font-weight:900;color:${totals.net >= 0 ? C.green : C.red}">${inr(totals.net)}</td><td style="padding:8px;text-align:right;font-size:10px;font-weight:900;color:${totals.net >= 0 ? C.green : C.red}">${totals.sales > 0 ? ((totals.net / totals.sales) * 100).toFixed(1) + "%" : "-"}</td></tr>`;
-    const html = `<div style="width:1000px;background:${C.bg};font-family:'Segoe UI',Arial,sans-serif;color:${C.ink};padding:34px"><div style="font-size:22px;font-weight:900">Brownie Heaven — Outlet &amp; Channel P&amp;L</div><div style="font-size:11px;color:${C.soft};margin-bottom:16px">${pnlFrom} to ${pnlTo} · real fixed costs from Sales Target · 29.4% COGS · 5% wastage · 50% online commission</div><table style="width:100%;border-collapse:collapse;background:${C.card};border:1px solid ${C.line};border-radius:10px;overflow:hidden"><thead><tr style="background:${C.ink}"><th style="padding:8px;text-align:left;color:#FFF6E5;font-size:9px">OUTLET</th><th style="padding:8px;text-align:right;color:#FFF6E5;font-size:9px">SHOP</th><th style="padding:8px;text-align:right;color:#FFF6E5;font-size:9px">SWIGGY</th><th style="padding:8px;text-align:right;color:#FFF6E5;font-size:9px">ZOMATO</th><th style="padding:8px;text-align:right;color:#FFF6E5;font-size:9px">TOTAL SALES</th><th style="padding:8px;text-align:right;color:#FFF6E5;font-size:9px">CONTRIBUTION</th><th style="padding:8px;text-align:right;color:#FFF6E5;font-size:9px">FIXED COSTS</th><th style="padding:8px;text-align:right;color:#FFF6E5;font-size:9px">NET PROFIT</th><th style="padding:8px;text-align:right;color:#FFF6E5;font-size:9px">NET %</th></tr></thead><tbody>${rowsHtml}${totalRow}</tbody></table><div style="font-size:9px;color:${C.soft};margin-top:12px">Generated ${new Date().toISOString().split("T")[0]}</div></div>`;
+    const html = `<div style="width:1000px;background:${C.bg};font-family:'Segoe UI',Arial,sans-serif;color:${C.ink};padding:34px"><div style="font-size:22px;font-weight:900">Brownie Heaven — Channel P&amp;L</div><div style="font-size:11px;color:${C.soft};margin-bottom:16px">${pnlFrom} to ${pnlTo} · real fixed costs from Outlet P&amp;L · 29.4% COGS · 5% wastage · 50% online commission</div><table style="width:100%;border-collapse:collapse;background:${C.card};border:1px solid ${C.line};border-radius:10px;overflow:hidden"><thead><tr style="background:${C.ink}"><th style="padding:8px;text-align:left;color:#FFF6E5;font-size:9px">OUTLET</th><th style="padding:8px;text-align:right;color:#FFF6E5;font-size:9px">SHOP</th><th style="padding:8px;text-align:right;color:#FFF6E5;font-size:9px">SWIGGY</th><th style="padding:8px;text-align:right;color:#FFF6E5;font-size:9px">ZOMATO</th><th style="padding:8px;text-align:right;color:#FFF6E5;font-size:9px">TOTAL SALES</th><th style="padding:8px;text-align:right;color:#FFF6E5;font-size:9px">CONTRIBUTION</th><th style="padding:8px;text-align:right;color:#FFF6E5;font-size:9px">FIXED COSTS</th><th style="padding:8px;text-align:right;color:#FFF6E5;font-size:9px">NET PROFIT</th><th style="padding:8px;text-align:right;color:#FFF6E5;font-size:9px">NET %</th></tr></thead><tbody>${rowsHtml}${totalRow}</tbody></table><div style="font-size:9px;color:${C.soft};margin-top:12px">Generated ${new Date().toISOString().split("T")[0]}</div></div>`;
     const lib = await loadH2P();
     window.scrollTo(0, 0); await new Promise((r) => setTimeout(r, 50));
     const holder = document.createElement("div"); holder.style.position = "fixed"; holder.style.left = "-9999px"; holder.style.top = "0"; holder.innerHTML = html; document.body.appendChild(holder);
@@ -2572,7 +2572,7 @@ const stApplyOutlet = async (oid: string, brand: string) => {
   const { error } = await supabase.from("sales_target").upsert({ outlet_id: oid, brand, line_items: updated, updated_at: new Date().toISOString() }, { onConflict: "outlet_id,brand" });
   setStUpBusy("");
   if (error) { setStUpMsg(m => ({ ...m, [key]: "Error: " + error.message })); return; }
-  setStUpMsg(m => ({ ...m, [key]: "✓ Saved to Sales Target (" + brand + ")." }));
+  setStUpMsg(m => ({ ...m, [key]: "✓ Saved to Outlet P&L (" + brand + ")." }));
   setStUpload(u => ({ ...u, [key]: null }));
   if (user) fetchSalesTargets(user);
 };
@@ -2874,7 +2874,7 @@ else await fetchOutletReportsByDate(outletEntryDate);
           )}
                 {user?.role === "Financial Analyst" && (
             <div onClick={() => { setActiveTab("pnl"); setSidebarOpen(false); fetchPnl(); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "pnl" ? "text-white bg-zinc-900 border-l-2 border-yellow-400" : "text-zinc-500 hover:text-white"}`}>
-              <span>💹</span> Outlet &amp; Channel P&amp;L
+              <span>💹</span> Channel P&amp;L
             </div>
           )}
                    {user?.role === "Financial Analyst" && (
@@ -2934,7 +2934,7 @@ else await fetchOutletReportsByDate(outletEntryDate);
 )}
          {((user.outlets && user.outlets.length > 0) || canAssign) && (
             <div onClick={() => { setActiveTab("sales_target"); setSidebarOpen(false); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "sales_target" ? "text-white bg-zinc-900 border-l-2 border-yellow-400" : "text-zinc-500 hover:text-white"}`}>
-              <span>🎯</span> Sales Target
+              <span>🎯</span> Outlet P&amp;L
             </div>
           )}
                 {user?.role === "Financial Analyst" && (
@@ -3167,7 +3167,7 @@ else await fetchOutletReportsByDate(outletEntryDate);
           <div className="flex flex-col items-center justify-center py-24 text-center max-w-lg mx-auto">
             <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-[0.3em] mb-3">{user.role}</p>
             <h2 className="text-4xl md:text-5xl font-black tracking-tight mb-3">Welcome, {user.name.split(" ")[0]}</h2>
-            <p className="text-sm text-zinc-500 mb-8">Use the sidebar — Outlet &amp; Channel P&amp;L and Contribution Margins are live. Still building:</p>
+            <p className="text-sm text-zinc-500 mb-8">Use the sidebar — Channel P&amp;L and Contribution Margins are live. Still building:</p>
             <div className="text-left w-full space-y-3 text-sm text-zinc-400 border border-zinc-800 p-5">
               <p>Weekly cash-flow forecasting</p>
               <p>Swiggy/Zomato net-realisation analysis</p>
@@ -3178,8 +3178,8 @@ else await fetchOutletReportsByDate(outletEntryDate);
           <div>
             <div className="flex justify-between items-start mb-6 pb-5 border-b border-zinc-800">
               <div>
-                <h2 className="text-2xl md:text-3xl font-black tracking-tight">Outlet & Channel P&amp;L</h2>
-                <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mt-1">Real fixed costs from Sales Target · 29.4% COGS · 5% wastage · 50% online commission</p>
+                <h2 className="text-2xl md:text-3xl font-black tracking-tight">Channel P&amp;L</h2>
+                <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mt-1">Real fixed costs from Outlet P&amp;L · 29.4% COGS · 5% wastage · 50% online commission</p>
               </div>
               <div className="flex gap-2">
                 <input type="date" value={pnlFrom} onChange={(e) => setPnlFrom(e.target.value)} className="bg-black border border-zinc-800 text-white px-3 py-2 focus:outline-none focus:border-yellow-400 text-sm font-mono" />
@@ -3224,7 +3224,7 @@ else await fetchOutletReportsByDate(outletEntryDate);
                         {pnlExpanded === r.oid && (
                           <tr className="bg-zinc-900/40">
                             <td colSpan={9} className="py-3 px-3">
-                              <p className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-2">Fixed costs — {r.name} (from Sales Target)</p>
+                              <p className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-2">Fixed costs — {r.name} (from Outlet P&amp;L)</p>
                               <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs font-mono">
                                 <div className="flex justify-between bg-black/40 px-2 py-1"><span className="text-zinc-500">Staff</span><span className="text-zinc-300">₹{Math.round(r.fixedBreakdown.staff).toLocaleString("en-IN")}</span></div>
                                 <div className="flex justify-between bg-black/40 px-2 py-1"><span className="text-zinc-500">Rent</span><span className="text-zinc-300">₹{Math.round(r.fixedBreakdown.rent).toLocaleString("en-IN")}</span></div>
@@ -3242,7 +3242,7 @@ else await fetchOutletReportsByDate(outletEntryDate);
                     ))}
                   </tbody>
                 </table>
-                <p className="text-[10px] text-zinc-600 mt-3">Fixed costs pulled from what's entered in Sales Target for each outlet (BH brand). Outlets with no fixed-cost entry yet show ₹0 there — worth flagging to whoever owns that outlet.</p>
+                <p className="text-[10px] text-zinc-600 mt-3">Fixed costs pulled from what's entered in Outlet P&amp;L for each outlet (BH brand). Outlets with no fixed-cost entry yet show ₹0 there — worth flagging to whoever owns that outlet.</p>
               </div>
             )}
           </div>
@@ -3824,7 +3824,7 @@ else await fetchOutletReportsByDate(outletEntryDate);
           <div>
             <div className="flex justify-between items-start mb-6 pb-5 border-b border-zinc-800">
               <div>
-                <h2 className="text-2xl md:text-3xl font-black tracking-tight">Sales Target</h2>
+                <h2 className="text-2xl md:text-3xl font-black tracking-tight">Outlet P&amp;L</h2>
             <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mt-1">Net &amp; Online filled per day · P&amp;L sums the whole month · fixed costs &amp; targets edit-once</p>
               </div>
               <div className="text-right">
