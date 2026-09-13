@@ -62,7 +62,7 @@ router.push("/dashboard");
       <div className="absolute inset-0" style={{ backgroundImage: "linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px)", backgroundSize: "50px 50px" }} />
       <div className="relative z-10 w-[420px] bg-zinc-950 border border-zinc-800 p-12">
         <div className="border-b border-zinc-800 pb-6 mb-8">
-          <h1 className="text-4xl font-black tracking-tight text-white">TASK<span className="text-yellow-400">FORCE</span></h1>
+          <h1 className="text-4xl font-black tracking-tight text-white">TASK<span className="text-yellow-400">FORCE IQ</span></h1>
           <p className="mt-1 text-[11px] font-mono text-zinc-500 uppercase tracking-widest">Brownie Heaven // Staff Accountability System</p>
         </div>
         <div className="space-y-5">
