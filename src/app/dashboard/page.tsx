@@ -3888,10 +3888,10 @@ else await fetchOutletReportsByDate(outletEntryDate);
                  const inp = (k: string, fb: number) => editing
                     ? <input key={`${key}_${k}`} type="number" value={stEditValues[k] !== undefined ? stEditValues[k] : (fb ? String(fb) : "")} onChange={(e) => setStEditValues(prev => ({ ...prev, [k]: e.target.value }))} className="w-24 bg-black border border-zinc-700 text-white px-2 py-1 text-right focus:outline-none focus:border-yellow-400" placeholder="0" />
                     : <span>{m(fb)}</span>;
-                  const row = (label: string, val: any, opts?: { neg?: boolean; bold?: boolean }) => (
+                  const row = (label: string, val: any, opts?: { neg?: boolean; bold?: boolean; fixedCost?: boolean }) => (
                     <tr key={label} className="border-t border-zinc-800/60">
                       <td className={`px-4 py-2 ${opts?.bold ? "text-white font-bold" : "text-zinc-300"}`}>{label}</td>
-                      <td className={`px-4 py-2 text-right font-mono ${opts?.neg ? "text-red-400" : opts?.bold ? "text-yellow-400 font-bold" : ""}`}>{val}</td>
+                      <td className={`px-4 py-2 text-right font-mono ${opts?.fixedCost ? "text-blue-400 font-bold" : opts?.neg ? "text-red-400" : opts?.bold ? "text-yellow-400 font-bold" : ""}`}>{val}</td>
                     </tr>
                   );
                   return (
@@ -3919,7 +3919,7 @@ else await fetchOutletReportsByDate(outletEntryDate);
                           {row("Less: Wastage @ 5%", m(todayWastage), { neg: true })}
                           {row("Less: Commission @ 50% (online)", m(todayComm), { neg: true })}
                           {row("Today's Contribution", m(todayContrib), { bold: true })}
-                          {row(`Less: Fixed cost share (monthly ÷ ${daysInThisMonth})`, m(todayFixedShare), { neg: true })}
+                          {row(`Less: Fixed cost share (monthly ÷ ${daysInThisMonth})`, m(todayFixedShare), { fixedCost: true })}
                           {row("TODAY'S NET PROFIT / (LOSS)", m(todayNetProfit), { bold: true })}
                           {row("   Today's margin %", (todayMargin * 100).toFixed(1) + "%")}
                           <tr key="_pldiv" className="border-t border-zinc-800"><td colSpan={2} className="px-4 pt-3 pb-1 text-[10px] font-mono text-zinc-500 uppercase tracking-widest">Month-to-date P&amp;L · {ml}</td></tr>
@@ -3931,14 +3931,14 @@ else await fetchOutletReportsByDate(outletEntryDate);
                           {row("Less: Commission @ 50% (online)", m(comm), { neg: true })}
                           {row("Contribution (before fixed)", m(contrib), { bold: true })}
                           {row("   Contribution margin %", (cMargin * 100).toFixed(1) + "%")}
-                          {row("Less: Staff salaries", isCBH ? <span className="text-zinc-600">0</span> : inp("staff", Number(f.staff) || 0), { neg: !isCBH })}
-                          {row("Less: Rent", isCBH ? <span className="text-zinc-600">0</span> : inp("rent", Number(f.rent) || 0), { neg: !isCBH })}
-                          {row("Less: Electricity / EB", isCBH ? <span className="text-zinc-600">0</span> : inp("eb", Number(f.eb) || 0), { neg: !isCBH })}
-                          {row("Less: Transport", isCBH ? <span className="text-zinc-600">0</span> : inp("transport", Number(f.transport) || 0), { neg: !isCBH })}
-                          {row("Less: Repair & Maintenance (20% of rent)", m(rm), { neg: true })}
-                          {row("Less: Pest control", inp("pest", Number(f.pest) || 0), { neg: true })}
-                          {row("Less: Water", inp("water", Number(f.water) || 0), { neg: true })}
-                          {row("Less: Airtel / WiFi", inp("airtel", Number(f.airtel) || 0), { neg: true })}
+                          {row("Less: Staff salaries", isCBH ? <span className="text-zinc-600">0</span> : inp("staff", Number(f.staff) || 0), { fixedCost: !isCBH })}
+                          {row("Less: Rent", isCBH ? <span className="text-zinc-600">0</span> : inp("rent", Number(f.rent) || 0), { fixedCost: !isCBH })}
+                          {row("Less: Electricity / EB", isCBH ? <span className="text-zinc-600">0</span> : inp("eb", Number(f.eb) || 0), { fixedCost: !isCBH })}
+                          {row("Less: Transport", isCBH ? <span className="text-zinc-600">0</span> : inp("transport", Number(f.transport) || 0), { fixedCost: !isCBH })}
+                          {row("Less: Repair & Maintenance (20% of rent)", m(rm), { fixedCost: true })}
+                          {row("Less: Pest control", inp("pest", Number(f.pest) || 0), { fixedCost: true })}
+                          {row("Less: Water", inp("water", Number(f.water) || 0), { fixedCost: true })}
+                          {row("Less: Airtel / WiFi", inp("airtel", Number(f.airtel) || 0), { fixedCost: true })}
                           {row("NET PROFIT / (LOSS)", m(netProfit), { bold: true })}
                           {row("   Net margin %", (nMargin * 100).toFixed(1) + "%")}
                         </tbody>
