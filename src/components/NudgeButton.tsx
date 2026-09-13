@@ -35,7 +35,7 @@ export default function NudgeButton() {
       {open && (
         <div className="mb-3 w-72 bg-neutral-900 border border-yellow-400/40 rounded-xl shadow-2xl p-4">
           <p className="text-[10px] font-mono text-yellow-400 uppercase tracking-widest mb-1">📌 Temporary reminder tool</p>
-          <p className="text-xs text-zinc-400 mb-3">Send Niranjana a nudge to work on TASKFORCE.</p>
+          <p className="text-xs text-zinc-400 mb-3">Send Niranjana a nudge to work on TASKFORCE IQ.</p>
           <textarea
             value={message}
             onChange={(e) => setMessage(e.target.value)}
