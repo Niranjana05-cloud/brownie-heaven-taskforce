@@ -999,6 +999,11 @@ export default function DashboardPage() {
     setManualAssignBusy((m) => ({ ...m, [idx]: false }));
     if (error) { alert("Save failed: " + error.message); return; }
     setManualAssignDone((m) => ({ ...m, [idx]: true }));
+    // If what we just saved falls outside the currently viewed date range, widen
+    // the range to include it — otherwise it'd save correctly but the box would
+    // still show "No data yet", which looks like a failure when it isn't one.
+    if (payload.period_start < nrFrom) setNrFrom(payload.period_start);
+    if (payload.period_end > nrTo) setNrTo(payload.period_end);
     fetchNetRealisation();
   };
   const checkNewPayouts = async () => {
@@ -3277,12 +3282,39 @@ else await fetchOutletReportsByDate(outletEntryDate);
                           {Object.entries(autoPayoutResult.skipReasons).map(([reason, count]: any) => <li key={reason}>• {count} skipped — {reason}</li>)}
                         </ul>
                       )}
-                      {autoPayoutResult.sampleSkips?.map((s: any, i: number) => (
+                      {autoPayoutResult.sampleSkips?.map((s: any, i: number) => {
+                        const preview = s.parsed || (s.fullText ? parseSwiggyPayoutEmail(s.fullText) : null);
+                        return (
                         <div key={i} className="bg-black/40 p-2 mb-2 text-[11px] text-zinc-500">
                           <p className="text-zinc-300">{s.reason}</p>
                           {s.restId && <p>Rest ID: {s.restId}</p>}
                           {s.subject && <p>Subject: {s.subject}</p>}
-                          {s.fullText && <pre className="text-zinc-500 mt-1 whitespace-pre-wrap font-mono text-[10px] max-h-48 overflow-y-auto border border-zinc-800 p-2">{s.fullText}</pre>}
+                          {preview && (
+                            <div className="mt-2 grid grid-cols-2 gap-1.5">
+                              <div className="bg-[#131316] border border-zinc-800 p-1.5">
+                                <p className="text-[9px] font-mono text-zinc-600 uppercase">Period</p>
+                                <p className="text-zinc-200">{preview.period_start || "?"} → {preview.period_end || "?"}</p>
+                              </div>
+                              <div className="bg-[#131316] border border-zinc-800 p-1.5">
+                                <p className="text-[9px] font-mono text-zinc-600 uppercase">Orders</p>
+                                <p className="text-zinc-200">{preview.total_orders ?? "—"}</p>
+                              </div>
+                              <div className="bg-[#131316] border border-zinc-800 p-1.5">
+                                <p className="text-[9px] font-mono text-zinc-600 uppercase">Order Value</p>
+                                <p className="text-zinc-200">{preview.customer_payable ? `₹${Number(preview.customer_payable).toLocaleString("en-IN")}` : "—"}</p>
+                              </div>
+                              <div className="bg-[#131316] border border-zinc-800 p-1.5">
+                                <p className="text-[9px] font-mono text-zinc-600 uppercase">Actually Paid</p>
+                                <p className="text-zinc-200">{preview.amount_transferable ? `₹${Number(preview.amount_transferable).toLocaleString("en-IN")}` : "—"}</p>
+                              </div>
+                            </div>
+                          )}
+                          {s.fullText && (
+                            <details className="mt-1">
+                              <summary className="text-[10px] text-zinc-600 cursor-pointer hover:text-zinc-400">Show raw email (if the numbers above look wrong)</summary>
+                              <pre className="text-zinc-500 mt-1 whitespace-pre-wrap font-mono text-[10px] max-h-48 overflow-y-auto border border-zinc-800 p-2">{s.fullText}</pre>
+                            </details>
+                          )}
                           {(s.reason === "no Rest ID found in email" || s.reason === "Rest ID not in outlet map yet") && (
                             <div className="mt-2 pt-2 border-t border-zinc-800 flex flex-wrap items-center gap-2">
                               {manualAssignDone[i] ? (
@@ -3307,7 +3339,8 @@ else await fetchOutletReportsByDate(outletEntryDate);
                             </div>
                           )}
                         </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   </details>
                 )}
