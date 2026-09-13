@@ -1344,7 +1344,7 @@ export default function DashboardPage() {
           const mRows = marginRowsLive.map((r: any) => `<tr><td style="padding:5px 8px;border-bottom:1px solid ${C.line};font-size:11px">${r.flag ? "🚩 " : ""}${r.name}</td><td style="padding:5px 8px;border-bottom:1px solid ${C.line};text-align:right;font-size:11px">${inr(r.sales)}</td><td style="padding:5px 8px;border-bottom:1px solid ${C.line};text-align:right;font-size:11px;color:${C.soft}">${inr(r.cost)}</td><td style="padding:5px 8px;border-bottom:1px solid ${C.line};text-align:right;font-size:11px;font-weight:700;color:${r.marginPct == null ? C.soft : r.marginPct < 40 ? C.red : r.marginPct < 60 ? C.amber : C.green}">${r.marginPct == null ? "—" : r.marginPct.toFixed(1) + "%"}</td></tr>`).join("");
           const topProductsHtml = Object.entries(productTotals).sort((a: any, b: any) => b[1] - a[1]).slice(0, 5).map(([pname, val]: any) => `<tr><td style="padding:4px 8px;border-bottom:1px solid ${C.line};font-size:10px">${pname}</td><td style="padding:4px 8px;border-bottom:1px solid ${C.line};text-align:right;font-size:10px;color:${C.soft}">${inr(val as number)}</td></tr>`).join("");
           const uncostedTotal = marginRowsLive.reduce((a, r) => a + r.uncostedCount, 0);
-          stockCard = `<div style="background:${C.card};border:2px solid ${C.amber};border-radius:12px;padding:16px;margin-bottom:14px"><div style="font-size:15px;font-weight:900;margin-bottom:2px">📦 True margin for this exact period — live from Stock</div><div style="font-size:9px;color:${C.soft};margin-bottom:10px">Sales minus actual ingredient cost (dispatch quantity × real recipe cost), computed fresh for ${ceoCustomFrom} → ${ceoCustomTo}. This is not available anywhere else in TASKFORCE.</div><div style="font-size:22px;font-weight:900;color:${totalMarginPct < 40 ? C.red : totalMarginPct < 60 ? C.amber : C.green}">${totalMarginPct.toFixed(1)}% overall margin</div><div style="font-size:11px;color:${C.soft};margin-bottom:10px">${inr(totalSales)} sales − ${inr(totalCost)} true food cost</div><table style="width:100%;border-collapse:collapse;margin-bottom:10px"><thead><tr style="text-align:left"><th style="font-size:9px;color:${C.soft};padding:4px 8px">OUTLET</th><th style="font-size:9px;color:${C.soft};padding:4px 8px;text-align:right">SALES</th><th style="font-size:9px;color:${C.soft};padding:4px 8px;text-align:right">FOOD COST</th><th style="font-size:9px;color:${C.soft};padding:4px 8px;text-align:right">MARGIN %</th></tr></thead><tbody>${mRows}</tbody></table>${topProductsHtml ? `<div style="font-size:11px;font-weight:700;margin-bottom:4px">Top 5 costliest products this period</div><table style="width:100%;border-collapse:collapse">${topProductsHtml}</table>` : ""}${uncostedTotal > 0 ? `<div style="font-size:9px;color:${C.soft};margin-top:8px;font-style:italic">${uncostedTotal} outlet-product combos have no recipe cost yet, so true cost is a touch higher than shown.</div>` : ""}${marginRowsLive.some((r: any) => r.flag) ? `<div style="font-size:9px;color:${C.red};margin-top:4px">🚩 = dispatched stock value is running well above sales for that outlet — worth a look.</div>` : ""}</div>`;
+          stockCard = `<div style="background:${C.card};border:2px solid ${C.amber};border-radius:12px;padding:16px;margin-bottom:14px"><div style="font-size:15px;font-weight:900;margin-bottom:2px">📦 True margin for this exact period — live from Stock</div><div style="font-size:9px;color:${C.soft};margin-bottom:10px">Sales minus actual ingredient cost (dispatch quantity × real recipe cost), computed fresh for ${ceoCustomFrom} → ${ceoCustomTo}. This is not available anywhere else in TASKFORCE IQ.</div><div style="font-size:22px;font-weight:900;color:${totalMarginPct < 40 ? C.red : totalMarginPct < 60 ? C.amber : C.green}">${totalMarginPct.toFixed(1)}% overall margin</div><div style="font-size:11px;color:${C.soft};margin-bottom:10px">${inr(totalSales)} sales − ${inr(totalCost)} true food cost</div><table style="width:100%;border-collapse:collapse;margin-bottom:10px"><thead><tr style="text-align:left"><th style="font-size:9px;color:${C.soft};padding:4px 8px">OUTLET</th><th style="font-size:9px;color:${C.soft};padding:4px 8px;text-align:right">SALES</th><th style="font-size:9px;color:${C.soft};padding:4px 8px;text-align:right">FOOD COST</th><th style="font-size:9px;color:${C.soft};padding:4px 8px;text-align:right">MARGIN %</th></tr></thead><tbody>${mRows}</tbody></table>${topProductsHtml ? `<div style="font-size:11px;font-weight:700;margin-bottom:4px">Top 5 costliest products this period</div><table style="width:100%;border-collapse:collapse">${topProductsHtml}</table>` : ""}${uncostedTotal > 0 ? `<div style="font-size:9px;color:${C.soft};margin-top:8px;font-style:italic">${uncostedTotal} outlet-product combos have no recipe cost yet, so true cost is a touch higher than shown.</div>` : ""}${marginRowsLive.some((r: any) => r.flag) ? `<div style="font-size:9px;color:${C.red};margin-top:4px">🚩 = dispatched stock value is running well above sales for that outlet — worth a look.</div>` : ""}</div>`;
         }
       } catch { /* stock connection optional — skip on failure */ }
       const CEO_QUOTES = [
@@ -1409,7 +1409,7 @@ export default function DashboardPage() {
     setCeoPushSending(true);
     try {
       await supabase.from("app_settings").upsert({ key: "ceo_push_ts", value: new Date().toISOString(), updated_at: new Date().toISOString() }, { onConflict: "key" });
-      alert("Pushed — Nishant will see the popup next time he opens TASKFORCE (or right away if he already has it open).");
+      alert("Pushed — Nishant will see the popup next time he opens TASKFORCE IQ (or right away if he already has it open).");
     } finally { setCeoPushSending(false); }
   };
   const fetchCompProducts = async () => {
@@ -2859,7 +2859,7 @@ else await fetchOutletReportsByDate(outletEntryDate);
 
       <aside className={`fixed inset-y-0 left-0 z-40 w-60 bg-[#131316] border-r border-zinc-800 flex flex-col shrink-0 transition-transform duration-200 md:relative md:translate-x-0 ${sidebarOpen ? "translate-x-0" : "-translate-x-full"}`}>
         <div className="px-6 py-6 border-b border-zinc-800">
-          <h1 className="text-xl font-black tracking-tight">TASK<span className="text-yellow-400">FORCE</span></h1>
+          <h1 className="text-xl font-black tracking-tight">TASK<span className="text-yellow-400">FORCE IQ</span></h1>
           <p className="text-[10px] font-mono text-zinc-600 uppercase tracking-widest mt-1">Brownie Heaven</p>
         </div>
         <nav className="flex-1 px-3 py-4">
@@ -3254,9 +3254,23 @@ else await fetchOutletReportsByDate(outletEntryDate);
                 <h2 className="text-2xl md:text-3xl font-black tracking-tight">Net Realisation</h2>
                 <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mt-1">What Swiggy/Zomato actually pay vs the order value</p>
               </div>
-              <div className="flex gap-2">
+              <div className="flex gap-2 items-center">
                 <input type="date" value={nrFrom} onChange={(e) => setNrFrom(e.target.value)} className="bg-black border border-zinc-800 text-white px-3 py-2 focus:outline-none focus:border-yellow-400 text-sm font-mono" />
                 <input type="date" value={nrTo} onChange={(e) => setNrTo(e.target.value)} className="bg-black border border-zinc-800 text-white px-3 py-2 focus:outline-none focus:border-yellow-400 text-sm font-mono" />
+                <button
+                  onClick={async () => {
+                    const { count } = await supabase.from("outlet_payouts").select("id", { count: "exact", head: true });
+                    if (!count) { alert("Nothing to clear — outlet_payouts is already empty."); return; }
+                    if (!confirm(`This will permanently delete all ${count} payout row(s) — Swiggy and Zomato, every outlet, every period. Use this to reset while testing. Continue?`)) return;
+                    const { error } = await supabase.from("outlet_payouts").delete().not("id", "is", null);
+                    if (error) { alert("Clear failed: " + error.message); return; }
+                    fetchNetRealisation();
+                  }}
+                  className="text-xs text-zinc-600 hover:text-red-400 border border-zinc-800 hover:border-red-500/40 px-3 py-2 transition-colors"
+                  title="Delete all payout data — for resetting while testing"
+                >
+                  🗑 Clear test data
+                </button>
               </div>
             </div>
 
@@ -4733,7 +4747,7 @@ else await fetchOutletReportsByDate(outletEntryDate);
             <div className="mb-6 flex items-center justify-between flex-wrap gap-3">
               <div>
                 <h2 className="text-3xl font-black tracking-tight">⭐ Auto Reviews</h2>
-                <p className="text-sm text-zinc-500 mt-1">Google reviews auto-pulled into TASKFORCE. Swiggy &amp; Zomato coming next.</p>
+                <p className="text-sm text-zinc-500 mt-1">Google reviews auto-pulled into TASKFORCE IQ. Swiggy &amp; Zomato coming next.</p>
               </div>
               <button
                 onClick={checkNewReviews}
