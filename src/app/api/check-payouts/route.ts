@@ -96,7 +96,7 @@ export async function GET() {
           const reason = "no Rest ID found in email";
           skipReasons[reason] = (skipReasons[reason] || 0) + 1;
           skipped.push({ uid, reason, subject });
-          if (sampleSkips.length < 3) sampleSkips.push({ reason, subject, textPreview: plainText.slice(0, 500) });
+          if (sampleSkips.length < 20) sampleSkips.push({ reason, subject, uid, fullText: plainText.slice(0, 6000) });
           continue;
         }
 
@@ -105,7 +105,7 @@ export async function GET() {
           const reason = "Rest ID not in outlet map yet";
           skipReasons[reason] = (skipReasons[reason] || 0) + 1;
           skipped.push({ uid, reason, restId: parsed.restId, subject });
-          if (sampleSkips.length < 3) sampleSkips.push({ reason, restId: parsed.restId, subject });
+          if (sampleSkips.length < 20) sampleSkips.push({ reason, restId: parsed.restId, subject, uid, parsed });
           continue; // don't mark processed — worth retrying once the ID is added
         }
 
@@ -158,7 +158,7 @@ export async function GET() {
           const reason = "db save failed";
           skipReasons[reason] = (skipReasons[reason] || 0) + 1;
           skipped.push({ uid, reason, error: error.message });
-          if (sampleSkips.length < 3) sampleSkips.push({ reason, error: error.message });
+          if (sampleSkips.length < 20) sampleSkips.push({ reason, error: error.message });
           continue;
         }
 
