@@ -1758,7 +1758,19 @@ export default function DashboardPage() {
 
   const fetchOutletHealth = async () => {
     setOutletHealthLoading(true);
-    const { data } = await supabase.from("outlet_reports").select("outlet_id, report_date, shop_sales_value, swiggy_sales_value, zomato_sales_value").gte("report_date", "2026-06-01");
+    // Same silent-truncation risk as Purchase & Vendors: this query has no end
+    // date, so it grows every day — already past Supabase's 1000-row cap as of
+    // September 2026. Batched fetch removes the ceiling entirely.
+    const BATCH = 1000;
+    let data: any[] = [];
+    let offset = 0;
+    while (true) {
+      const { data: batch, error } = await supabase.from("outlet_reports").select("outlet_id, report_date, shop_sales_value, swiggy_sales_value, zomato_sales_value").gte("report_date", "2026-06-01").range(offset, offset + BATCH - 1);
+      if (error) { console.error(error); break; }
+      data = data.concat(batch || []);
+      if (!batch || batch.length < BATCH) break;
+      offset += BATCH;
+    }
     const byOutletMonth: Record<string, Record<string, number>> = {};
     (data || []).forEach((r: any) => {
       const oid = r.outlet_id;
