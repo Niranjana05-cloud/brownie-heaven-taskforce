@@ -938,6 +938,7 @@ export default function DashboardPage() {
   const [pvFrom, setPvFrom] = useState<string>(() => { const d = new Date(); d.setDate(d.getDate() - 60); return d.toISOString().slice(0, 10); });
   const [pvTo, setPvTo] = useState<string>(() => new Date().toISOString().slice(0, 10));
   const [pvRows, setPvRows] = useState<any[]>([]);
+  const [pvVendorSel, setPvVendorSel] = useState<string>("");
   const [pvLoading, setPvLoading] = useState(false);
   const fetchPurchaseVendors = async () => {
     setPvLoading(true);
@@ -1004,6 +1005,33 @@ export default function DashboardPage() {
       .sort((a, b) => b.gapPct - a.gapPct);
 
     return { totalSpend, vendorRanked, categoryRanked, priceCreep, vendorComparison };
+  })();
+
+  // Drill-down into one selected vendor: everything they sold, whether their
+  // pricing on each item beats or loses to the best price seen elsewhere.
+  const pvVendorDrilldown = (() => {
+    if (!pvVendorSel) return null;
+    const vendorRows = pvRows.filter((r) => r.agency === pvVendorSel);
+    if (vendorRows.length === 0) return null;
+    const totalSpent = vendorRows.reduce((s, r) => s + (Number(r.amount) || 0), 0);
+    const byItem: Record<string, { qty: number; amount: number; rates: number[] }> = {};
+    vendorRows.forEach((r) => {
+      if (!byItem[r.product]) byItem[r.product] = { qty: 0, amount: 0, rates: [] };
+      byItem[r.product].qty += Number(r.qty) || 0;
+      byItem[r.product].amount += Number(r.amount) || 0;
+      byItem[r.product].rates.push(Number(r.rate) || 0);
+    });
+    const items = Object.entries(byItem).map(([product, d]) => {
+      const avgRate = d.rates.reduce((s, v) => s + v, 0) / d.rates.length;
+      // How does this vendor's price for this item compare to the cheapest
+      // other vendor selling the same item, in the same date range?
+      const otherRates = pvRows.filter((r) => r.product === product && r.agency !== pvVendorSel).map((r) => Number(r.rate) || 0);
+      const cheapestOther = otherRates.length ? Math.min(...otherRates) : null;
+      const vsCheapestPct = cheapestOther && cheapestOther > 0 ? ((avgRate - cheapestOther) / cheapestOther) * 100 : null;
+      return { product, qty: d.qty, amount: d.amount, avgRate, cheapestOther, vsCheapestPct };
+    }).sort((a, b) => b.amount - a.amount);
+    const rankPosition = pvAnalysis.vendorRanked.findIndex(([agency]) => agency === pvVendorSel) + 1;
+    return { totalSpent, items, rankPosition, totalVendors: pvAnalysis.vendorRanked.length };
   })();
 
   const [nrFrom, setNrFrom] = useState<string>(() => { const d = new Date(); d.setDate(d.getDate() - 60); return d.toISOString().slice(0, 10); });
@@ -3607,13 +3635,13 @@ else await fetchOutletReportsByDate(outletEntryDate);
 
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
                   <div className="bg-[#131316] border border-zinc-800 p-4">
-                    <p className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-3">Spend by vendor</p>
+                    <p className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-3">Spend by vendor <span className="text-zinc-700 normal-case">— click one to drill in</span></p>
                     <div className="space-y-1.5">
                       {pvAnalysis.vendorRanked.slice(0, 12).map(([agency, amt]) => (
-                        <div key={agency} className="flex justify-between text-xs py-1 border-t border-zinc-800/60">
-                          <span className="text-zinc-300">{agency}</span>
+                        <button key={agency} onClick={() => setPvVendorSel(agency === pvVendorSel ? "" : agency)} className={`w-full flex justify-between text-xs py-1 border-t border-zinc-800/60 text-left transition-colors ${agency === pvVendorSel ? "bg-yellow-400/10" : "hover:bg-zinc-900"}`}>
+                          <span className={agency === pvVendorSel ? "text-yellow-400 font-bold" : "text-zinc-300"}>{agency}</span>
                           <span className="font-mono text-zinc-400">₹{Math.round(amt).toLocaleString("en-IN")}</span>
-                        </div>
+                        </button>
                       ))}
                     </div>
                   </div>
@@ -3629,6 +3657,43 @@ else await fetchOutletReportsByDate(outletEntryDate);
                     </div>
                   </div>
                 </div>
+
+                {pvVendorDrilldown && (
+                  <div className="bg-[#131316] border border-yellow-400/40 p-4 mb-6">
+                    <div className="flex justify-between items-start mb-1">
+                      <p className="text-sm font-bold text-yellow-400">{pvVendorSel}</p>
+                      <button onClick={() => setPvVendorSel("")} className="text-[10px] text-zinc-600 hover:text-white">✕ close</button>
+                    </div>
+                    <p className="text-[11px] text-zinc-500 mb-3">₹{Math.round(pvVendorDrilldown.totalSpent).toLocaleString("en-IN")} total · #{pvVendorDrilldown.rankPosition} of {pvVendorDrilldown.totalVendors} vendors by spend in this range</p>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-xs font-mono whitespace-nowrap">
+                        <thead>
+                          <tr className="text-zinc-500 uppercase tracking-widest text-[10px] border-b border-zinc-800">
+                            <th className="text-left py-2 pr-3">Item</th>
+                            <th className="text-right py-2 pl-3">Qty bought</th>
+                            <th className="text-right py-2 pl-3">Avg rate</th>
+                            <th className="text-right py-2 pl-3">Spent</th>
+                            <th className="text-right py-2 pl-3">vs. cheapest elsewhere</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {pvVendorDrilldown.items.map((it, i) => (
+                            <tr key={i} className="border-b border-zinc-800/40">
+                              <td className="py-1.5 pr-3 text-zinc-300">{it.product}</td>
+                              <td className="py-1.5 pl-3 text-right text-zinc-400">{it.qty}</td>
+                              <td className="py-1.5 pl-3 text-right text-zinc-300">₹{it.avgRate.toFixed(2)}</td>
+                              <td className="py-1.5 pl-3 text-right text-white font-bold">₹{Math.round(it.amount).toLocaleString("en-IN")}</td>
+                              <td className={`py-1.5 pl-3 text-right ${it.vsCheapestPct == null ? "text-zinc-700" : it.vsCheapestPct <= 0 ? "text-green-400" : it.vsCheapestPct >= 10 ? "text-red-400 font-bold" : "text-yellow-400"}`}>
+                                {it.vsCheapestPct == null ? "only vendor" : `${it.vsCheapestPct >= 0 ? "+" : ""}${it.vsCheapestPct.toFixed(0)}%`}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                    <p className="text-[10px] text-zinc-600 mt-3">"vs. cheapest elsewhere" compares this vendor's average rate to the lowest rate any other vendor charged for the same item, in this same date range. Green = cheapest or tied. "Only vendor" = nobody else supplied this item in this window, so there's nothing to compare against.</p>
+                  </div>
+                )}
 
                 <div className="bg-[#131316] border border-red-500/20 p-4 mb-6">
                   <p className="text-[10px] font-mono text-red-400 uppercase tracking-widest mb-1">📈 Price creep — same vendor, rising rate</p>
