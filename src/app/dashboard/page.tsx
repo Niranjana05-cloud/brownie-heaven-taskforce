@@ -3030,7 +3030,7 @@ else await fetchOutletReportsByDate(outletEntryDate);
           </div>
         )}
 
-       {activeTab === "tasks" && user && user.role === "Founder's Office" && <FounderDashboard user={user} />}
+       {activeTab === "tasks" && user && (user.role === "Founder's Office" || user.role === "Owner") && <FounderDashboard user={user} />}
       {activeTab === "tasks" && user?.role === "Head Chef" && (
           <div>
             <div className="flex justify-between items-end mb-6 pb-5 border-b border-zinc-800">
@@ -3598,7 +3598,7 @@ else await fetchOutletReportsByDate(outletEntryDate);
             </div>
           </div>
        )}
-       {activeTab === "tasks" && user?.role !== "Founder's Office" && user?.role !== "Head Chef" && user?.role !== "Financial Analyst" && (
+       {activeTab === "tasks" && user?.role !== "Founder's Office" && user?.role !== "Owner" && user?.role !== "Head Chef" && user?.role !== "Financial Analyst" && (
          <div>
             {canAssign && compTop && (compHeadlineOn || user?.role === "Owner") && (
               <div className="mb-6 border border-zinc-800 bg-zinc-900/40 px-5 py-4">
