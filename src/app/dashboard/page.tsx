@@ -942,15 +942,28 @@ export default function DashboardPage() {
   const [pvLoading, setPvLoading] = useState(false);
   const fetchPurchaseVendors = async () => {
     setPvLoading(true);
-    const { data, error } = await supabaseStock
-      .from("purchase_ledger")
-      .select("date,agency,product,category,qty,unit,rate,amount")
-      .gte("date", pvFrom)
-      .lte("date", pvTo)
-      .order("date", { ascending: true })
-      .limit(10000);
-    if (error) { console.error(error); setPvRows([]); setPvLoading(false); return; }
-    setPvRows(data || []);
+    // Supabase enforces a server-side "Max Rows" cap (usually 1000) on every
+    // query, regardless of any .limit() requested client-side — so a single
+    // request can silently come back truncated with no error. Fetching in
+    // batches of 1000 and looping until a batch comes back short sidesteps
+    // that cap entirely, however large the table grows in the future.
+    const BATCH = 1000;
+    let all: any[] = [];
+    let offset = 0;
+    while (true) {
+      const { data, error } = await supabaseStock
+        .from("purchase_ledger")
+        .select("date,agency,product,category,qty,unit,rate,amount")
+        .gte("date", pvFrom)
+        .lte("date", pvTo)
+        .order("date", { ascending: true })
+        .range(offset, offset + BATCH - 1);
+      if (error) { console.error(error); setPvRows(all); setPvLoading(false); return; }
+      all = all.concat(data || []);
+      if (!data || data.length < BATCH) break;
+      offset += BATCH;
+    }
+    setPvRows(all);
     setPvLoading(false);
   };
   useEffect(() => { if (activeTab === "purchase_vendors") fetchPurchaseVendors(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [activeTab, pvFrom, pvTo]);
