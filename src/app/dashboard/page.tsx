@@ -947,7 +947,8 @@ export default function DashboardPage() {
       .select("date,agency,product,category,qty,unit,rate,amount")
       .gte("date", pvFrom)
       .lte("date", pvTo)
-      .order("date", { ascending: true });
+      .order("date", { ascending: true })
+      .limit(10000);
     if (error) { console.error(error); setPvRows([]); setPvLoading(false); return; }
     setPvRows(data || []);
     setPvLoading(false);
@@ -3621,7 +3622,7 @@ else await fetchOutletReportsByDate(outletEntryDate);
                   <div className="bg-[#131316] border border-zinc-800 p-4 min-w-[160px]">
                     <p className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-1">Total spend</p>
                     <p className="text-xl font-black text-yellow-400">₹{Math.round(pvAnalysis.totalSpend).toLocaleString("en-IN")}</p>
-                    <p className="text-[10px] text-zinc-600 mt-1">{pvRows.length} purchase entries</p>
+                    <p className="text-[10px] text-zinc-600 mt-1">{pvRows.length} purchase entries · {pvRows[0]?.date} to {pvRows[pvRows.length - 1]?.date}</p>
                   </div>
                   <div className="bg-[#131316] border border-zinc-800 p-4 min-w-[160px]">
                     <p className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-1">Vendors</p>
