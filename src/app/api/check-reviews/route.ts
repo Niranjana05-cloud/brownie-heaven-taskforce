@@ -15,197 +15,179 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
+const PROCESSED_FLAG = "TASKFORCEPROCESSED";
+// Each platform gets its OWN slice of the time budget — previously Google ran
+// to completion (or timed out) before Zomato's search even started, so a large
+// Google backlog could starve Zomato indefinitely. Splitting the budget means
+// every single "Check Now" click makes progress on both, regardless of how
+// lopsided the backlog is.
+const TIME_BUDGET_PER_PLATFORM_MS = 20000;
+
+type BatchResult = { inserted: any[]; skipped: any[]; skipReasons: Record<string, number>; sampleSkips: any[]; candidateCount: number; timedOut: boolean };
+
+async function processGoogleBatch(client: ImapFlow, out: BatchResult) {
+  const uids = await client.search(
+    { from: "businessprofile-noreply@google.com", subject: "left a review for", unKeyword: PROCESSED_FLAG } as any,
+    { uid: true }
+  );
+  out.candidateCount += (uids || []).length;
+  const startedAt = Date.now();
+
+  for (const uid of (uids || []) as number[]) {
+    if (Date.now() - startedAt > TIME_BUDGET_PER_PLATFORM_MS) { out.timedOut = true; break; }
+    const raw = await client.download(uid.toString(), undefined, { uid: true });
+    if (!raw || !raw.content) {
+      const reason = "download returned no content";
+      out.skipReasons[reason] = (out.skipReasons[reason] || 0) + 1;
+      out.skipped.push({ uid, reason });
+      continue;
+    }
+    const parsedEmail = await simpleParser(raw.content);
+    const subject = parsedEmail.subject || "";
+    const plainText = parsedEmail.text || "";
+
+    const review = parseGoogleReview(subject, plainText);
+    if (!review) {
+      const reason = "could not parse";
+      out.skipReasons[reason] = (out.skipReasons[reason] || 0) + 1;
+      out.skipped.push({ uid, reason, subject });
+      if (out.sampleSkips.length < 3) {
+        const anchor = plainText.search(/Read review/i);
+        const start = anchor >= 0 ? Math.max(0, anchor - 20) : 0;
+        out.sampleSkips.push({ reason, subject, foundReadReview: anchor >= 0, textPreview: plainText.slice(start, start + 1200) });
+      }
+      continue;
+    }
+
+    const outletId = matchReviewOutletId(review.outletNameRaw);
+    if (!outletId) {
+      const reason = "outlet not matched";
+      out.skipReasons[reason] = (out.skipReasons[reason] || 0) + 1;
+      out.skipped.push({ uid, reason, outletNameRaw: review.outletNameRaw });
+      if (out.sampleSkips.length < 5) out.sampleSkips.push({ reason, outletNameRaw: review.outletNameRaw, subject });
+      continue;
+    }
+
+    const staffId = staffIdForReviewOutlet(outletId);
+    const emailDate = parsedEmail.date ? parsedEmail.date.toISOString().split("T")[0] : new Date().toISOString().split("T")[0];
+    const note = `${review.reviewerName}: ${review.reviewText}`.trim();
+
+    const { error } = await supabase.from("outlet_reviews").insert({
+      outlet_id: outletId, staff_id: staffId, report_date: emailDate,
+      platform: "Google", rating: review.rating, valid_complaint: false, refund_given: false, note,
+    });
+
+    if (error) {
+      const reason = "db insert failed";
+      out.skipReasons[reason] = (out.skipReasons[reason] || 0) + 1;
+      out.skipped.push({ uid, reason, error: error.message });
+      if (out.sampleSkips.length < 5) out.sampleSkips.push({ reason, error: error.message });
+      continue;
+    }
+
+    out.inserted.push({ outletId, platform: "Google", rating: review.rating, reviewer: review.reviewerName });
+    await client.messageFlagsAdd(uid.toString(), [PROCESSED_FLAG], { uid: true });
+  }
+}
+
+async function processZomatoBatch(client: ImapFlow, out: BatchResult) {
+  // No confirmed sender address for Zomato's review emails yet, so matched by
+  // subject ("New Review") plus a body-content check for "zomato" as a safety
+  // net against unrelated emails with a similar subject line.
+  const uids = await client.search(
+    { subject: "New Review", unKeyword: PROCESSED_FLAG } as any,
+    { uid: true }
+  );
+  out.candidateCount += (uids || []).length;
+  const startedAt = Date.now();
+
+  for (const uid of (uids || []) as number[]) {
+    if (Date.now() - startedAt > TIME_BUDGET_PER_PLATFORM_MS) { out.timedOut = true; break; }
+    const raw = await client.download(uid.toString(), undefined, { uid: true });
+    if (!raw || !raw.content) {
+      const reason = "download returned no content";
+      out.skipReasons[reason] = (out.skipReasons[reason] || 0) + 1;
+      out.skipped.push({ uid, reason });
+      continue;
+    }
+    const parsedEmail = await simpleParser(raw.content);
+    const subject = parsedEmail.subject || "";
+    const plainText = parsedEmail.text || "";
+
+    if (!isZomatoReviewEmail(subject) || !/zomato/i.test(plainText)) {
+      const reason = "subject matched but not a real Zomato review email";
+      out.skipReasons[reason] = (out.skipReasons[reason] || 0) + 1;
+      out.skipped.push({ uid, reason, subject });
+      continue; // don't mark processed — genuinely not ours to claim
+    }
+
+    const review = parseZomatoReview(plainText);
+    if (!review) {
+      const reason = "could not parse Zomato review";
+      out.skipReasons[reason] = (out.skipReasons[reason] || 0) + 1;
+      out.skipped.push({ uid, reason, subject });
+      if (out.sampleSkips.length < 3) out.sampleSkips.push({ reason, subject, textPreview: plainText.slice(0, 1200) });
+      continue;
+    }
+
+    const outletId = matchReviewOutletId(review.outletNameRaw);
+    if (!outletId) {
+      const reason = "outlet not matched (Zomato)";
+      out.skipReasons[reason] = (out.skipReasons[reason] || 0) + 1;
+      out.skipped.push({ uid, reason, outletNameRaw: review.outletNameRaw });
+      if (out.sampleSkips.length < 5) out.sampleSkips.push({ reason, outletNameRaw: review.outletNameRaw, subject });
+      continue;
+    }
+
+    const staffId = staffIdForReviewOutlet(outletId);
+    const emailDate = parsedEmail.date ? parsedEmail.date.toISOString().split("T")[0] : new Date().toISOString().split("T")[0];
+
+    const { error } = await supabase.from("outlet_reviews").insert({
+      outlet_id: outletId, brand: review.brand, staff_id: staffId, report_date: emailDate,
+      platform: "Zomato", rating: review.rating, valid_complaint: false, refund_given: false, note: review.reviewText,
+    });
+
+    if (error) {
+      const reason = "db insert failed (Zomato)";
+      out.skipReasons[reason] = (out.skipReasons[reason] || 0) + 1;
+      out.skipped.push({ uid, reason, error: error.message });
+      if (out.sampleSkips.length < 5) out.sampleSkips.push({ reason, error: error.message });
+      continue;
+    }
+
+    out.inserted.push({ outletId, brand: review.brand, platform: "Zomato", rating: review.rating });
+    await client.messageFlagsAdd(uid.toString(), [PROCESSED_FLAG], { uid: true });
+  }
+}
+
 export async function GET() {
   const client = new ImapFlow({
     host: "imap.gmail.com",
     port: 993,
     secure: true,
-    auth: {
-      user: process.env.GMAIL_USER!,
-      pass: process.env.GMAIL_APP_PASSWORD!,
-    },
+    auth: { user: process.env.GMAIL_USER!, pass: process.env.GMAIL_APP_PASSWORD! },
     logger: false,
   });
 
-  const inserted: any[] = [];
-  const skipped: any[] = [];
-  const skipReasons: Record<string, number> = {};
-  const sampleSkips: any[] = [];
-  let candidateCount = 0;
-  let timedOut = false;
+  const result: BatchResult = {
+    inserted: [],
+    skipped: [],
+    skipReasons: {},
+    sampleSkips: [],
+    candidateCount: 0,
+    timedOut: false,
+  };
 
   try {
     await client.connect();
     const lock = await client.getMailboxLock("INBOX");
 
     try {
-      // Look at emails from Google's review sender whose SUBJECT already looks like
-      // a review notification ("X left a review for Y") — narrowing by subject too,
-      // not just sender, cuts the candidate list drastically (Google Business Profile
-      // also sends weekly summaries, Q&A alerts, etc. from the same address that
-      // aren't reviews at all, and downloading every one of those was what made this
-      // slow). We still track "processed" via our own private keyword, not
-      // read/unread, so an already-opened email is still picked up. Must pass
-      // { uid: true } here, or the numbers returned are sequence numbers, not UIDs.
-      const PROCESSED_FLAG = "TASKFORCEPROCESSED";
-      const uids = await client.search(
-        { from: "businessprofile-noreply@google.com", subject: "left a review for", unKeyword: PROCESSED_FLAG } as any,
-        { uid: true }
-      );
-      candidateCount = (uids || []).length;
-
-      // Hard time budget, not just a candidate-count cap — some emails take longer
-      // to download than others, so this adapts instead of guessing a fixed batch
-      // size. Stops with plenty of margin before Vercel's own 60s limit kicks in
-      // and returns its own (non-JSON) timeout page instead of our response.
-      const startedAt = Date.now();
-      const TIME_BUDGET_MS = 45000;
-
-      for (const uid of (uids || []) as number[]) {
-        if (Date.now() - startedAt > TIME_BUDGET_MS) { timedOut = true; break; }
-        const raw = await client.download(uid.toString(), undefined, { uid: true });
-        if (!raw || !raw.content) {
-          const reason = "download returned no content";
-          skipReasons[reason] = (skipReasons[reason] || 0) + 1;
-          skipped.push({ uid, reason });
-          continue;
-        }
-        const parsedEmail = await simpleParser(raw.content);
-
-        const subject = parsedEmail.subject || "";
-        const plainText = parsedEmail.text || "";
-
-        const review = parseGoogleReview(subject, plainText);
-        if (!review) {
-          const reason = "could not parse";
-          skipReasons[reason] = (skipReasons[reason] || 0) + 1;
-          skipped.push({ uid, reason, subject });
-          if (sampleSkips.length < 3) {
-            // Show the section around "Read review" specifically — that's the exact
-            // zone the parser regex needs to match, not just the start of the email.
-            const anchor = plainText.search(/Read review/i);
-            const start = anchor >= 0 ? Math.max(0, anchor - 20) : 0;
-            const textPreview = plainText.slice(start, start + 1200);
-            sampleSkips.push({ reason, subject, foundReadReview: anchor >= 0, textPreview });
-          }
-          continue;
-        }
-
-        const outletId = matchReviewOutletId(review.outletNameRaw);
-        if (!outletId) {
-          const reason = "outlet not matched";
-          skipReasons[reason] = (skipReasons[reason] || 0) + 1;
-          skipped.push({ uid, reason, outletNameRaw: review.outletNameRaw });
-          if (sampleSkips.length < 5) sampleSkips.push({ reason, outletNameRaw: review.outletNameRaw, subject });
-          continue;
-        }
-
-        const staffId = staffIdForReviewOutlet(outletId);
-        const emailDate = parsedEmail.date ? parsedEmail.date.toISOString().split("T")[0] : new Date().toISOString().split("T")[0];
-        const note = `${review.reviewerName}: ${review.reviewText}`.trim();
-
-        const { error } = await supabase.from("outlet_reviews").insert({
-          outlet_id: outletId,
-          staff_id: staffId,
-          report_date: emailDate,
-          platform: "Google",
-          rating: review.rating,
-          valid_complaint: false,
-          refund_given: false,
-          note,
-        });
-
-        if (error) {
-          const reason = "db insert failed";
-          skipReasons[reason] = (skipReasons[reason] || 0) + 1;
-          skipped.push({ uid, reason, error: error.message });
-          if (sampleSkips.length < 5) sampleSkips.push({ reason, error: error.message });
-          continue; // don't mark as processed — worth retrying once the DB issue is fixed
-        }
-
-        inserted.push({ outletId, rating: review.rating, reviewer: review.reviewerName });
-
-        // Mark as processed with our own private flag — leaves the email's actual
-        // read/unread status untouched either way.
-        await client.messageFlagsAdd(uid.toString(), [PROCESSED_FLAG], { uid: true });
-      }
-
-      // Zomato review emails — no confirmed sender address for these yet, so
-      // matched by subject ("New Review") plus a body-content check for
-      // "zomato" as a safety net against unrelated emails with a similar
-      // subject line. Same time budget applies across BOTH passes combined.
-      const zomatoUids = await client.search(
-        { subject: "New Review", unKeyword: PROCESSED_FLAG } as any,
-        { uid: true }
-      );
-      candidateCount += (zomatoUids || []).length;
-
-      for (const uid of (zomatoUids || []) as number[]) {
-        if (Date.now() - startedAt > TIME_BUDGET_MS) { timedOut = true; break; }
-        const raw = await client.download(uid.toString(), undefined, { uid: true });
-        if (!raw || !raw.content) {
-          const reason = "download returned no content";
-          skipReasons[reason] = (skipReasons[reason] || 0) + 1;
-          skipped.push({ uid, reason });
-          continue;
-        }
-        const parsedEmail = await simpleParser(raw.content);
-        const subject = parsedEmail.subject || "";
-        const plainText = parsedEmail.text || "";
-
-        if (!isZomatoReviewEmail(subject) || !/zomato/i.test(plainText)) {
-          const reason = "subject matched but not a real Zomato review email";
-          skipReasons[reason] = (skipReasons[reason] || 0) + 1;
-          skipped.push({ uid, reason, subject });
-          continue; // don't mark processed — genuinely not ours to claim
-        }
-
-        const review = parseZomatoReview(plainText);
-        if (!review) {
-          const reason = "could not parse Zomato review";
-          skipReasons[reason] = (skipReasons[reason] || 0) + 1;
-          skipped.push({ uid, reason, subject });
-          if (sampleSkips.length < 3) sampleSkips.push({ reason, subject, textPreview: plainText.slice(0, 1200) });
-          continue;
-        }
-
-        const outletId = matchReviewOutletId(review.outletNameRaw);
-        if (!outletId) {
-          const reason = "outlet not matched (Zomato)";
-          skipReasons[reason] = (skipReasons[reason] || 0) + 1;
-          skipped.push({ uid, reason, outletNameRaw: review.outletNameRaw });
-          if (sampleSkips.length < 5) sampleSkips.push({ reason, outletNameRaw: review.outletNameRaw, subject });
-          continue;
-        }
-
-        const staffId = staffIdForReviewOutlet(outletId);
-        const emailDate = parsedEmail.date ? parsedEmail.date.toISOString().split("T")[0] : new Date().toISOString().split("T")[0];
-        const note = review.reviewText;
-
-        const { error } = await supabase.from("outlet_reviews").insert({
-          outlet_id: outletId,
-          brand: review.brand,
-          staff_id: staffId,
-          report_date: emailDate,
-          platform: "Zomato",
-          rating: review.rating,
-          valid_complaint: false,
-          refund_given: false,
-          note,
-        });
-
-        if (error) {
-          const reason = "db insert failed (Zomato)";
-          skipReasons[reason] = (skipReasons[reason] || 0) + 1;
-          skipped.push({ uid, reason, error: error.message });
-          if (sampleSkips.length < 5) sampleSkips.push({ reason, error: error.message });
-          continue;
-        }
-
-        inserted.push({ outletId, brand: review.brand, platform: "Zomato", rating: review.rating });
-
-        await client.messageFlagsAdd(uid.toString(), [PROCESSED_FLAG], { uid: true });
-      }
+      // Each platform runs with its own independent time budget — Zomato is
+      // guaranteed to get checked every run, not just whenever Google's
+      // backlog happens to be small enough to finish early.
+      await processGoogleBatch(client, result);
+      await processZomatoBatch(client, result);
     } finally {
       lock.release();
     }
@@ -214,13 +196,8 @@ export async function GET() {
 
     return NextResponse.json({
       success: true,
-      inserted,
-      skipped,
-      candidateCount,
-      skipReasons,
-      sampleSkips,
-      timedOut,
-      remaining: timedOut ? candidateCount - inserted.length - skipped.length : 0,
+      ...result,
+      remaining: result.timedOut ? result.candidateCount - result.inserted.length - result.skipped.length : 0,
     });
   } catch (err: any) {
     return NextResponse.json({ success: false, error: err.message || String(err) }, { status: 500 });
