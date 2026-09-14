@@ -48,6 +48,8 @@ const lakh = (n: number) => "₹" + (n / 100000).toFixed(2) + " L";
   const [revs, setRevs] = useState<any[]>([]);
   const [payouts, setPayouts] = useState<any[]>([]);
   const [atlasResults, setAtlasResults] = useState<any[]>([]);
+  const [openTasks, setOpenTasks] = useState<any[]>([]);
+  const [staffNames, setStaffNames] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
 
   const d0 = new Date(date + "T00:00:00");
@@ -58,7 +60,7 @@ const lakh = (n: number) => "₹" + (n / 100000).toFixed(2) + " L";
   useEffect(() => {
     (async () => {
       setLoading(true);
-     const [o, mo, d, r, p, off, st, atlasRaw] = await Promise.all([
+     const [o, mo, d, r, p, off, st, atlasRaw, tasksRaw, staffRaw] = await Promise.all([
         supabase.from("outlet_reports").select("*").eq("report_date", date),
         supabase.from("outlet_reports").select("outlet_id,report_date,shop_sales_value,swiggy_sales_value,zomato_sales_value,swiggy_sales_count,zomato_sales_count").gte("report_date", monthStart).lte("report_date", date),
         supabase.from("reports").select("staff_id,report_date,is_late,is_backfill,no_points").eq("report_date", date),
@@ -67,9 +69,15 @@ const lakh = (n: number) => "₹" + (n / 100000).toFixed(2) + " L";
         supabase.from("day_off").select("staff_id").eq("off_date", date),
         supabase.from("sales_target").select("outlet_id,line_items").eq("brand", "BH"),
         supabase.from("atlas_monthly_results").select("*").eq("month", monthStart.slice(0, 7)),
+        supabase.from("tasks").select("id,title,description,assigned_to,priority,status,due_at,outlet_id").neq("status", "completed").order("due_at", { ascending: true }),
+        supabase.from("staff").select("id,name"),
       ]);
       setOut(o.data || []); setMonth(mo.data || []); setDaily(d.data || []); setRevs(r.data || []); setPayouts(p.data || []); setOffRows((off.data || []).map((x: any) => x.staff_id));
       setAtlasResults(atlasRaw.data || []);
+      setOpenTasks(tasksRaw.data || []);
+      const sn: Record<string, string> = {};
+      (staffRaw.data || []).forEach((s: any) => { sn[s.id] = s.name; });
+      setStaffNames(sn);
       const fm: Record<string, any> = {}; const sm: Record<string, { net: number; online: number }> = {};
       (st.data || []).forEach((row: any) => { fm[row.outlet_id] = (row.line_items || {}).fixed || {}; });
       (mo.data || []).forEach((row: any) => {
@@ -395,11 +403,11 @@ const downloadPDF = async () => {
     <div>
       <div className="flex flex-wrap justify-between items-end gap-3 mb-6">
         <div>
-          <h2 className="text-2xl md:text-3xl font-black tracking-tight">Founder&apos;s Office</h2>
+          <h2 className="text-2xl md:text-3xl font-black tracking-tight">Command Centre</h2>
           <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mt-1">{dayLabel}</p>
         </div>
        <div className="flex items-center gap-2">
-          <button onClick={downloadPDF} className="bg-yellow-400 text-black font-bold text-[10px] px-4 py-2.5 uppercase tracking-widest hover:opacity-90">📄 PDF for Nishant</button>
+          <button onClick={downloadPDF} className="bg-yellow-400 text-black font-bold text-[10px] px-4 py-2.5 uppercase tracking-widest hover:opacity-90">📄 Download PDF</button>
           <input type="date" max={today} value={date} onChange={e => setDate(e.target.value)} className="bg-black border border-zinc-800 text-white px-3 py-2 focus:outline-none focus:border-yellow-400 text-sm font-mono" />
         </div>
       </div>
@@ -425,7 +433,30 @@ const downloadPDF = async () => {
             ) : <p className="text-xs text-green-400 mb-1">No outlet is in the red this month.</p>}
             {worstPnl && <p className="text-xs text-zinc-400 mb-2"><span className="text-yellow-400">Fix:</span> {fixBleed(worstPnl)}</p>}
             {bleeders.length > 1 && <p className="text-[11px] font-mono text-zinc-500">Also in red: {bleeders.slice(1, 4).map(b => `${b.name} (${inr(b.netProfit)})`).join(", ")}</p>}
-            {noFixedCount > 0 && <p className="text-[10px] text-orange-400 mt-2">⚠ Fixed costs not entered for {noFixedCount} outlet(s) in Sales Target — their profit is overstated until you add rent/staff/etc.</p>}
+            {noFixedCount > 0 && <p className="text-[10px] text-orange-400 mt-2">⚠ Fixed costs not entered for {noFixedCount} outlet(s) in Outlet P&amp;L — their profit is overstated until you add rent/staff/etc.</p>}
+          </Card>
+
+          <Card title="Today's action list" right={<span className="text-[10px] font-mono text-zinc-600">{openTasks.length} open</span>}>
+            {openTasks.length === 0 ? (
+              <p className="text-zinc-600 text-xs">Nothing open — all caught up.</p>
+            ) : (
+              <div className="space-y-1.5">
+                {openTasks.slice(0, 15).map((t: any) => {
+                  const overdue = t.due_at && new Date(t.due_at) < new Date() && t.status !== "completed";
+                  const dueStr = t.due_at ? new Date(t.due_at).toLocaleDateString("en-IN", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" }) : "no deadline";
+                  return (
+                    <div key={t.id} className="flex justify-between items-start text-xs py-1.5 border-t border-zinc-800/60 gap-3">
+                      <div className="min-w-0">
+                        <p className="text-zinc-200 truncate">{t.title}{t.outlet_id ? <span className="text-zinc-600"> · {OUTLET_NAMES[t.outlet_id] || t.outlet_id}</span> : ""}</p>
+                        <p className="text-[10px] text-zinc-500">{staffNames[t.assigned_to] || t.assigned_to} · {t.priority}{overdue ? <span className="text-red-400"> · overdue</span> : ""}</p>
+                      </div>
+                      <span className={`text-[10px] font-mono whitespace-nowrap ${overdue ? "text-red-400" : "text-zinc-500"}`}>{dueStr}</span>
+                    </div>
+                  );
+                })}
+                {openTasks.length > 15 && <p className="text-[10px] text-zinc-600 pt-1">+{openTasks.length - 15} more — see Tasks tab for the full list.</p>}
+              </div>
+            )}
           </Card>
 
           <Card title={`Monthly target · ${d0.toLocaleDateString("en-IN", { month: "long" })}`}>
