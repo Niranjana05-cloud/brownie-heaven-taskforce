@@ -3079,7 +3079,7 @@ else await fetchOutletReportsByDate(outletEntryDate);
               <span>📐</span> Contribution Margins
             </div>
           )}
-                  {user?.role === "Financial Analyst" && (
+                  {(user?.role === "Financial Analyst" || user?.role === "Owner") && (
             <div onClick={() => { setActiveTab("net_realisation"); setSidebarOpen(false); fetchNetRealisation(); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "net_realisation" ? "text-white bg-zinc-900 border-l-2 border-yellow-400" : "text-zinc-500 hover:text-white"}`}>
               <span>🧾</span> Net Realisation
             </div>
@@ -3450,7 +3450,7 @@ else await fetchOutletReportsByDate(outletEntryDate);
             )}
           </div>
        )}
-       {activeTab === "net_realisation" && user?.role === "Financial Analyst" && (
+       {activeTab === "net_realisation" && (user?.role === "Financial Analyst" || user?.role === "Owner") && (
           <div>
             <div className="flex justify-between items-start mb-6 pb-5 border-b border-zinc-800">
               <div>
@@ -3477,7 +3477,7 @@ else await fetchOutletReportsByDate(outletEntryDate);
               </div>
             </div>
 
-            {user?.role === "Financial Analyst" && (
+            {(user?.role === "Financial Analyst" || user?.role === "Owner") && (
               <div className="mb-6 flex items-center gap-3 relative">
                 <button onClick={checkNewPayouts} disabled={autoPayoutChecking} className="bg-yellow-400 text-black px-4 py-2 text-sm font-semibold hover:bg-yellow-300 disabled:opacity-50 transition-colors">
                   {autoPayoutChecking ? "Checking…" : "🔄 Check Swiggy inbox"}
@@ -3564,7 +3564,7 @@ else await fetchOutletReportsByDate(outletEntryDate);
               </div>
             )}
 
-            {user?.role === "Financial Analyst" && (
+            {(user?.role === "Financial Analyst" || user?.role === "Owner") && (
               <div className="mb-8 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
                 {OUTLETS.map((oid) => {
                   const renderPlatformRow = (platform: "Swiggy" | "Zomato") => (
@@ -3607,7 +3607,7 @@ else await fetchOutletReportsByDate(outletEntryDate);
               </div>
             )}
 
-            {user?.role === "Financial Analyst" && (
+            {(user?.role === "Financial Analyst" || user?.role === "Owner") && (
               <div className="mb-8 border border-zinc-800 p-5 max-w-2xl">
                 <p className="text-sm font-semibold mb-1">📥 Upload Swiggy payout report</p>
                 <p className="text-xs text-zinc-500 mb-4">Manual alternative to the auto-checker above — the weekly/monthly annexure Excel Swiggy emails. Reads the "Payout Breakup" sheet, pulls Total Customer Paid (gross) and Net Payout (net) from the Delivered Orders column.</p>
