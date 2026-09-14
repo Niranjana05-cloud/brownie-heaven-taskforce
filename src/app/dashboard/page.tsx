@@ -10,6 +10,7 @@ import FounderDashboard from "./FounderDashboard";
 import CommandCentre from "./CommandCentre";
 import ReconciliationTab from "./ReconciliationTab";
 import supabaseStock from "@/lib/supabaseStock";
+import { fetchRealFoodCostPct, REAL_FOOD_COST_WINDOW_DAYS } from "@/lib/realFoodCost";
 import { OUTLET_ID_TO_STOCK_NAME } from "@/lib/outletMap";
 import { FOOD_COST_MAP } from "@/lib/foodCosts";
 import { matchItemCost } from "@/lib/itemPerfCosts";
@@ -387,6 +388,19 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [activeTab, setActiveTab] = useState<"tasks" | "my_report" | "all_reports" | "analytics" | "outlet_reports" | "owner_outlets" | "history" | "attendance" | "sales_target" | "payout" | "reconciliation" | "competition" | "item_perf" | "ceo_report" | "fines" | "niranjana_report" | "pnl" | "contribution_margins" | "net_realisation" | "cash_flow" | "cheques" | "auto_reviews" | "purchase_vendors">("tasks");
+  // Real, purchase-data-backed food cost % (trailing 30 days, company-wide) —
+  // replaces the flat 29.4% assumption in Outlet P&L, Channel P&L and Command
+  // Centre. Falls back to 29.4% if there's no purchase/revenue data yet in the
+  // window, so nothing breaks while Purchase & Vendors data is still thin.
+  const [realFoodCostPct, setRealFoodCostPct] = useState<number | null>(null);
+  const [realFoodCostWindow, setRealFoodCostWindow] = useState<{ from: string; to: string } | null>(null);
+  useEffect(() => {
+    fetchRealFoodCostPct().then(({ pct, windowFrom, windowTo }) => {
+      setRealFoodCostPct(pct);
+      setRealFoodCostWindow({ from: windowFrom, to: windowTo });
+    }).catch((err) => console.error("real food cost fetch failed", err));
+  }, []);
+  const cogsRate = (realFoodCostPct ?? 29.4) / 100;
   const RANGE_PRESETS = [
     { id: "yesterday", label: "Yesterday" },
     { id: "last7", label: "Last 7 days" },
@@ -878,7 +892,7 @@ export default function DashboardPage() {
     const rows = OUTLETS.filter((o) => byOutlet[o]).map((o) => {
       const b = byOutlet[o];
       const chan = (sales: number, isOnline: boolean) => {
-        const cogs = sales * 0.294;
+        const cogs = sales * cogsRate;
         const wastage = sales * 0.05;
         const commission = isOnline ? sales * 0.5 : 0;
         const contrib = sales - cogs - wastage - commission;
@@ -1053,12 +1067,15 @@ export default function DashboardPage() {
       .filter((x): x is NonNullable<typeof x> => !!x && x.gapPct >= 10)
       .sort((a, b) => b.gapPct - a.gapPct);
 
-    // Real food cost % — actual purchase spend against actual revenue in the
-    // same window, compared to the flat 29.4% every other P&L page assumes.
+    // Food cost % for the date range selected on THIS page — compared against
+    // the app-wide figure (trailing 30 days, fixed window) now actually used in
+    // Outlet P&L / Channel P&L / Command Centre. These two numbers can
+    // legitimately differ if you pick a different range here than the
+    // app-wide rolling window — that's expected, not a bug.
     const totalRevenue = pvRevenueRows.reduce((s, r) => s + (Number(r.shop_sales_value) || 0) + (Number(r.swiggy_sales_value) || 0) + (Number(r.zomato_sales_value) || 0), 0);
-    const realFoodCostPct = totalRevenue > 0 ? (totalSpend / totalRevenue) * 100 : null;
-    const assumedFoodCostPct = 29.4;
-    const modelGapPct = realFoodCostPct != null ? realFoodCostPct - assumedFoodCostPct : null;
+    const selectedRangeFoodCostPct = totalRevenue > 0 ? (totalSpend / totalRevenue) * 100 : null;
+    const assumedFoodCostPct = realFoodCostPct ?? 29.4;
+    const modelGapPct = selectedRangeFoodCostPct != null ? selectedRangeFoodCostPct - assumedFoodCostPct : null;
 
     // Category-level: real ingredient spend vs Item Performance's category
     // revenue. Matched case-insensitively/trimmed — anything that doesn't
@@ -1088,7 +1105,7 @@ export default function DashboardPage() {
       categoryMatch.sort((a, b) => b.spend - a.spend);
     }
 
-    return { totalSpend, vendorRanked, categoryRanked, priceCreep, vendorComparison, totalRevenue, realFoodCostPct, assumedFoodCostPct, modelGapPct, categoryMatch, unmatchedSpendCategories, unmatchedRevenueCategories };
+    return { totalSpend, vendorRanked, categoryRanked, priceCreep, vendorComparison, totalRevenue, selectedRangeFoodCostPct, assumedFoodCostPct, modelGapPct, categoryMatch, unmatchedSpendCategories, unmatchedRevenueCategories };
   })();
 
   // Drill-down into one selected vendor: everything they sold, whether their
@@ -1310,7 +1327,7 @@ export default function DashboardPage() {
     const totals = pnlRows.reduce((a, r) => ({ shop: a.shop + r.shop.sales, swiggy: a.swiggy + r.swiggy.sales, zomato: a.zomato + r.zomato.sales, sales: a.sales + r.totalSales, contrib: a.contrib + r.totalContrib, fixed: a.fixed + r.fixed, net: a.net + r.netProfit }), { shop: 0, swiggy: 0, zomato: 0, sales: 0, contrib: 0, fixed: 0, net: 0 });
     const rowsHtml = pnlRows.map((r) => `<tr><td style="padding:6px 8px;border-bottom:1px solid ${C.line};font-size:10px;font-weight:600">${r.name}</td><td style="padding:6px 8px;border-bottom:1px solid ${C.line};text-align:right;font-size:10px">${inr(r.shop.sales)}</td><td style="padding:6px 8px;border-bottom:1px solid ${C.line};text-align:right;font-size:10px">${inr(r.swiggy.sales)}</td><td style="padding:6px 8px;border-bottom:1px solid ${C.line};text-align:right;font-size:10px">${inr(r.zomato.sales)}</td><td style="padding:6px 8px;border-bottom:1px solid ${C.line};text-align:right;font-size:10px;font-weight:700">${inr(r.totalSales)}</td><td style="padding:6px 8px;border-bottom:1px solid ${C.line};text-align:right;font-size:10px;color:${C.soft}">${inr(r.totalContrib)}</td><td style="padding:6px 8px;border-bottom:1px solid ${C.line};text-align:right;font-size:10px;color:${C.soft}">${inr(r.fixed)}</td><td style="padding:6px 8px;border-bottom:1px solid ${C.line};text-align:right;font-size:10px;font-weight:700;color:${r.netProfit >= 0 ? C.green : C.red}">${inr(r.netProfit)}</td><td style="padding:6px 8px;border-bottom:1px solid ${C.line};text-align:right;font-size:10px;font-weight:700;color:${r.netMargin >= 0 ? C.green : C.red}">${r.netMargin.toFixed(1)}%</td></tr>`).join("");
     const totalRow = `<tr style="background:${C.line};border-top:2px solid ${C.ink}"><td style="padding:8px;font-size:10px;font-weight:900">TOTAL</td><td style="padding:8px;text-align:right;font-size:10px;font-weight:700">${inr(totals.shop)}</td><td style="padding:8px;text-align:right;font-size:10px;font-weight:700">${inr(totals.swiggy)}</td><td style="padding:8px;text-align:right;font-size:10px;font-weight:700">${inr(totals.zomato)}</td><td style="padding:8px;text-align:right;font-size:10px;font-weight:900">${inr(totals.sales)}</td><td style="padding:8px;text-align:right;font-size:10px;font-weight:700">${inr(totals.contrib)}</td><td style="padding:8px;text-align:right;font-size:10px;font-weight:700">${inr(totals.fixed)}</td><td style="padding:8px;text-align:right;font-size:10px;font-weight:900;color:${totals.net >= 0 ? C.green : C.red}">${inr(totals.net)}</td><td style="padding:8px;text-align:right;font-size:10px;font-weight:900;color:${totals.net >= 0 ? C.green : C.red}">${totals.sales > 0 ? ((totals.net / totals.sales) * 100).toFixed(1) + "%" : "-"}</td></tr>`;
-    const html = `<div style="width:1000px;background:${C.bg};font-family:'Segoe UI',Arial,sans-serif;color:${C.ink};padding:34px"><div style="font-size:22px;font-weight:900">Brownie Heaven — Channel P&amp;L</div><div style="font-size:11px;color:${C.soft};margin-bottom:16px">${pnlFrom} to ${pnlTo} · real fixed costs from Outlet P&amp;L · 29.4% COGS · 5% wastage · 50% online commission</div><table style="width:100%;border-collapse:collapse;background:${C.card};border:1px solid ${C.line};border-radius:10px;overflow:hidden"><thead><tr style="background:${C.ink}"><th style="padding:8px;text-align:left;color:#FFF6E5;font-size:9px">OUTLET</th><th style="padding:8px;text-align:right;color:#FFF6E5;font-size:9px">SHOP</th><th style="padding:8px;text-align:right;color:#FFF6E5;font-size:9px">SWIGGY</th><th style="padding:8px;text-align:right;color:#FFF6E5;font-size:9px">ZOMATO</th><th style="padding:8px;text-align:right;color:#FFF6E5;font-size:9px">TOTAL SALES</th><th style="padding:8px;text-align:right;color:#FFF6E5;font-size:9px">CONTRIBUTION</th><th style="padding:8px;text-align:right;color:#FFF6E5;font-size:9px">FIXED COSTS</th><th style="padding:8px;text-align:right;color:#FFF6E5;font-size:9px">NET PROFIT</th><th style="padding:8px;text-align:right;color:#FFF6E5;font-size:9px">NET %</th></tr></thead><tbody>${rowsHtml}${totalRow}</tbody></table><div style="font-size:9px;color:${C.soft};margin-top:12px">Generated ${new Date().toISOString().split("T")[0]}</div></div>`;
+    const html = `<div style="width:1000px;background:${C.bg};font-family:'Segoe UI',Arial,sans-serif;color:${C.ink};padding:34px"><div style="font-size:22px;font-weight:900">Brownie Heaven — Channel P&amp;L</div><div style="font-size:11px;color:${C.soft};margin-bottom:16px">${pnlFrom} to ${pnlTo} · real fixed costs from Outlet P&amp;L · ${(cogsRate * 100).toFixed(1)}% COGS (real, trailing ${REAL_FOOD_COST_WINDOW_DAYS}d) · 5% wastage · 50% online commission</div><table style="width:100%;border-collapse:collapse;background:${C.card};border:1px solid ${C.line};border-radius:10px;overflow:hidden"><thead><tr style="background:${C.ink}"><th style="padding:8px;text-align:left;color:#FFF6E5;font-size:9px">OUTLET</th><th style="padding:8px;text-align:right;color:#FFF6E5;font-size:9px">SHOP</th><th style="padding:8px;text-align:right;color:#FFF6E5;font-size:9px">SWIGGY</th><th style="padding:8px;text-align:right;color:#FFF6E5;font-size:9px">ZOMATO</th><th style="padding:8px;text-align:right;color:#FFF6E5;font-size:9px">TOTAL SALES</th><th style="padding:8px;text-align:right;color:#FFF6E5;font-size:9px">CONTRIBUTION</th><th style="padding:8px;text-align:right;color:#FFF6E5;font-size:9px">FIXED COSTS</th><th style="padding:8px;text-align:right;color:#FFF6E5;font-size:9px">NET PROFIT</th><th style="padding:8px;text-align:right;color:#FFF6E5;font-size:9px">NET %</th></tr></thead><tbody>${rowsHtml}${totalRow}</tbody></table><div style="font-size:9px;color:${C.soft};margin-top:12px">Generated ${new Date().toISOString().split("T")[0]}</div></div>`;
     const lib = await loadH2P();
     window.scrollTo(0, 0); await new Promise((r) => setTimeout(r, 50));
     const holder = document.createElement("div"); holder.style.position = "fixed"; holder.style.left = "-9999px"; holder.style.top = "0"; holder.innerHTML = html; document.body.appendChild(holder);
@@ -3382,7 +3399,7 @@ else await fetchOutletReportsByDate(outletEntryDate);
             <div className="flex justify-between items-start mb-6 pb-5 border-b border-zinc-800">
               <div>
                 <h2 className="text-2xl md:text-3xl font-black tracking-tight">Channel P&amp;L</h2>
-                <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mt-1">Real fixed costs from Outlet P&amp;L · 29.4% COGS · 5% wastage · 50% online commission</p>
+                <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mt-1">Real fixed costs from Outlet P&amp;L · {(cogsRate * 100).toFixed(1)}% COGS (real, trailing {REAL_FOOD_COST_WINDOW_DAYS}d) · 5% wastage · 50% online commission</p>
               </div>
               <div className="flex gap-2">
                 <input type="date" value={pnlFrom} onChange={(e) => setPnlFrom(e.target.value)} className="bg-black border border-zinc-800 text-white px-3 py-2 focus:outline-none focus:border-yellow-400 text-sm font-mono" />
@@ -3728,27 +3745,27 @@ else await fetchOutletReportsByDate(outletEntryDate);
                     <p className="text-xl font-black text-red-400">{pvAnalysis.priceCreep.length}</p>
                   </div>
                   <div className={`bg-[#131316] border p-4 min-w-[160px] ${pvAnalysis.modelGapPct == null ? "border-zinc-800" : Math.abs(pvAnalysis.modelGapPct) >= 5 ? "border-orange-500/40" : "border-zinc-800"}`}>
-                    <p className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-1">Real food cost %</p>
-                    <p className="text-xl font-black">{pvAnalysis.realFoodCostPct == null ? "—" : `${pvAnalysis.realFoodCostPct.toFixed(1)}%`}</p>
-                    <p className="text-[10px] text-zinc-600 mt-1">vs. {pvAnalysis.assumedFoodCostPct}% assumed everywhere else</p>
+                    <p className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-1">Food cost % (this range)</p>
+                    <p className="text-xl font-black">{pvAnalysis.selectedRangeFoodCostPct == null ? "—" : `${pvAnalysis.selectedRangeFoodCostPct.toFixed(1)}%`}</p>
+                    <p className="text-[10px] text-zinc-600 mt-1">vs. {pvAnalysis.assumedFoodCostPct.toFixed(1)}% used app-wide (trailing {REAL_FOOD_COST_WINDOW_DAYS}d)</p>
                   </div>
                 </div>
 
                 <div className={`border p-4 mb-6 ${pvAnalysis.modelGapPct != null && Math.abs(pvAnalysis.modelGapPct) >= 5 ? "bg-orange-950/20 border-orange-500/40" : "bg-[#131316] border-zinc-800"}`}>
-                  <p className="text-[10px] font-mono text-zinc-400 uppercase tracking-widest mb-1">💰 Real vs. modelled profitability</p>
-                  {pvAnalysis.realFoodCostPct == null ? (
+                  <p className="text-[10px] font-mono text-zinc-400 uppercase tracking-widest mb-1">💰 This range vs. the app-wide figure</p>
+                  {pvAnalysis.selectedRangeFoodCostPct == null ? (
                     <p className="text-xs text-zinc-600">No revenue data in this date range to compare against.</p>
                   ) : (
                     <>
-                      <p className="text-xs text-zinc-300 mb-1">Actual purchase spend was <span className="font-bold text-white">₹{Math.round(pvAnalysis.totalSpend).toLocaleString("en-IN")}</span> against <span className="font-bold text-white">₹{Math.round(pvAnalysis.totalRevenue).toLocaleString("en-IN")}</span> revenue in this window — a real food cost of <span className="font-bold text-yellow-400">{pvAnalysis.realFoodCostPct.toFixed(1)}%</span>.</p>
-                      <p className="text-xs text-zinc-400">Every other P&amp;L page in TASKFORCE assumes a flat <span className="font-bold">{pvAnalysis.assumedFoodCostPct}%</span>. {pvAnalysis.modelGapPct != null && (
+                      <p className="text-xs text-zinc-300 mb-1">Actual purchase spend was <span className="font-bold text-white">₹{Math.round(pvAnalysis.totalSpend).toLocaleString("en-IN")}</span> against <span className="font-bold text-white">₹{Math.round(pvAnalysis.totalRevenue).toLocaleString("en-IN")}</span> revenue in this window — a food cost of <span className="font-bold text-yellow-400">{pvAnalysis.selectedRangeFoodCostPct.toFixed(1)}%</span> for this specific date range.</p>
+                      <p className="text-xs text-zinc-400">Outlet P&amp;L, Channel P&amp;L and Command Centre now use a real figure too — <span className="font-bold">{pvAnalysis.assumedFoodCostPct.toFixed(1)}%</span>, based on a rolling trailing-{REAL_FOOD_COST_WINDOW_DAYS}-day window rather than this page's selected range. {pvAnalysis.modelGapPct != null && (
                         Math.abs(pvAnalysis.modelGapPct) < 2
-                          ? <span className="text-green-400">That's close — the assumption is holding up well for this period.</span>
+                          ? <span className="text-green-400">Close to each other — expected, since both are real numbers now.</span>
                           : pvAnalysis.modelGapPct > 0
-                            ? <span className="text-red-400">Real cost is running {pvAnalysis.modelGapPct.toFixed(1)} points higher — profit across the app has likely been overstated for this period.</span>
-                            : <span className="text-green-400">Real cost is running {Math.abs(pvAnalysis.modelGapPct).toFixed(1)} points lower — profit across the app has likely been understated for this period.</span>
+                            ? <span className="text-yellow-400">This range is running {pvAnalysis.modelGapPct.toFixed(1)} points higher than the rolling figure — likely just this period being pricier, or a shorter/different window than 30 days.</span>
+                            : <span className="text-yellow-400">This range is running {Math.abs(pvAnalysis.modelGapPct).toFixed(1)} points lower than the rolling figure — likely just this period being cheaper, or a shorter/different window than 30 days.</span>
                       )}</p>
-                      <p className="text-[10px] text-zinc-600 mt-2">Purchases aren't outlet-tagged yet, and not every ingredient purchased converts to revenue in the exact same window it was bought (some gets used later) — so this is a real, useful signal, not an exact match to any single day's numbers.</p>
+                      <p className="text-[10px] text-zinc-600 mt-2">Purchases aren't outlet-tagged yet, and not every ingredient purchased converts to revenue in the exact same window it was bought (some gets used later) — so some gap between any two windows is expected, not a bug.</p>
                     </>
                   )}
                 </div>
@@ -4244,7 +4261,7 @@ else await fetchOutletReportsByDate(outletEntryDate);
               const stYear = Number(stDate.slice(0, 4)), stMonthNum = Number(stDate.slice(5, 7));
               const daysInThisMonth = new Date(stYear, stMonthNum, 0).getDate();
               const todayTotalSales = dayNet + dayOnline;
-              const todayCogs = 0.294 * todayTotalSales, todayWastage = 0.05 * todayTotalSales, todayComm = 0.5 * dayOnline;
+              const todayCogs = cogsRate * todayTotalSales, todayWastage = 0.05 * todayTotalSales, todayComm = 0.5 * dayOnline;
               const todayContrib = todayTotalSales - todayCogs - todayWastage - todayComm;
               const todayFixedShare = totalFixed / daysInThisMonth;
               const todayNetProfit = todayContrib - todayFixedShare;
@@ -4316,7 +4333,7 @@ else await fetchOutletReportsByDate(outletEntryDate);
                   const fEb = isSharedFixed ? 0 : _ab(f.eb);
                   const fTransport = isSharedFixed ? 0 : _ab(f.transport);
                  const totalSales = net + online;
-                  const cogs = 0.294 * totalSales, wastage = 0.05 * totalSales, comm = 0.5 * online;
+                  const cogs = cogsRate * totalSales, wastage = 0.05 * totalSales, comm = 0.5 * online;
                   const contrib = totalSales - cogs - wastage - comm;
                   const rm = 0.2 * fRent;
                   const totalFixed = fStaff+fRent+fEb+fTransport+rm+_ab(f.pest)+_ab(f.water)+_ab(f.airtel);
@@ -4331,7 +4348,7 @@ else await fetchOutletReportsByDate(outletEntryDate);
                   const stYear = Number(stDate.slice(0, 4)), stMonthNum = Number(stDate.slice(5, 7));
                   const daysInThisMonth = new Date(stYear, stMonthNum, 0).getDate();
                   const todayTotalSales = dayNet + dayOnline;
-                  const todayCogs = 0.294 * todayTotalSales, todayWastage = 0.05 * todayTotalSales, todayComm = 0.5 * dayOnline;
+                  const todayCogs = cogsRate * todayTotalSales, todayWastage = 0.05 * todayTotalSales, todayComm = 0.5 * dayOnline;
                   const todayContrib = todayTotalSales - todayCogs - todayWastage - todayComm;
                   const todayFixedShare = totalFixed / daysInThisMonth;
                   const todayNetProfit = todayContrib - todayFixedShare;
@@ -4369,7 +4386,7 @@ else await fetchOutletReportsByDate(outletEntryDate);
                           {row(`Online Sales (Swiggy+Zomato) · ${dayLbl}`, inp("online", dayOnline))}
                           <tr key="_tpldiv" className="border-t border-zinc-800"><td colSpan={2} className="px-4 pt-3 pb-1 text-[10px] font-mono text-yellow-400 uppercase tracking-widest">Today's P&amp;L · {dayLbl} (fixed cost ÷ {daysInThisMonth} days this month)</td></tr>
                           {row("Today's Total Sales", m(todayTotalSales), { bold: true })}
-                          {row("Less: COGS @ 29.4%", m(todayCogs), { neg: true })}
+                          {row(`Less: COGS @ ${(cogsRate * 100).toFixed(1)}% (real, trailing ${REAL_FOOD_COST_WINDOW_DAYS}d)`, m(todayCogs), { neg: true })}
                           {row("Less: Wastage @ 5%", m(todayWastage), { neg: true })}
                           {row("Less: Commission @ 50% (online)", m(todayComm), { neg: true })}
                           {row("Today's Contribution", m(todayContrib), { bold: true })}
@@ -4380,7 +4397,7 @@ else await fetchOutletReportsByDate(outletEntryDate);
                           {row(`Net Sales — ${ml} total ${editing ? "✏️ (whole-month override)" : ""}`, editing ? inp("mnet", Number(_moNet) || 0) : m(net))}
                           {row(`Online Sales — ${ml} total ${editing ? "✏️ (whole-month override)" : ""}`, editing ? inp("monline", Number(_moOnline) || 0) : m(online))}
                           {row("Total Sales (shop + online)", m(totalSales), { bold: true })}
-                          {row("Less: COGS (food cost) @ 29.4% of total", m(cogs), { neg: true })}
+                          {row(`Less: COGS (food cost) @ ${(cogsRate * 100).toFixed(1)}% of total (real, trailing ${REAL_FOOD_COST_WINDOW_DAYS}d)`, m(cogs), { neg: true })}
                           {row("Less: Wastage @ 5% of total", m(wastage), { neg: true })}
                           {row("Less: Commission @ 50% (online)", m(comm), { neg: true })}
                           {row("Contribution (before fixed)", m(contrib), { bold: true })}
