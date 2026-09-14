@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import supabaseStock from "@/lib/supabaseStock";
+import { fetchRealFoodCostPct, REAL_FOOD_COST_WINDOW_DAYS } from "@/lib/realFoodCost";
 
 type Staff = { id: string; name: string; role: string; outlets?: string[] };
 
@@ -55,6 +56,8 @@ const lakh = (n: number) => "₹" + (n / 100000).toFixed(2) + " L";
   const [prevMonthRows, setPrevMonthRows] = useState<any[]>([]);
   const [monthReviews, setMonthReviews] = useState<any[]>([]);
   const [tableCounts, setTableCounts] = useState<{ name: string; count: number | null; source: string }[]>([]);
+  const [realFoodCostPct, setRealFoodCostPct] = useState<number | null>(null);
+  const cogsRate = (realFoodCostPct ?? 29.4) / 100;
   const [loading, setLoading] = useState(true);
 
   const d0 = new Date(date + "T00:00:00");
@@ -133,6 +136,13 @@ const lakh = (n: number) => "₹" + (n / 100000).toFixed(2) + " L";
     })();
   }, []);
 
+  // Real food cost % (trailing 30 days, company-wide) — replaces the flat
+  // 29.4% assumption previously used in the modules below. Same shared
+  // calculation as Outlet P&L and Channel P&L, so all three stay consistent.
+  useEffect(() => {
+    fetchRealFoodCostPct().then(({ pct }) => setRealFoodCostPct(pct)).catch((err) => console.error("real food cost fetch failed", err));
+  }, []);
+
   const n = (v: any) => Number(v) || 0;
   const sum = (rows: any[], k: string) => rows.reduce((s, r) => s + n(r[k]), 0);
 
@@ -148,9 +158,9 @@ const lakh = (n: number) => "₹" + (n / 100000).toFixed(2) + " L";
   // line to separate out, so EBITDA and "net profit" are effectively the same
   // figure; shown as EBITDA to match his terminology.
   const companyFinancials = (totalSales: number, onlineSales: number, fixedTotal: number) => {
-    const grossMargin = totalSales * (1 - 0.294);
+    const grossMargin = totalSales * (1 - cogsRate);
     const commission = 0.5 * onlineSales;
-    const contribution = totalSales - totalSales * 0.294 - totalSales * 0.05 - commission;
+    const contribution = totalSales - totalSales * cogsRate - totalSales * 0.05 - commission;
     const ebitda = contribution - fixedTotal;
     return { sales: totalSales, grossMargin, grossMarginPct: totalSales > 0 ? (grossMargin / totalSales) * 100 : 0, contribution, ebitda };
   };
@@ -190,7 +200,7 @@ const lakh = (n: number) => "₹" + (n / 100000).toFixed(2) + " L";
     const fixed = _abs(f.staff) + _abs(f.rent) + _abs(f.eb) + _abs(f.transport) + 0.2 * _abs(f.rent) + _abs(f.pest) + _abs(f.water) + _abs(f.airtel);
     const oTotal = oNet + oOnline;
     const comm = 0.5 * oOnline;
-    const contribution = oTotal - 0.294 * oTotal - 0.05 * oTotal - comm;
+    const contribution = oTotal - cogsRate * oTotal - 0.05 * oTotal - comm;
     const netProfit = contribution - fixed;
     return { o, name: OUTLET_NAMES[o] || o, net: oNet, online: oOnline, fixed, comm, contribution, netProfit, reported: rows.length };
   });
@@ -552,7 +562,7 @@ const downloadPDF = async () => {
                 </tbody>
               </table>
             </div>
-            <p className="text-[10px] text-zinc-600 mt-3">Modelled using 29.4% COGS, 5% wastage, 50% online commission (same assumptions as Outlet P&amp;L) — not real per-outlet food cost. EBITDA = contribution minus fixed costs; this business has no separate interest/depreciation line to strip out.</p>
+            <p className="text-[10px] text-zinc-600 mt-3">Uses a real {(cogsRate * 100).toFixed(1)}% COGS (from actual purchase data, trailing {REAL_FOOD_COST_WINDOW_DAYS} days, company-wide — not yet per-outlet), 5% wastage, 50% online commission. EBITDA = contribution minus fixed costs; this business has no separate interest/depreciation line to strip out.</p>
           </Card>
 
           <Card title="2. Outlet ranking — growth, profitability, ratings, compliance">
@@ -580,7 +590,7 @@ const downloadPDF = async () => {
                 </tbody>
               </table>
             </div>
-            <p className="text-[10px] text-zinc-600 mt-3">Food cost isn't ranked here — it's currently a flat 29.4% assumption applied the same way to every outlet, so ranking on it wouldn't show anything real yet. Needs Inventory &amp; Food Cost data first.</p>
+            <p className="text-[10px] text-zinc-600 mt-3">Food cost isn't ranked here — it's a real {(cogsRate * 100).toFixed(1)}% figure now (not a guess), but still company-wide and applied the same way to every outlet, so ranking on it wouldn't show anything outlet-specific yet. Needs per-outlet Inventory &amp; Food Cost data first.</p>
           </Card>
 
           <Card title="3. Top opportunities, profit leakages &amp; operational risks">
