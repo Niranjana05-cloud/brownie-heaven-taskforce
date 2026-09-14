@@ -2960,7 +2960,7 @@ else await fetchOutletReportsByDate(outletEntryDate);
               <span>🧾</span> Net Realisation
             </div>
           )}
-                  {user?.role === "Financial Analyst" && (
+                  {(user?.role === "Financial Analyst" || user?.role === "Owner") && (
             <div onClick={() => { setActiveTab("purchase_vendors"); setSidebarOpen(false); fetchPurchaseVendors(); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "purchase_vendors" ? "text-white bg-zinc-900 border-l-2 border-yellow-400" : "text-zinc-500 hover:text-white"}`}>
               <span>🛒</span> Purchase &amp; Vendors
             </div>
@@ -3570,7 +3570,7 @@ else await fetchOutletReportsByDate(outletEntryDate);
             )}
           </div>
        )}
-        {activeTab === "purchase_vendors" && user?.role === "Financial Analyst" && (
+        {activeTab === "purchase_vendors" && (user?.role === "Financial Analyst" || user?.role === "Owner") && (
           <div>
             <div className="flex justify-between items-start mb-6 pb-5 border-b border-zinc-800">
               <div>
