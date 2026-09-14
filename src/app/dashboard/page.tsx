@@ -939,6 +939,8 @@ export default function DashboardPage() {
   const [pvTo, setPvTo] = useState<string>(() => new Date().toISOString().slice(0, 10));
   const [pvRows, setPvRows] = useState<any[]>([]);
   const [pvVendorSel, setPvVendorSel] = useState<string>("");
+  const [pvRevenueRows, setPvRevenueRows] = useState<any[]>([]);
+  const [pvItemPerfCategories, setPvItemPerfCategories] = useState<{ label: string; rows: { category: string; revenue: number }[] } | null>(null);
   const [pvLoading, setPvLoading] = useState(false);
   const fetchPurchaseVendors = async () => {
     setPvLoading(true);
@@ -964,6 +966,39 @@ export default function DashboardPage() {
       offset += BATCH;
     }
     setPvRows(all);
+
+    // Real revenue for the same date range — company-wide, batched for the
+    // same reason as above (12 outlets × a wide range can exceed 1000 rows).
+    let revAll: any[] = [];
+    let revOffset = 0;
+    while (true) {
+      const { data: revBatch, error: revErr } = await supabase
+        .from("outlet_reports")
+        .select("shop_sales_value,swiggy_sales_value,zomato_sales_value")
+        .gte("report_date", pvFrom)
+        .lte("report_date", pvTo)
+        .range(revOffset, revOffset + BATCH - 1);
+      if (revErr) { console.error(revErr); break; }
+      revAll = revAll.concat(revBatch || []);
+      if (!revBatch || revBatch.length < BATCH) break;
+      revOffset += BATCH;
+    }
+    setPvRevenueRows(revAll);
+
+    // Latest Item Performance upload's category revenue — for the category-
+    // level cost-vs-revenue check. This is whatever period that upload covers,
+    // not necessarily the same window as the purchase date range above —
+    // shown with its own label so the two periods are never conflated.
+    const { data: uploads } = await supabase.from("item_perf_uploads").select("id,label").order("created_at", { ascending: false }).limit(1);
+    if (uploads && uploads.length > 0) {
+      const { data: ipRows } = await supabase.from("item_perf_rows").select("category,net_revenue").eq("upload_id", uploads[0].id);
+      const byCategory: Record<string, number> = {};
+      (ipRows || []).forEach((r: any) => { const c = r.category || "Uncategorised"; byCategory[c] = (byCategory[c] || 0) + (Number(r.net_revenue) || 0); });
+      setPvItemPerfCategories({ label: uploads[0].label, rows: Object.entries(byCategory).map(([category, revenue]) => ({ category, revenue })) });
+    } else {
+      setPvItemPerfCategories(null);
+    }
+
     setPvLoading(false);
   };
   useEffect(() => { if (activeTab === "purchase_vendors") fetchPurchaseVendors(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [activeTab, pvFrom, pvTo]);
@@ -1018,7 +1053,42 @@ export default function DashboardPage() {
       .filter((x): x is NonNullable<typeof x> => !!x && x.gapPct >= 10)
       .sort((a, b) => b.gapPct - a.gapPct);
 
-    return { totalSpend, vendorRanked, categoryRanked, priceCreep, vendorComparison };
+    // Real food cost % — actual purchase spend against actual revenue in the
+    // same window, compared to the flat 29.4% every other P&L page assumes.
+    const totalRevenue = pvRevenueRows.reduce((s, r) => s + (Number(r.shop_sales_value) || 0) + (Number(r.swiggy_sales_value) || 0) + (Number(r.zomato_sales_value) || 0), 0);
+    const realFoodCostPct = totalRevenue > 0 ? (totalSpend / totalRevenue) * 100 : null;
+    const assumedFoodCostPct = 29.4;
+    const modelGapPct = realFoodCostPct != null ? realFoodCostPct - assumedFoodCostPct : null;
+
+    // Category-level: real ingredient spend vs Item Performance's category
+    // revenue. Matched case-insensitively/trimmed — anything that doesn't
+    // match on either side is listed explicitly, never silently dropped,
+    // since a wording mismatch (e.g. "Ice cream" vs "Ice Cream") would
+    // otherwise make a real category vanish without any sign it happened.
+    const norm = (s: string) => (s || "").trim().toLowerCase();
+    let categoryMatch: { category: string; revenue: number; spend: number; costPct: number }[] = [];
+    let unmatchedSpendCategories: string[] = [];
+    let unmatchedRevenueCategories: string[] = [];
+    if (pvItemPerfCategories) {
+      const revByNorm: Record<string, { label: string; revenue: number }> = {};
+      pvItemPerfCategories.rows.forEach((r) => { revByNorm[norm(r.category)] = { label: r.category, revenue: r.revenue }; });
+      const spendByNorm: Record<string, { label: string; spend: number }> = {};
+      categoryRanked.forEach(([cat, amt]) => { spendByNorm[norm(cat)] = { label: cat, spend: amt }; });
+      const allKeys = new Set([...Object.keys(revByNorm), ...Object.keys(spendByNorm)]);
+      allKeys.forEach((k) => {
+        const rev = revByNorm[k], sp = spendByNorm[k];
+        if (rev && sp) {
+          categoryMatch.push({ category: rev.label, revenue: rev.revenue, spend: sp.spend, costPct: rev.revenue > 0 ? (sp.spend / rev.revenue) * 100 : 0 });
+        } else if (sp && !rev) {
+          unmatchedSpendCategories.push(sp.label);
+        } else if (rev && !sp) {
+          unmatchedRevenueCategories.push(rev.label);
+        }
+      });
+      categoryMatch.sort((a, b) => b.spend - a.spend);
+    }
+
+    return { totalSpend, vendorRanked, categoryRanked, priceCreep, vendorComparison, totalRevenue, realFoodCostPct, assumedFoodCostPct, modelGapPct, categoryMatch, unmatchedSpendCategories, unmatchedRevenueCategories };
   })();
 
   // Drill-down into one selected vendor: everything they sold, whether their
@@ -3657,7 +3727,63 @@ else await fetchOutletReportsByDate(outletEntryDate);
                     <p className="text-[10px] font-mono text-red-400 uppercase tracking-widest mb-1">Price jumps (≥10%)</p>
                     <p className="text-xl font-black text-red-400">{pvAnalysis.priceCreep.length}</p>
                   </div>
+                  <div className={`bg-[#131316] border p-4 min-w-[160px] ${pvAnalysis.modelGapPct == null ? "border-zinc-800" : Math.abs(pvAnalysis.modelGapPct) >= 5 ? "border-orange-500/40" : "border-zinc-800"}`}>
+                    <p className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-1">Real food cost %</p>
+                    <p className="text-xl font-black">{pvAnalysis.realFoodCostPct == null ? "—" : `${pvAnalysis.realFoodCostPct.toFixed(1)}%`}</p>
+                    <p className="text-[10px] text-zinc-600 mt-1">vs. {pvAnalysis.assumedFoodCostPct}% assumed everywhere else</p>
+                  </div>
                 </div>
+
+                <div className={`border p-4 mb-6 ${pvAnalysis.modelGapPct != null && Math.abs(pvAnalysis.modelGapPct) >= 5 ? "bg-orange-950/20 border-orange-500/40" : "bg-[#131316] border-zinc-800"}`}>
+                  <p className="text-[10px] font-mono text-zinc-400 uppercase tracking-widest mb-1">💰 Real vs. modelled profitability</p>
+                  {pvAnalysis.realFoodCostPct == null ? (
+                    <p className="text-xs text-zinc-600">No revenue data in this date range to compare against.</p>
+                  ) : (
+                    <>
+                      <p className="text-xs text-zinc-300 mb-1">Actual purchase spend was <span className="font-bold text-white">₹{Math.round(pvAnalysis.totalSpend).toLocaleString("en-IN")}</span> against <span className="font-bold text-white">₹{Math.round(pvAnalysis.totalRevenue).toLocaleString("en-IN")}</span> revenue in this window — a real food cost of <span className="font-bold text-yellow-400">{pvAnalysis.realFoodCostPct.toFixed(1)}%</span>.</p>
+                      <p className="text-xs text-zinc-400">Every other P&amp;L page in TASKFORCE assumes a flat <span className="font-bold">{pvAnalysis.assumedFoodCostPct}%</span>. {pvAnalysis.modelGapPct != null && (
+                        Math.abs(pvAnalysis.modelGapPct) < 2
+                          ? <span className="text-green-400">That's close — the assumption is holding up well for this period.</span>
+                          : pvAnalysis.modelGapPct > 0
+                            ? <span className="text-red-400">Real cost is running {pvAnalysis.modelGapPct.toFixed(1)} points higher — profit across the app has likely been overstated for this period.</span>
+                            : <span className="text-green-400">Real cost is running {Math.abs(pvAnalysis.modelGapPct).toFixed(1)} points lower — profit across the app has likely been understated for this period.</span>
+                      )}</p>
+                      <p className="text-[10px] text-zinc-600 mt-2">Purchases aren't outlet-tagged yet, and not every ingredient purchased converts to revenue in the exact same window it was bought (some gets used later) — so this is a real, useful signal, not an exact match to any single day's numbers.</p>
+                    </>
+                  )}
+                </div>
+
+                {pvItemPerfCategories && pvAnalysis.categoryMatch.length > 0 && (
+                  <div className="bg-[#131316] border border-zinc-800 p-4 mb-6">
+                    <p className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-1">📦 Category cost ratio — ingredient spend vs. item revenue</p>
+                    <p className="text-[10px] text-zinc-600 mb-3">Revenue from Item Performance's latest upload ("{pvItemPerfCategories.label}") · spend from the purchase date range above — two different windows, shown together as a directional check, not a perfect match.</p>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-xs font-mono whitespace-nowrap">
+                        <thead>
+                          <tr className="text-zinc-500 uppercase tracking-widest text-[10px] border-b border-zinc-800">
+                            <th className="text-left py-2 pr-3">Category</th>
+                            <th className="text-right py-2 pl-3">Item revenue</th>
+                            <th className="text-right py-2 pl-3">Ingredient spend</th>
+                            <th className="text-right py-2 pl-3">Cost ratio</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {pvAnalysis.categoryMatch.map((c) => (
+                            <tr key={c.category} className="border-b border-zinc-800/40">
+                              <td className="py-1.5 pr-3 text-zinc-300">{c.category}</td>
+                              <td className="py-1.5 pl-3 text-right text-zinc-400">₹{Math.round(c.revenue).toLocaleString("en-IN")}</td>
+                              <td className="py-1.5 pl-3 text-right text-zinc-400">₹{Math.round(c.spend).toLocaleString("en-IN")}</td>
+                              <td className={`py-1.5 pl-3 text-right font-bold ${c.costPct >= 40 ? "text-red-400" : c.costPct >= 30 ? "text-yellow-400" : "text-green-400"}`}>{c.costPct.toFixed(1)}%</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                    {(pvAnalysis.unmatchedSpendCategories.length > 0 || pvAnalysis.unmatchedRevenueCategories.length > 0) && (
+                      <p className="text-[10px] text-orange-400 mt-3">⚠ Not shown above (no match on the other side): {[...pvAnalysis.unmatchedSpendCategories.map((c: string) => `"${c}" (spend only)`), ...pvAnalysis.unmatchedRevenueCategories.map((c: string) => `"${c}" (revenue only)`)].join(", ")} — likely just a naming difference between the two systems, worth checking rather than assuming it's zero.</p>
+                    )}
+                  </div>
+                )}
 
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
                   <div className="bg-[#131316] border border-zinc-800 p-4">
