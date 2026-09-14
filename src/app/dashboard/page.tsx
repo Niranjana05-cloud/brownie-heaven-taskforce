@@ -2759,11 +2759,11 @@ const stApplyOutlet = async (oid: string, brand: string) => {
   const li: any = cur?.line_items || { sales: {}, fixed: {}, targets: {}, monthly: {} };
   const num = (a: any, b: any) => (a != null ? a : (b ?? 0));
   const mk = stDate.slice(0, 7);
-  const isCBH = brand === "CBH";
+  const isSharedFixedUp = brand !== "BH";
   const updated = {
     sales: li.sales || {},
     monthly: { ...(li.monthly || {}), [mk]: { net: e.net || 0, online: (e.swiggy || 0) + (e.zomato || 0) } },
-    fixed: { staff: isCBH ? 0 : num(e.staff, li.fixed?.staff), rent: isCBH ? 0 : num(e.rent, li.fixed?.rent), eb: isCBH ? 0 : num(e.eb, li.fixed?.eb), transport: isCBH ? 0 : num(e.transport, li.fixed?.transport), pest: num(e.pest, li.fixed?.pest), water: num(e.water, li.fixed?.water), airtel: num(e.airtel, li.fixed?.airtel) },
+    fixed: { staff: isSharedFixedUp ? 0 : num(e.staff, li.fixed?.staff), rent: isSharedFixedUp ? 0 : num(e.rent, li.fixed?.rent), eb: isSharedFixedUp ? 0 : num(e.eb, li.fixed?.eb), transport: isSharedFixedUp ? 0 : num(e.transport, li.fixed?.transport), pest: num(e.pest, li.fixed?.pest), water: num(e.water, li.fixed?.water), airtel: num(e.airtel, li.fixed?.airtel) },
     targets: li.targets || { a: 0, b: 0 },
   };
   const { error } = await supabase.from("sales_target").upsert({ outlet_id: oid, brand, line_items: updated, updated_at: new Date().toISOString() }, { onConflict: "outlet_id,brand" });
@@ -4221,7 +4221,37 @@ else await fetchOutletReportsByDate(outletEntryDate);
           </div>
         )}
 
-      {activeTab === "sales_target" && (
+      {activeTab === "sales_target" && (() => {
+            // Shared by both the compact Today snapshot table and the detailed
+            // per-brand view below — same formulas, same source data, computed
+            // once so the two views can never quietly disagree with each other.
+            const computeBrandSnapshot = (oid: string, brand: "BH" | "CBH" | "ICBH") => {
+              const li = salesTargets[oid]?.[brand];
+              if (!li) return null;
+              const _outletActuals = stActuals[oid] || { daily: {}, monthNet: 0, monthOnline: 0 };
+              const _sales = li.sales || {};
+              const dayNet = brand === "BH" ? (_outletActuals.daily[stDate]?.shop || 0) : (Number(_sales[stDate]?.net) || 0);
+              const dayOnline = brand === "BH" ? (_outletActuals.daily[stDate]?.online || 0) : (Number(_sales[stDate]?.online) || 0);
+              const f = li.fixed || {};
+              const isSharedFixed = brand !== "BH"; // CBH & ICBH share BH's rent/staff/EB/transport
+              const _ab = (v: any) => Math.abs(Number(v) || 0);
+              const fStaff = isSharedFixed ? 0 : _ab(f.staff);
+              const fRent = isSharedFixed ? 0 : _ab(f.rent);
+              const fEb = isSharedFixed ? 0 : _ab(f.eb);
+              const fTransport = isSharedFixed ? 0 : _ab(f.transport);
+              const rm = 0.2 * fRent;
+              const totalFixed = fStaff + fRent + fEb + fTransport + rm + _ab(f.pest) + _ab(f.water) + _ab(f.airtel);
+              const stYear = Number(stDate.slice(0, 4)), stMonthNum = Number(stDate.slice(5, 7));
+              const daysInThisMonth = new Date(stYear, stMonthNum, 0).getDate();
+              const todayTotalSales = dayNet + dayOnline;
+              const todayCogs = 0.294 * todayTotalSales, todayWastage = 0.05 * todayTotalSales, todayComm = 0.5 * dayOnline;
+              const todayContrib = todayTotalSales - todayCogs - todayWastage - todayComm;
+              const todayFixedShare = totalFixed / daysInThisMonth;
+              const todayNetProfit = todayContrib - todayFixedShare;
+              const todayMargin = todayTotalSales ? todayNetProfit / todayTotalSales : 0;
+              return { dayNet, dayOnline, todayTotalSales, todayNetProfit, todayMargin };
+            };
+            return (
           <div>
             <div className="flex justify-between items-start mb-6 pb-5 border-b border-zinc-800">
               <div>
@@ -4233,10 +4263,33 @@ else await fetchOutletReportsByDate(outletEntryDate);
                 <input type="date" max={new Date().toISOString().split("T")[0]} value={stDate} onChange={(e) => { setStDate(e.target.value); setStEditing(null); setStEditValues({}); }} className="bg-black border border-zinc-800 text-white px-3 py-2 focus:outline-none focus:border-yellow-400 text-sm font-mono" />
               </div>
             </div>
-            {(canAssign ? OUTLETS : (user.outlets || [])).map((oid: string) => (
+            {(canAssign ? OUTLETS : (user.outlets || [])).map((oid: string) => {
+              const dayLblTop = new Date(stDate + "T00:00:00").toLocaleDateString("en-IN", { day: "numeric", month: "short" });
+              const snapshots = (["BH", "CBH", "ICBH"] as const).map((b) => ({ brand: b, s: computeBrandSnapshot(oid, b) }));
+              return (
               <div key={oid} className="mb-8">
-                <h3 className="text-lg font-bold mb-3">{OUTLET_NAMES[oid] || oid}</h3>
-              {["BH", "CBH"].map((brand) => {
+                <div className="flex flex-wrap justify-between items-center gap-2 mb-3">
+                  <h3 className="text-lg font-bold">{OUTLET_NAMES[oid] || oid}</h3>
+                  <span className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest">{dayLblTop} snapshot</span>
+                </div>
+                <div className="grid grid-cols-3 gap-2 mb-5">
+                  {snapshots.map(({ brand, s }) => (
+                    <div key={brand} className="bg-[#131316] border border-zinc-800 p-3">
+                      <p className="text-[10px] font-mono text-yellow-400 uppercase tracking-widest mb-1.5">{brand}</p>
+                      {!s ? (
+                        <p className="text-[11px] text-zinc-700">Not set up</p>
+                      ) : (
+                        <>
+                          <p className="text-[10px] text-zinc-500">Sales</p>
+                          <p className="text-sm font-mono text-zinc-200 mb-1">₹{Math.round(s.todayTotalSales).toLocaleString("en-IN")}</p>
+                          <p className="text-[10px] text-zinc-500">Net profit</p>
+                          <p className={`text-sm font-mono font-bold ${s.todayNetProfit >= 0 ? "text-green-400" : "text-red-400"}`}>₹{Math.round(s.todayNetProfit).toLocaleString("en-IN")} <span className="text-[10px] text-zinc-600">({(s.todayMargin * 100).toFixed(0)}%)</span></p>
+                        </>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              {(["BH", "CBH", "ICBH"] as const).map((brand) => {
                   const li = salesTargets[oid]?.[brand];
                   if (!li) return null;
                   const key = `${oid}_${brand}`;
@@ -4256,12 +4309,12 @@ else await fetchOutletReportsByDate(outletEntryDate);
                   const net = brand === "BH" ? _outletActuals.monthNet : ((Number(_moNet) || 0) + _dNet);
                   const online = brand === "BH" ? _outletActuals.monthOnline : ((Number(_moOnline) || 0) + _dOnline);
                   const f = li.fixed || {}; const t = li.targets || {};
-                  const isCBH = brand === "CBH";
+                  const isSharedFixed = brand !== "BH";
                   const _ab = (v: any) => Math.abs(Number(v) || 0);
-                  const fStaff = isCBH ? 0 : _ab(f.staff);
-                  const fRent = isCBH ? 0 : _ab(f.rent);
-                  const fEb = isCBH ? 0 : _ab(f.eb);
-                  const fTransport = isCBH ? 0 : _ab(f.transport);
+                  const fStaff = isSharedFixed ? 0 : _ab(f.staff);
+                  const fRent = isSharedFixed ? 0 : _ab(f.rent);
+                  const fEb = isSharedFixed ? 0 : _ab(f.eb);
+                  const fTransport = isSharedFixed ? 0 : _ab(f.transport);
                  const totalSales = net + online;
                   const cogs = 0.294 * totalSales, wastage = 0.05 * totalSales, comm = 0.5 * online;
                   const contrib = totalSales - cogs - wastage - comm;
@@ -4332,10 +4385,10 @@ else await fetchOutletReportsByDate(outletEntryDate);
                           {row("Less: Commission @ 50% (online)", m(comm), { neg: true })}
                           {row("Contribution (before fixed)", m(contrib), { bold: true })}
                           {row("   Contribution margin %", (cMargin * 100).toFixed(1) + "%")}
-                          {row("Less: Staff salaries", isCBH ? <span className="text-zinc-600">0</span> : inp("staff", Number(f.staff) || 0), { fixedCost: !isCBH })}
-                          {row("Less: Rent", isCBH ? <span className="text-zinc-600">0</span> : inp("rent", Number(f.rent) || 0), { fixedCost: !isCBH })}
-                          {row("Less: Electricity / EB", isCBH ? <span className="text-zinc-600">0</span> : inp("eb", Number(f.eb) || 0), { fixedCost: !isCBH })}
-                          {row("Less: Transport", isCBH ? <span className="text-zinc-600">0</span> : inp("transport", Number(f.transport) || 0), { fixedCost: !isCBH })}
+                          {row("Less: Staff salaries", isSharedFixed ? <span className="text-zinc-600">0</span> : inp("staff", Number(f.staff) || 0), { fixedCost: !isSharedFixed })}
+                          {row("Less: Rent", isSharedFixed ? <span className="text-zinc-600">0</span> : inp("rent", Number(f.rent) || 0), { fixedCost: !isSharedFixed })}
+                          {row("Less: Electricity / EB", isSharedFixed ? <span className="text-zinc-600">0</span> : inp("eb", Number(f.eb) || 0), { fixedCost: !isSharedFixed })}
+                          {row("Less: Transport", isSharedFixed ? <span className="text-zinc-600">0</span> : inp("transport", Number(f.transport) || 0), { fixedCost: !isSharedFixed })}
                           {row("Less: Repair & Maintenance (20% of rent)", m(rm), { fixedCost: true })}
                           {row("Less: Pest control", inp("pest", Number(f.pest) || 0), { fixedCost: true })}
                           {row("Less: Water", inp("water", Number(f.water) || 0), { fixedCost: true })}
@@ -4359,10 +4412,10 @@ else await fetchOutletReportsByDate(outletEntryDate);
                     </div>
                   );
                 })}
-             {(canAssign || (user.outlets || []).includes(oid)) && ["BH", "CBH"].map((brand) => { const key = oid + "_" + brand; const u = stUpload[key]; const busy = stUpBusy === key; const msg = stUpMsg[key]; const isCBH = brand === "CBH"; return (
+             {(canAssign || (user.outlets || []).includes(oid)) && (["BH", "CBH", "ICBH"] as const).map((brand) => { const key = oid + "_" + brand; const u = stUpload[key]; const busy = stUpBusy === key; const msg = stUpMsg[key]; const isSharedFixed = brand !== "BH"; return (
                   <div key={key} className="border border-zinc-800 bg-black/20 p-4 mt-3">
                     <p className="text-[11px] font-bold uppercase tracking-widest mb-1"><span className="text-yellow-400">{brand}</span> · 📥 Upload P&amp;L / MIS — {OUTLET_NAMES[oid] || oid}</p>
-                    <p className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-3">MIS → Net + Swiggy + Zomato · P&amp;L → {isCBH ? "Pest, Water, Airtel only" : "fixed costs"} · saved for the month</p>
+                    <p className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-3">MIS → Net + Swiggy + Zomato · P&amp;L → {isSharedFixed ? "Pest, Water, Airtel only (shares rent/staff with BH)" : "fixed costs"} · saved for the month</p>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
                       <div><label className="text-[10px] font-mono text-zinc-500 uppercase block mb-1">{brand} MIS (.xlsx)</label><input type="file" accept=".xlsx,.xls" onChange={e => { const file = e.target.files?.[0]; setStFiles(s => ({ ...s, [key]: { ...s[key], mis: file } })); }} className="text-xs text-zinc-400 w-full" /></div>
                       <div><label className="text-[10px] font-mono text-zinc-500 uppercase block mb-1">{brand} P&amp;L (.xlsx)</label><input type="file" accept=".xlsx,.xls" onChange={e => { const file = e.target.files?.[0]; setStFiles(s => ({ ...s, [key]: { ...s[key], pnl: file } })); }} className="text-xs text-zinc-400 w-full" /></div>
@@ -4373,7 +4426,7 @@ else await fetchOutletReportsByDate(outletEntryDate);
                       <div className="bg-black/30 border border-zinc-800 p-3 mb-2">
                         <p className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-2">Found — check, then apply (red = not found)</p>
                         <div className="grid grid-cols-2 md:grid-cols-3 gap-2 text-xs">
-                          {((isCBH ? [["Net Sales", u.net], ["Swiggy", u.swiggy], ["Zomato", u.zomato], ["Pest", u.pest], ["Water", u.water], ["Airtel", u.airtel]] : [["Net Sales", u.net], ["Swiggy", u.swiggy], ["Zomato", u.zomato], ["Rent", u.rent], ["Staff", u.staff], ["Electricity", u.eb], ["Transport", u.transport], ["Pest", u.pest], ["Water", u.water], ["Airtel", u.airtel]]) as [string, any][]).map(([k, v]) => (
+                          {((isSharedFixed ? [["Net Sales", u.net], ["Swiggy", u.swiggy], ["Zomato", u.zomato], ["Pest", u.pest], ["Water", u.water], ["Airtel", u.airtel]] : [["Net Sales", u.net], ["Swiggy", u.swiggy], ["Zomato", u.zomato], ["Rent", u.rent], ["Staff", u.staff], ["Electricity", u.eb], ["Transport", u.transport], ["Pest", u.pest], ["Water", u.water], ["Airtel", u.airtel]]) as [string, any][]).map(([k, v]) => (
                             <div key={k} className="flex justify-between bg-black/40 px-2 py-1"><span className="text-zinc-400">{k}</span><span className={v == null ? "text-red-400" : "text-green-400 font-mono"}>{v == null ? "not found" : Math.round(v).toLocaleString("en-IN")}</span></div>
                           ))}
                         </div>
@@ -4383,9 +4436,11 @@ else await fetchOutletReportsByDate(outletEntryDate);
                   </div>
                 ); })}
               </div>
-            ))}
+              );
+            })}
           </div>
-        )}
+            );
+          })()}
       {activeTab === "payout" && user && user.role === "Financial Analyst" && <PayoutTab user={user} />}
       {activeTab === "reconciliation" && user && <ReconciliationTab />}
        {activeTab === "attendance" && (
