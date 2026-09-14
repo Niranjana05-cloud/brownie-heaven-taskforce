@@ -3121,7 +3121,7 @@ else await fetchOutletReportsByDate(outletEntryDate);
               <span>📝</span> Niranjana's Report
             </div>
           )}
-          {(isFO || ["nishant","arun","vishnu","ahila"].includes(user?.id ?? "")) && (
+          {(isFO || ["nishant","arun","vishnu","ahila","nilani"].includes(user?.id ?? "")) && (
             <div onClick={() => { setActiveTab("auto_reviews"); setSidebarOpen(false); fetchAutoReviews(); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "auto_reviews" ? "text-white bg-zinc-900 border-l-2 border-yellow-400" : "text-zinc-500 hover:text-white"}`}>
               <span>⭐</span> Auto Reviews
             </div>
@@ -5215,7 +5215,7 @@ else await fetchOutletReportsByDate(outletEntryDate);
     </div>
   </div>
 )}
-        {activeTab === "auto_reviews" && (isFO || ["nishant","arun","vishnu","ahila"].includes(user?.id ?? "")) && (
+        {activeTab === "auto_reviews" && (isFO || ["nishant","arun","vishnu","ahila","nilani"].includes(user?.id ?? "")) && (
           <div>
             <div className="mb-6 flex items-center justify-between flex-wrap gap-3">
               <div>
