@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
+import supabaseStock from "@/lib/supabaseStock";
 
 type Staff = { id: string; name: string; role: string; outlets?: string[] };
 
@@ -53,6 +54,7 @@ const lakh = (n: number) => "₹" + (n / 100000).toFixed(2) + " L";
   const [yesterdayRows, setYesterdayRows] = useState<any[]>([]);
   const [prevMonthRows, setPrevMonthRows] = useState<any[]>([]);
   const [monthReviews, setMonthReviews] = useState<any[]>([]);
+  const [tableCounts, setTableCounts] = useState<{ name: string; count: number | null; source: string }[]>([]);
   const [loading, setLoading] = useState(true);
 
   const d0 = new Date(date + "T00:00:00");
@@ -104,6 +106,32 @@ const lakh = (n: number) => "₹" + (n / 100000).toFixed(2) + " L";
       setLoading(false);
     })();
   }, [date, monthStart]);
+
+  // Data volume check — not part of the main dashboard data, just a proactive
+  // heads-up so a growing table's row count is visible before it silently
+  // causes the same kind of truncation bug Purchase & Vendors and Outlet
+  // Health hit (Supabase caps any single query at ~1000 rows by default).
+  // This only counts rows — it does not know whether any specific query
+  // against a table is protected with batching or not; that's still a coding
+  // discipline, not something a dashboard widget can verify on its own.
+  useEffect(() => {
+    (async () => {
+      const [orCount, taskCount, revCount, payoutCount, plCount] = await Promise.all([
+        supabase.from("outlet_reports").select("id", { count: "exact", head: true }),
+        supabase.from("tasks").select("id", { count: "exact", head: true }),
+        supabase.from("outlet_reviews").select("id", { count: "exact", head: true }),
+        supabase.from("outlet_payouts").select("id", { count: "exact", head: true }),
+        supabaseStock.from("purchase_ledger").select("id", { count: "exact", head: true }),
+      ]);
+      setTableCounts([
+        { name: "outlet_reports", count: orCount.count, source: "TASKFORCE" },
+        { name: "tasks", count: taskCount.count, source: "TASKFORCE" },
+        { name: "outlet_reviews", count: revCount.count, source: "TASKFORCE" },
+        { name: "outlet_payouts", count: payoutCount.count, source: "TASKFORCE" },
+        { name: "purchase_ledger", count: plCount.count, source: "Production Stock" },
+      ]);
+    })();
+  }, []);
 
   const n = (v: any) => Number(v) || 0;
   const sum = (rows: any[], k: string) => rows.reduce((s, r) => s + n(r[k]), 0);
@@ -621,6 +649,23 @@ const downloadPDF = async () => {
                 {openTasks.length > 15 && <p className="text-[10px] text-zinc-600 pt-1">+{openTasks.length - 15} more — see Tasks tab for the full list.</p>}
               </div>
             )}
+          </Card>
+
+          <Card title="📊 Data volume — Supabase health">
+            <p className="text-[10px] text-zinc-600 mb-3">Any single query pulls at most ~1000 rows unless it's specifically built to fetch in batches — a table crossing that size is worth double-checking. Outlet Health and Purchase &amp; Vendors already had this bug and are now fixed.</p>
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
+              {tableCounts.map((t) => {
+                const risk = t.count == null ? "unknown" : t.count >= 1000 ? "high" : t.count >= 700 ? "watch" : "ok";
+                const color = risk === "high" ? "text-red-400 border-red-500/30" : risk === "watch" ? "text-yellow-400 border-yellow-500/30" : "text-green-400 border-zinc-800";
+                return (
+                  <div key={t.name} className={`bg-black/30 border p-2 text-center ${color}`}>
+                    <p className="text-[9px] font-mono text-zinc-600 uppercase truncate">{t.name}</p>
+                    <p className={`text-sm font-bold ${color.split(" ")[0]}`}>{t.count ?? "—"}</p>
+                    <p className="text-[9px] text-zinc-700">{t.source}</p>
+                  </div>
+                );
+              })}
+            </div>
           </Card>
 
           <p className="text-[10px] font-mono text-zinc-700 uppercase tracking-widest mt-8 mb-3">Supporting detail</p>
