@@ -7,6 +7,7 @@ import { celebrate } from "../celebrate";
 import { computeScores, type ScoreRow } from "@/lib/score";
 import PayoutTab from "./PayoutTab";
 import FounderDashboard from "./FounderDashboard";
+import CommandCentre from "./CommandCentre";
 import ReconciliationTab from "./ReconciliationTab";
 import supabaseStock from "@/lib/supabaseStock";
 import { OUTLET_ID_TO_STOCK_NAME } from "@/lib/outletMap";
@@ -3030,7 +3031,8 @@ else await fetchOutletReportsByDate(outletEntryDate);
           </div>
         )}
 
-       {activeTab === "tasks" && user && (user.role === "Founder's Office" || user.role === "Owner") && <FounderDashboard user={user} />}
+       {activeTab === "tasks" && user && user.role === "Founder's Office" && <FounderDashboard user={user} />}
+       {activeTab === "tasks" && user && user.role === "Owner" && <CommandCentre user={user} />}
       {activeTab === "tasks" && user?.role === "Head Chef" && (
           <div>
             <div className="flex justify-between items-end mb-6 pb-5 border-b border-zinc-800">
