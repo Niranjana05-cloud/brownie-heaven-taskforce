@@ -28,8 +28,22 @@ const STAFF_BY_OUTLET: Record<string, string> = {
 
 // Finds the outlet_id whose display name appears inside the raw outlet name text
 // from the email. Case-insensitive, ignores punctuation like the comma Zomato adds.
+//
+// Some platforms use the real street/area name for a listing instead of
+// TASKFORCE's own outlet name — confirmed via the Swiggy ID sheets ("Thoraipakkam"
+// = BSR Mall, "Adambakkam" = Velachery) and now seen the same way in a real
+// Zomato review email too ("Brownie Heaven, Adambakkam").
+const OUTLET_NAME_ALIASES: Record<string, string> = {
+  thoraipakkam: "bsr_mall",
+  adambakkam: "velachery",
+};
+
 export function matchReviewOutletId(rawOutletName: string): string | null {
   const cleaned = rawOutletName.toLowerCase().replace(/[,.]/g, " ").replace(/\s+/g, " ").trim();
+
+  for (const [alias, outletId] of Object.entries(OUTLET_NAME_ALIASES)) {
+    if (cleaned.includes(alias)) return outletId;
+  }
 
   for (const [outletId, displayName] of Object.entries(REVIEW_OUTLET_DISPLAY_NAMES)) {
     if (cleaned.includes(displayName.toLowerCase())) {
