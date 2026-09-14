@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { simpleParser } from "mailparser";
 import { isGoogleReviewEmail, parseGoogleReview } from "@/lib/reviewParsers/google";
+import { isZomatoReviewEmail, parseZomatoReview } from "@/lib/reviewParsers/zomato";
 import { matchReviewOutletId, staffIdForReviewOutlet } from "@/lib/reviewOutletMap";
 
 // Give this route more time than Vercel's default 10s — IMAP + parsing +
@@ -126,6 +127,83 @@ export async function GET() {
 
         // Mark as processed with our own private flag — leaves the email's actual
         // read/unread status untouched either way.
+        await client.messageFlagsAdd(uid.toString(), [PROCESSED_FLAG], { uid: true });
+      }
+
+      // Zomato review emails — no confirmed sender address for these yet, so
+      // matched by subject ("New Review") plus a body-content check for
+      // "zomato" as a safety net against unrelated emails with a similar
+      // subject line. Same time budget applies across BOTH passes combined.
+      const zomatoUids = await client.search(
+        { subject: "New Review", unKeyword: PROCESSED_FLAG } as any,
+        { uid: true }
+      );
+      candidateCount += (zomatoUids || []).length;
+
+      for (const uid of (zomatoUids || []) as number[]) {
+        if (Date.now() - startedAt > TIME_BUDGET_MS) { timedOut = true; break; }
+        const raw = await client.download(uid.toString(), undefined, { uid: true });
+        if (!raw || !raw.content) {
+          const reason = "download returned no content";
+          skipReasons[reason] = (skipReasons[reason] || 0) + 1;
+          skipped.push({ uid, reason });
+          continue;
+        }
+        const parsedEmail = await simpleParser(raw.content);
+        const subject = parsedEmail.subject || "";
+        const plainText = parsedEmail.text || "";
+
+        if (!isZomatoReviewEmail(subject) || !/zomato/i.test(plainText)) {
+          const reason = "subject matched but not a real Zomato review email";
+          skipReasons[reason] = (skipReasons[reason] || 0) + 1;
+          skipped.push({ uid, reason, subject });
+          continue; // don't mark processed — genuinely not ours to claim
+        }
+
+        const review = parseZomatoReview(plainText);
+        if (!review) {
+          const reason = "could not parse Zomato review";
+          skipReasons[reason] = (skipReasons[reason] || 0) + 1;
+          skipped.push({ uid, reason, subject });
+          if (sampleSkips.length < 3) sampleSkips.push({ reason, subject, textPreview: plainText.slice(0, 1200) });
+          continue;
+        }
+
+        const outletId = matchReviewOutletId(review.outletNameRaw);
+        if (!outletId) {
+          const reason = "outlet not matched (Zomato)";
+          skipReasons[reason] = (skipReasons[reason] || 0) + 1;
+          skipped.push({ uid, reason, outletNameRaw: review.outletNameRaw });
+          if (sampleSkips.length < 5) sampleSkips.push({ reason, outletNameRaw: review.outletNameRaw, subject });
+          continue;
+        }
+
+        const staffId = staffIdForReviewOutlet(outletId);
+        const emailDate = parsedEmail.date ? parsedEmail.date.toISOString().split("T")[0] : new Date().toISOString().split("T")[0];
+        const note = review.reviewText;
+
+        const { error } = await supabase.from("outlet_reviews").insert({
+          outlet_id: outletId,
+          brand: review.brand,
+          staff_id: staffId,
+          report_date: emailDate,
+          platform: "Zomato",
+          rating: review.rating,
+          valid_complaint: false,
+          refund_given: false,
+          note,
+        });
+
+        if (error) {
+          const reason = "db insert failed (Zomato)";
+          skipReasons[reason] = (skipReasons[reason] || 0) + 1;
+          skipped.push({ uid, reason, error: error.message });
+          if (sampleSkips.length < 5) sampleSkips.push({ reason, error: error.message });
+          continue;
+        }
+
+        inserted.push({ outletId, brand: review.brand, platform: "Zomato", rating: review.rating });
+
         await client.messageFlagsAdd(uid.toString(), [PROCESSED_FLAG], { uid: true });
       }
     } finally {
