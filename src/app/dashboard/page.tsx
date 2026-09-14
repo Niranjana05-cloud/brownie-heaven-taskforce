@@ -386,7 +386,7 @@ export default function DashboardPage() {
   const [reports, setReports] = useState<Report[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
-  const [activeTab, setActiveTab] = useState<"tasks" | "my_report" | "all_reports" | "analytics" | "outlet_reports" | "owner_outlets" | "history" | "attendance" | "sales_target" | "payout" | "reconciliation" | "competition" | "item_perf" | "ceo_report" | "fines" | "niranjana_report" | "pnl" | "contribution_margins" | "net_realisation" | "cash_flow" | "cheques" | "auto_reviews">("tasks");
+  const [activeTab, setActiveTab] = useState<"tasks" | "my_report" | "all_reports" | "analytics" | "outlet_reports" | "owner_outlets" | "history" | "attendance" | "sales_target" | "payout" | "reconciliation" | "competition" | "item_perf" | "ceo_report" | "fines" | "niranjana_report" | "pnl" | "contribution_margins" | "net_realisation" | "cash_flow" | "cheques" | "auto_reviews" | "purchase_vendors">("tasks");
   const RANGE_PRESETS = [
     { id: "yesterday", label: "Yesterday" },
     { id: "last7", label: "Last 7 days" },
@@ -934,6 +934,78 @@ export default function DashboardPage() {
     setCfLoading(false);
   };
   useEffect(() => { if (activeTab === "cash_flow") fetchCashFlowForecast(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [activeTab]);
+  // --- Purchase & Vendors (reads from the separate Production Stock database) ---
+  const [pvFrom, setPvFrom] = useState<string>(() => { const d = new Date(); d.setDate(d.getDate() - 60); return d.toISOString().slice(0, 10); });
+  const [pvTo, setPvTo] = useState<string>(() => new Date().toISOString().slice(0, 10));
+  const [pvRows, setPvRows] = useState<any[]>([]);
+  const [pvLoading, setPvLoading] = useState(false);
+  const fetchPurchaseVendors = async () => {
+    setPvLoading(true);
+    const { data, error } = await supabaseStock
+      .from("purchase_ledger")
+      .select("date,agency,product,category,qty,unit,rate,amount")
+      .gte("date", pvFrom)
+      .lte("date", pvTo)
+      .order("date", { ascending: true });
+    if (error) { console.error(error); setPvRows([]); setPvLoading(false); return; }
+    setPvRows(data || []);
+    setPvLoading(false);
+  };
+  useEffect(() => { if (activeTab === "purchase_vendors") fetchPurchaseVendors(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [activeTab, pvFrom, pvTo]);
+
+  const pvAnalysis = (() => {
+    const totalSpend = pvRows.reduce((s, r) => s + (Number(r.amount) || 0), 0);
+    const byVendor: Record<string, number> = {};
+    const byCategory: Record<string, number> = {};
+    pvRows.forEach((r) => {
+      byVendor[r.agency] = (byVendor[r.agency] || 0) + (Number(r.amount) || 0);
+      byCategory[r.category || "Uncategorised"] = (byCategory[r.category || "Uncategorised"] || 0) + (Number(r.amount) || 0);
+    });
+    const vendorRanked = Object.entries(byVendor).sort((a, b) => b[1] - a[1]);
+    const categoryRanked = Object.entries(byCategory).sort((a, b) => b[1] - a[1]);
+
+    // Price-creep: for each (agency + product) pair bought more than once in this
+    // window, compare the earliest and latest rate. Flags a real jump, not noise —
+    // requires at least 2 purchases and a meaningful (>=10%) increase.
+    const pairKey = (r: any) => `${r.agency}__${r.product}`;
+    const byPair: Record<string, any[]> = {};
+    pvRows.forEach((r) => { const k = pairKey(r); if (!byPair[k]) byPair[k] = []; byPair[k].push(r); });
+    const priceCreep = Object.entries(byPair)
+      .map(([, rows]) => {
+        const sorted = [...rows].sort((a, b) => a.date.localeCompare(b.date));
+        if (sorted.length < 2) return null;
+        const first = sorted[0], last = sorted[sorted.length - 1];
+        const firstRate = Number(first.rate) || 0, lastRate = Number(last.rate) || 0;
+        if (firstRate <= 0) return null;
+        const changePct = ((lastRate - firstRate) / firstRate) * 100;
+        return { agency: first.agency, product: first.product, firstRate, lastRate, firstDate: first.date, lastDate: last.date, changePct, purchaseCount: sorted.length };
+      })
+      .filter((x): x is NonNullable<typeof x> => !!x && x.changePct >= 10)
+      .sort((a, b) => b.changePct - a.changePct);
+
+    // Vendor comparison: same product bought from 2+ different vendors in this
+    // window — shows who's cheaper, using each vendor's average rate.
+    const byProduct: Record<string, Record<string, number[]>> = {};
+    pvRows.forEach((r) => {
+      if (!byProduct[r.product]) byProduct[r.product] = {};
+      if (!byProduct[r.product][r.agency]) byProduct[r.product][r.agency] = [];
+      byProduct[r.product][r.agency].push(Number(r.rate) || 0);
+    });
+    const vendorComparison = Object.entries(byProduct)
+      .map(([product, vendors]) => {
+        const vendorAvgs = Object.entries(vendors).map(([agency, rates]) => ({ agency, avgRate: rates.reduce((s, v) => s + v, 0) / rates.length, count: rates.length }));
+        if (vendorAvgs.length < 2) return null;
+        vendorAvgs.sort((a, b) => a.avgRate - b.avgRate);
+        const cheapest = vendorAvgs[0], priciest = vendorAvgs[vendorAvgs.length - 1];
+        const gapPct = cheapest.avgRate > 0 ? ((priciest.avgRate - cheapest.avgRate) / cheapest.avgRate) * 100 : 0;
+        return { product, vendorAvgs, cheapest, priciest, gapPct };
+      })
+      .filter((x): x is NonNullable<typeof x> => !!x && x.gapPct >= 10)
+      .sort((a, b) => b.gapPct - a.gapPct);
+
+    return { totalSpend, vendorRanked, categoryRanked, priceCreep, vendorComparison };
+  })();
+
   const [nrFrom, setNrFrom] = useState<string>(() => { const d = new Date(); d.setDate(d.getDate() - 60); return d.toISOString().slice(0, 10); });
   const [nrTo, setNrTo] = useState<string>(() => new Date().toISOString().slice(0, 10));
   const [nrRows, setNrRows] = useState<any[]>([]);
@@ -2888,6 +2960,11 @@ else await fetchOutletReportsByDate(outletEntryDate);
               <span>🧾</span> Net Realisation
             </div>
           )}
+                  {user?.role === "Financial Analyst" && (
+            <div onClick={() => { setActiveTab("purchase_vendors"); setSidebarOpen(false); fetchPurchaseVendors(); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "purchase_vendors" ? "text-white bg-zinc-900 border-l-2 border-yellow-400" : "text-zinc-500 hover:text-white"}`}>
+              <span>🛒</span> Purchase &amp; Vendors
+            </div>
+          )}
           {user?.role === "Financial Analyst" && (
             <div onClick={() => { setActiveTab("cash_flow"); setSidebarOpen(false); fetchCashFlowForecast(); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "cash_flow" ? "text-white bg-zinc-900 border-l-2 border-yellow-400" : "text-zinc-500 hover:text-white"}`}>
               <span>📉</span> Cash-Flow Forecast
@@ -3493,6 +3570,111 @@ else await fetchOutletReportsByDate(outletEntryDate);
             )}
           </div>
        )}
+        {activeTab === "purchase_vendors" && user?.role === "Financial Analyst" && (
+          <div>
+            <div className="flex justify-between items-start mb-6 pb-5 border-b border-zinc-800">
+              <div>
+                <h2 className="text-2xl md:text-3xl font-black tracking-tight">Purchase &amp; Vendors</h2>
+                <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mt-1">Company-wide — from Production Stock's purchase records</p>
+              </div>
+              <div className="flex gap-2">
+                <input type="date" value={pvFrom} onChange={(e) => setPvFrom(e.target.value)} className="bg-black border border-zinc-800 text-white px-3 py-2 focus:outline-none focus:border-yellow-400 text-sm font-mono" />
+                <input type="date" value={pvTo} onChange={(e) => setPvTo(e.target.value)} className="bg-black border border-zinc-800 text-white px-3 py-2 focus:outline-none focus:border-yellow-400 text-sm font-mono" />
+              </div>
+            </div>
+
+            {pvLoading ? (
+              <p className="text-sm text-zinc-500">Loading…</p>
+            ) : pvRows.length === 0 ? (
+              <p className="text-sm text-zinc-500">No purchase records in this range.</p>
+            ) : (
+              <>
+                <div className="flex flex-wrap gap-3 mb-6">
+                  <div className="bg-[#131316] border border-zinc-800 p-4 min-w-[160px]">
+                    <p className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-1">Total spend</p>
+                    <p className="text-xl font-black text-yellow-400">₹{Math.round(pvAnalysis.totalSpend).toLocaleString("en-IN")}</p>
+                    <p className="text-[10px] text-zinc-600 mt-1">{pvRows.length} purchase entries</p>
+                  </div>
+                  <div className="bg-[#131316] border border-zinc-800 p-4 min-w-[160px]">
+                    <p className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-1">Vendors</p>
+                    <p className="text-xl font-black">{pvAnalysis.vendorRanked.length}</p>
+                  </div>
+                  <div className="bg-[#131316] border border-red-500/30 p-4 min-w-[160px]">
+                    <p className="text-[10px] font-mono text-red-400 uppercase tracking-widest mb-1">Price jumps (≥10%)</p>
+                    <p className="text-xl font-black text-red-400">{pvAnalysis.priceCreep.length}</p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
+                  <div className="bg-[#131316] border border-zinc-800 p-4">
+                    <p className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-3">Spend by vendor</p>
+                    <div className="space-y-1.5">
+                      {pvAnalysis.vendorRanked.slice(0, 12).map(([agency, amt]) => (
+                        <div key={agency} className="flex justify-between text-xs py-1 border-t border-zinc-800/60">
+                          <span className="text-zinc-300">{agency}</span>
+                          <span className="font-mono text-zinc-400">₹{Math.round(amt).toLocaleString("en-IN")}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="bg-[#131316] border border-zinc-800 p-4">
+                    <p className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-3">Spend by category</p>
+                    <div className="space-y-1.5">
+                      {pvAnalysis.categoryRanked.slice(0, 12).map(([cat, amt]) => (
+                        <div key={cat} className="flex justify-between text-xs py-1 border-t border-zinc-800/60">
+                          <span className="text-zinc-300">{cat}</span>
+                          <span className="font-mono text-zinc-400">₹{Math.round(amt).toLocaleString("en-IN")}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-[#131316] border border-red-500/20 p-4 mb-6">
+                  <p className="text-[10px] font-mono text-red-400 uppercase tracking-widest mb-1">📈 Price creep — same vendor, rising rate</p>
+                  <p className="text-[10px] text-zinc-600 mb-3">Comparing the first and last purchase of each item from each vendor in this window — flags a genuine ≥10% rise, not day-to-day noise.</p>
+                  {pvAnalysis.priceCreep.length === 0 ? (
+                    <p className="text-xs text-zinc-600">Nothing flagged in this range.</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {pvAnalysis.priceCreep.slice(0, 15).map((p, i) => (
+                        <div key={i} className="flex justify-between items-center text-xs py-1.5 border-t border-zinc-800/60">
+                          <div>
+                            <span className="text-zinc-200">{p.product}</span>
+                            <span className="text-zinc-600"> · {p.agency}</span>
+                          </div>
+                          <div className="text-right">
+                            <span className="font-mono text-zinc-400">₹{p.firstRate.toFixed(2)} → ₹{p.lastRate.toFixed(2)}</span>
+                            <span className="font-mono text-red-400 font-bold ml-2">+{p.changePct.toFixed(0)}%</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <div className="bg-[#131316] border border-yellow-500/20 p-4">
+                  <p className="text-[10px] font-mono text-yellow-400 uppercase tracking-widest mb-1">⚖️ Vendor price comparison — same item, different vendors</p>
+                  <p className="text-[10px] text-zinc-600 mb-3">Only items bought from 2+ vendors in this window, where the gap between cheapest and priciest is ≥10%.</p>
+                  {pvAnalysis.vendorComparison.length === 0 ? (
+                    <p className="text-xs text-zinc-600">No comparable items in this range.</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {pvAnalysis.vendorComparison.slice(0, 15).map((v, i) => (
+                        <div key={i} className="text-xs py-1.5 border-t border-zinc-800/60">
+                          <p className="text-zinc-200 mb-1">{v.product} <span className="text-yellow-400 font-bold">({v.gapPct.toFixed(0)}% gap)</span></p>
+                          <p className="text-[10px] text-zinc-500">{v.vendorAvgs.map((va) => `${va.agency}: ₹${va.avgRate.toFixed(2)}`).join(" · ")}</p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <p className="text-[10px] text-zinc-600 mt-4">Company-wide — purchases in Production Stock aren't tagged to a specific outlet yet, so this can't be broken down per outlet. Invoice number/photo tracking exists in the source table but isn't populated yet.</p>
+              </>
+            )}
+          </div>
+        )}
         {activeTab === "cash_flow" && user?.role === "Financial Analyst" && (
           <div>
             <div className="mb-6 pb-5 border-b border-zinc-800">
