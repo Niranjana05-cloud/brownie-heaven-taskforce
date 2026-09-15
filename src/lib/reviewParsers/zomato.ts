@@ -26,10 +26,10 @@ function brandFromRaw(brandRaw: string): "BH" | "CBH" | "ICBH" {
 //       Rating: 5 / 5
 export function parseZomatoReview(body: string): (ParsedZomatoReview & { brand: "BH" | "CBH" | "ICBH" }) | null {
   const t = body.replace(/\u00a0/g, " ");
-  const nameMatch = t.match(/for your restaurant\s+(.+?):/i);
+  const nameMatch = t.match(/for your restaurant\s+([\s\S]+?):/i);
   if (!nameMatch) return null;
 
-  const fullName = nameMatch[1].trim();
+  const fullName = nameMatch[1].replace(/\s+/g, " ").trim();
   const parts = fullName.split(",").map((s) => s.trim());
   const brandRaw = parts[0] || "";
   const outletNameRaw = parts.length > 1 ? parts[1] : parts[0];
