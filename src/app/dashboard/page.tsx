@@ -5220,7 +5220,7 @@ else await fetchOutletReportsByDate(outletEntryDate);
             <div className="mb-6 flex items-center justify-between flex-wrap gap-3">
               <div>
                 <h2 className="text-3xl font-black tracking-tight">⭐ Auto Reviews</h2>
-                <p className="text-sm text-zinc-500 mt-1">Google reviews auto-pulled into TASKFORCE IQ. Swiggy &amp; Zomato coming next.</p>
+                <p className="text-sm text-zinc-500 mt-1">Google and Zomato reviews auto-pulled into TASKFORCE IQ. Swiggy coming next.</p>
               </div>
               <button
                 onClick={checkNewReviews}
