@@ -981,6 +981,21 @@ export default function DashboardPage() {
     if (error) { alert("Save failed: " + error.message); return; }
     setDiscTargets((m) => ({ ...m, [key]: pct }));
   };
+  const [liveDiscChecking, setLiveDiscChecking] = useState(false);
+  const [liveDiscResult, setLiveDiscResult] = useState<any>(null);
+  const checkLiveDiscounts = async () => {
+    setLiveDiscChecking(true);
+    setLiveDiscResult(null);
+    try {
+      const res = await fetch("/api/check-live-discounts");
+      const json = await res.json();
+      setLiveDiscResult(json);
+    } catch (err: any) {
+      setLiveDiscResult({ success: false, error: err.message || String(err) });
+    } finally {
+      setLiveDiscChecking(false);
+    }
+  };
   const [pvRevenueRows, setPvRevenueRows] = useState<any[]>([]);
   const [pvItemPerfCategories, setPvItemPerfCategories] = useState<{ label: string; rows: { category: string; revenue: number }[] } | null>(null);
   const [pvLoading, setPvLoading] = useState(false);
@@ -3568,7 +3583,45 @@ else await fetchOutletReportsByDate(outletEntryDate);
                     </tbody>
                   </table>
                 </div>
-                <p className="text-[10px] text-orange-400 mt-3">⏳ Real-discount comparison isn't live yet — waiting on a confirmed sample Payout Breakup Excel showing real "Restaurant Discounts" figures before that part gets built. For now, this just records what's approved each week.</p>
+                <p className="text-[10px] text-zinc-600 mt-3">Excel-based real-discount comparison still waiting on a confirmed sample. The live check below is a working alternative — reads Swiggy's actual public page for each outlet right now.</p>
+              </div>
+            )}
+
+            {(user?.role === "Financial Analyst" || user?.role === "Owner") && (
+              <div className="mb-6 bg-[#131316] border border-zinc-800 p-4">
+                <div className="flex justify-between items-center mb-1">
+                  <p className="text-sm font-semibold">🔍 Live discount check — what Swiggy is actually showing right now</p>
+                  <button onClick={checkLiveDiscounts} disabled={liveDiscChecking} className="bg-yellow-400 text-black px-4 py-2 text-sm font-semibold hover:bg-yellow-300 disabled:opacity-50 transition-colors">
+                    {liveDiscChecking ? "Checking all 36…" : "🔄 Check Now"}
+                  </button>
+                </div>
+                <p className="text-[10px] text-zinc-600 mb-3">Fetches each outlet's real, public Swiggy page directly and reads whatever offers are actually live — flags anything running more than 5 points above the approved % set above. First real attempt at this — if fetching gets blocked in practice, that'll show up honestly below rather than fail silently.</p>
+                {liveDiscResult && !liveDiscResult.success && (
+                  <p className="text-xs text-red-400">⚠️ {liveDiscResult.error}</p>
+                )}
+                {liveDiscResult?.success && (
+                  <>
+                    <p className="text-[10px] text-zinc-500 mb-2">Checked {liveDiscResult.results.filter((r: any) => !r.skipped).length} listings · week of {liveDiscResult.weekStart}</p>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+                      {liveDiscResult.results.filter((r: any) => !r.skipped).map((r: any, i: number) => (
+                        <div key={i} className={`p-2.5 border text-xs ${r.flagged ? "border-red-500/50 bg-red-950/20" : r.fetchOk ? "border-zinc-800" : "border-zinc-800/50 opacity-60"}`}>
+                          <div className="flex justify-between">
+                            <span className="text-zinc-200">{OUTLET_NAMES[r.outlet_id] || r.outlet_id} · {r.brand}</span>
+                            {r.flagged && <span className="text-red-400 font-bold">⚠ FLAG</span>}
+                          </div>
+                          {!r.fetchOk ? (
+                            <p className="text-zinc-600 mt-1">Couldn't fetch — {r.error}</p>
+                          ) : (
+                            <>
+                              <p className="text-zinc-400 mt-1">Live max: <span className={r.flagged ? "text-red-400 font-bold" : "text-zinc-200"}>{r.maxPct == null ? "no % offer found" : `${r.maxPct}%`}</span> · Approved: {r.approvedPct == null ? "not set" : `${r.approvedPct}%`}</p>
+                              {r.offers.length > 0 && <p className="text-zinc-600 mt-1 truncate" title={r.offers.join(", ")}>{r.offers.join(" · ")}</p>}
+                            </>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                )}
               </div>
             )}
 
