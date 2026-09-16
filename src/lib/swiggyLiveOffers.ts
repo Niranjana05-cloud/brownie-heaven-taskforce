@@ -53,12 +53,12 @@ function htmlToText(html: string): string {
     .trim();
 }
 
-export type LiveOfferResult = { offers: string[]; maxPct: number | null; fetchOk: boolean; error?: string };
+export type LiveOfferResult = { offers: string[]; maxPct: number | null; fetchOk: boolean; error?: string; debugRawLength?: number; debugTextPreview?: string; debugLooksLikeJsShell?: boolean };
 
 // Pulls out lines like "Flat 30% Off", "20% Off Upto ₹50", "Extra ₹20 Off" from
 // the page text, and the single highest % figure among them — used as the
 // "current live discount level" to compare against what was approved.
-export async function fetchLiveOffers(url: string): Promise<LiveOfferResult> {
+export async function fetchLiveOffers(url: string, includeDebug: boolean = false): Promise<LiveOfferResult> {
   try {
     const res = await fetch(url, {
       headers: {
@@ -87,7 +87,18 @@ export async function fetchLiveOffers(url: string): Promise<LiveOfferResult> {
       if (maxPct === null || v > maxPct) maxPct = v;
     }
 
-    return { offers: offerLines.slice(0, 10), maxPct, fetchOk: true };
+    // A page that's genuinely just a JS-loading shell (content fetched by the
+    // browser after load, not present in the raw HTML) tends to be short and
+    // lacks any of the dish/menu text that should be all over a real page.
+    const looksLikeJsShell = html.length < 20000 || !/Off|menu|restaurant/i.test(text);
+
+    const result: LiveOfferResult = { offers: offerLines.slice(0, 10), maxPct, fetchOk: true };
+    if (includeDebug) {
+      result.debugRawLength = html.length;
+      result.debugTextPreview = text.slice(0, 2000);
+      result.debugLooksLikeJsShell = looksLikeJsShell;
+    }
+    return result;
   } catch (err: any) {
     return { offers: [], maxPct: null, fetchOk: false, error: err.message || String(err) };
   }
