@@ -953,6 +953,34 @@ export default function DashboardPage() {
   const [pvTo, setPvTo] = useState<string>(() => new Date().toISOString().slice(0, 10));
   const [pvRows, setPvRows] = useState<any[]>([]);
   const [pvVendorSel, setPvVendorSel] = useState<string>("");
+  // --- Approved discount % per outlet+brand, per week (Nishant's request) ---
+  const [discWeekStart, setDiscWeekStart] = useState<string>(() => {
+    const d = new Date();
+    const day = d.getDay(); // 0=Sun
+    const diffToMonday = day === 0 ? 6 : day - 1;
+    d.setDate(d.getDate() - diffToMonday);
+    return d.toISOString().slice(0, 10);
+  });
+  const [discTargets, setDiscTargets] = useState<Record<string, number>>({}); // key: outlet_brand
+  const [discSaving, setDiscSaving] = useState<Record<string, boolean>>({});
+  const fetchDiscountTargets = async () => {
+    const { data } = await supabase.from("outlet_discount_targets").select("outlet_id,brand,approved_pct").eq("week_start", discWeekStart);
+    const m: Record<string, number> = {};
+    (data || []).forEach((r: any) => { m[`${r.outlet_id}_${r.brand}`] = Number(r.approved_pct); });
+    setDiscTargets(m);
+  };
+  useEffect(() => { if (activeTab === "net_realisation") fetchDiscountTargets(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [activeTab, discWeekStart]);
+  const saveDiscountTarget = async (oid: string, brand: string, pct: number) => {
+    const key = `${oid}_${brand}`;
+    setDiscSaving((m) => ({ ...m, [key]: true }));
+    const { error } = await supabase.from("outlet_discount_targets").upsert(
+      { outlet_id: oid, brand, week_start: discWeekStart, approved_pct: pct, set_by: user?.id || null, updated_at: new Date().toISOString() },
+      { onConflict: "outlet_id,brand,week_start" }
+    );
+    setDiscSaving((m) => ({ ...m, [key]: false }));
+    if (error) { alert("Save failed: " + error.message); return; }
+    setDiscTargets((m) => ({ ...m, [key]: pct }));
+  };
   const [pvRevenueRows, setPvRevenueRows] = useState<any[]>([]);
   const [pvItemPerfCategories, setPvItemPerfCategories] = useState<{ label: string; rows: { category: string; revenue: number }[] } | null>(null);
   const [pvLoading, setPvLoading] = useState(false);
@@ -3493,6 +3521,56 @@ else await fetchOutletReportsByDate(outletEntryDate);
                 </button>
               </div>
             </div>
+
+            {(user?.role === "Financial Analyst" || user?.role === "Owner") && (
+              <div className="mb-6 bg-[#131316] border border-zinc-800 p-4">
+                <div className="flex justify-between items-center mb-1">
+                  <p className="text-sm font-semibold">📢 Approved discount % — per outlet, per week</p>
+                  <input type="date" value={discWeekStart} onChange={(e) => setDiscWeekStart(e.target.value)} className="bg-black border border-zinc-800 text-white px-3 py-1.5 text-xs font-mono focus:outline-none focus:border-yellow-400" />
+                </div>
+                <p className="text-[10px] text-zinc-600 mb-3">What discount % each outlet is actually authorized to run on Swiggy this week — the number to compare against what Swiggy really applies, once real discount data is wired in. Week starting {discWeekStart}.</p>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="text-zinc-500 uppercase tracking-widest text-[10px] border-b border-zinc-800">
+                        <th className="text-left py-2 pr-3">Outlet</th>
+                        <th className="text-center py-2 px-2">BH</th>
+                        <th className="text-center py-2 px-2">CBH</th>
+                        <th className="text-center py-2 px-2">ICBH</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {OUTLETS.map((oid) => (
+                        <tr key={oid} className="border-b border-zinc-800/40">
+                          <td className="py-1.5 pr-3 text-zinc-300">{OUTLET_NAMES[oid] || oid}</td>
+                          {(["BH", "CBH", "ICBH"] as const).map((brand) => {
+                            const key = `${oid}_${brand}`;
+                            const val = discTargets[key];
+                            return (
+                              <td key={brand} className="py-1.5 px-2 text-center">
+                                <input
+                                  type="number"
+                                  defaultValue={val ?? ""}
+                                  key={`${key}_${val ?? "empty"}`}
+                                  placeholder="—"
+                                  onBlur={(e) => {
+                                    const n = parseFloat(e.target.value);
+                                    if (!isNaN(n) && n !== val) saveDiscountTarget(oid, brand, n);
+                                  }}
+                                  className={`w-16 bg-black border text-center px-1 py-1 text-xs focus:outline-none focus:border-yellow-400 ${discSaving[key] ? "border-yellow-400" : "border-zinc-800"}`}
+                                />
+                                <span className="text-zinc-600">%</span>
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <p className="text-[10px] text-orange-400 mt-3">⏳ Real-discount comparison isn't live yet — waiting on a confirmed sample Payout Breakup Excel showing real "Restaurant Discounts" figures before that part gets built. For now, this just records what's approved each week.</p>
+              </div>
+            )}
 
             {(user?.role === "Financial Analyst" || user?.role === "Owner") && (
               <div className="mb-6 flex items-center gap-3 relative">
