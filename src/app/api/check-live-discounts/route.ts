@@ -36,7 +36,8 @@ export async function GET() {
         results.push({ outlet_id: outletId, brand, skipped: true, reason: "no Rest ID known for this outlet+brand" });
         continue;
       }
-      const live = await fetchLiveOffers(built.url);
+      const isFirst = results.length === 0;
+      const live = await fetchLiveOffers(built.url, isFirst);
       const approvedPct = approvedByKey[`${outletId}_${brand}`] ?? null;
       const flagged = live.maxPct != null && approvedPct != null && live.maxPct > approvedPct + 5; // small buffer, not a hair-trigger
       results.push({
@@ -50,6 +51,9 @@ export async function GET() {
         flagged,
         fetchOk: live.fetchOk,
         error: live.error,
+        debugRawLength: live.debugRawLength,
+        debugTextPreview: live.debugTextPreview,
+        debugLooksLikeJsShell: live.debugLooksLikeJsShell,
       });
     }
   }
