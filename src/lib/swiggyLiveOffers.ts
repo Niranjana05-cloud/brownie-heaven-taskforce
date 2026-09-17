@@ -67,7 +67,11 @@ export async function fetchLiveOffers(url: string, includeDebug: boolean = false
       },
       signal: AbortSignal.timeout(15000),
     });
-    if (!res.ok) return { offers: [], maxPct: null, fetchOk: false, error: `HTTP ${res.status}` };
+    if (!res.ok) {
+      const failResult: LiveOfferResult = { offers: [], maxPct: null, fetchOk: false, error: `HTTP ${res.status}` };
+      if (includeDebug) { failResult.debugRawLength = 0; failResult.debugTextPreview = `Got HTTP ${res.status} — no page content at all.`; failResult.debugLooksLikeJsShell = false; }
+      return failResult;
+    }
     const html = await res.text();
     const text = htmlToText(html);
 
@@ -100,6 +104,8 @@ export async function fetchLiveOffers(url: string, includeDebug: boolean = false
     }
     return result;
   } catch (err: any) {
-    return { offers: [], maxPct: null, fetchOk: false, error: err.message || String(err) };
+    const failResult: LiveOfferResult = { offers: [], maxPct: null, fetchOk: false, error: err.message || String(err) };
+    if (includeDebug) { failResult.debugRawLength = 0; failResult.debugTextPreview = `Fetch threw an exception: ${err.message || String(err)}`; failResult.debugLooksLikeJsShell = false; }
+    return failResult;
   }
 }
