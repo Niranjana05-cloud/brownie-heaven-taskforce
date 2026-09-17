@@ -4,6 +4,8 @@ import { buildSwiggyUrl, fetchLiveOffers } from "@/lib/swiggyLiveOffers";
 import type { SwiggyBrand } from "@/lib/swiggyPayoutMap";
 
 export const maxDuration = 60;
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -58,5 +60,8 @@ export async function GET() {
     }
   }
 
-  return NextResponse.json({ success: true, weekStart, results, checkedAt: new Date().toISOString() });
+  return NextResponse.json(
+    { success: true, weekStart, results, checkedAt: new Date().toISOString() },
+    { headers: { "Cache-Control": "no-store, max-age=0, must-revalidate" } }
+  );
 }
