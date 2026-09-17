@@ -987,7 +987,7 @@ export default function DashboardPage() {
     setLiveDiscChecking(true);
     setLiveDiscResult(null);
     try {
-      const res = await fetch("/api/check-live-discounts");
+      const res = await fetch("/api/check-live-discounts?t=" + Date.now(), { cache: "no-store" });
       const json = await res.json();
       setLiveDiscResult(json);
     } catch (err: any) {
@@ -3615,18 +3615,18 @@ else await fetchOutletReportsByDate(outletEntryDate);
                             <>
                               <p className="text-zinc-400 mt-1">Live max: <span className={r.flagged ? "text-red-400 font-bold" : "text-zinc-200"}>{r.maxPct == null ? "no % offer found" : `${r.maxPct}%`}</span> · Approved: {r.approvedPct == null ? "not set" : `${r.approvedPct}%`}</p>
                               {r.offers.length > 0 && <p className="text-zinc-600 mt-1 truncate" title={r.offers.join(", ")}>{r.offers.join(" · ")}</p>}
-                              {r.debugRawLength != null && (
-                                <details className="mt-2">
-                                  <summary className="text-yellow-400 cursor-pointer">🔧 Debug (this entry only)</summary>
-                                  <div className="bg-black/40 p-2 mt-1 text-[10px] text-zinc-400">
-                                    <p>Raw HTML length: {r.debugRawLength} chars</p>
-                                    <p>Looks like a JS-loading shell: {r.debugLooksLikeJsShell ? "yes" : "no"}</p>
-                                    <p className="text-zinc-500 mt-1">First 2000 chars of parsed text:</p>
-                                    <pre className="whitespace-pre-wrap mt-1 max-h-64 overflow-y-auto border border-zinc-800 p-2">{r.debugTextPreview}</pre>
-                                  </div>
-                                </details>
-                              )}
                             </>
+                          )}
+                          {r.debugRawLength != null && (
+                            <details open className="mt-2">
+                              <summary className="text-yellow-400 cursor-pointer font-bold">🔧 Debug (this entry only) — already open, scroll down</summary>
+                              <div className="bg-black/40 p-2 mt-1 text-[10px] text-zinc-400">
+                                <p>Raw HTML length: {r.debugRawLength} chars</p>
+                                <p>Looks like a JS-loading shell: {r.debugLooksLikeJsShell ? "yes" : "no"}</p>
+                                <p className="text-zinc-500 mt-1">First 2000 chars of parsed text:</p>
+                                <pre className="whitespace-pre-wrap mt-1 max-h-64 overflow-y-auto border border-zinc-800 p-2">{r.debugTextPreview}</pre>
+                              </div>
+                            </details>
                           )}
                         </div>
                       ))}
