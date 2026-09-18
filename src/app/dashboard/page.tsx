@@ -10,6 +10,7 @@ import FounderDashboard from "./FounderDashboard";
 import CommandCentre from "./CommandCentre";
 import ReconciliationTab from "./ReconciliationTab";
 import supabaseStock from "@/lib/supabaseStock";
+import { buildSwiggyUrl } from "@/lib/swiggyLiveOffers";
 import { fetchRealFoodCostPct, REAL_FOOD_COST_WINDOW_DAYS } from "@/lib/realFoodCost";
 import { OUTLET_ID_TO_STOCK_NAME } from "@/lib/outletMap";
 import { FOOD_COST_MAP } from "@/lib/foodCosts";
@@ -3633,6 +3634,31 @@ else await fetchOutletReportsByDate(outletEntryDate);
                     </div>
                   </>
                 )}
+              </div>
+            )}
+
+            {(user?.role === "Financial Analyst" || user?.role === "Owner") && (
+              <div className="mb-6 bg-[#131316] border border-zinc-800 p-4">
+                <p className="text-sm font-semibold mb-1">📋 Manual check list — all outlet Swiggy pages</p>
+                <p className="text-[10px] text-zinc-600 mb-4">Click, glance at the offer banner, click the next one. Opens each real Swiggy page in a new tab — same pages the automated checker above couldn't get past.</p>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {OUTLETS.map((oid) => (
+                    <div key={oid} className="border border-zinc-800 p-3">
+                      <p className="text-xs font-bold text-zinc-200 mb-2">{OUTLET_NAMES[oid] || oid}</p>
+                      <div className="flex flex-wrap gap-2">
+                        {(["BH", "CBH", "ICBH"] as const).map((brand) => {
+                          const built = buildSwiggyUrl(oid, brand);
+                          if (!built) return <span key={brand} className="text-[10px] text-zinc-700 border border-zinc-800 px-2 py-1">{brand}: no ID</span>;
+                          return (
+                            <a key={brand} href={built.url} target="_blank" rel="noopener noreferrer" className="text-[10px] text-yellow-400 hover:text-yellow-300 border border-zinc-800 hover:border-yellow-400/50 px-2 py-1 transition-colors">
+                              {brand} ↗
+                            </a>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
 
