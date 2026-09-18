@@ -79,9 +79,9 @@ export default function MyOutletsDashboard({ user }: { user: Staff }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [customFrom, customTo]);
 
-  // Rotate the insight box every 7 seconds.
+  // Rotate the insight box every 5 seconds.
   useEffect(() => {
-    const id = setInterval(() => setTick((t) => t + 1), 7000);
+    const id = setInterval(() => setTick((t) => t + 1), 5000);
     return () => clearInterval(id);
   }, []);
 
