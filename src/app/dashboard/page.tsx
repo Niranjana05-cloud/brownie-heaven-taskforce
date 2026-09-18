@@ -731,6 +731,7 @@ export default function DashboardPage() {
   const [outletSubmitting, setOutletSubmitting] = useState(false);
   const [outletEntryDate, setOutletEntryDate] = useState<string>(() => new Date().toISOString().split("T")[0]);
   const [outletWasOff, setOutletWasOff] = useState(false);
+  const [dipFlag, setDipFlag] = useState<null | { outlet: string; todayTotal: number; prevTotal: number; pct: number; signals: string[] }>(null);
   const [reviews, setReviews] = useState<any[]>([]);
   const [revForm, setRevForm] = useState<{ platform: string; rating: string; valid: boolean; refund: boolean; note: string }>({ platform: "Swiggy", rating: "5", valid: false, refund: false, note: "" });
   const [revSaving, setRevSaving] = useState(false);
@@ -2875,7 +2876,7 @@ const submitOutletReport = async () => {
   const newRating = parseFloat(d.bh_google_rating) || 0;
   const todayStr = new Date().toISOString().split("T")[0];
   const { data: prevRows } = await supabase.from("outlet_reports")
-    .select("bh_google_rating").eq("outlet_id", activeOutlet).lt("report_date", todayStr)
+    .select("bh_google_rating, report_date, shop_sales_value, swiggy_sales_value, zomato_sales_value, swiggy_sales_count, zomato_sales_count").eq("outlet_id", activeOutlet).lt("report_date", todayStr)
     .order("report_date", { ascending: false }).limit(1);
   const prevRating = prevRows && prevRows[0] ? Number(prevRows[0].bh_google_rating) || 0 : 0;
   const earnedBonus = newRating > 4.5 && newRating > prevRating;
