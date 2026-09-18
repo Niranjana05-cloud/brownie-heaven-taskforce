@@ -3281,6 +3281,7 @@ else await fetchOutletReportsByDate(outletEntryDate);
 
        {activeTab === "tasks" && user && user.role === "Founder's Office" && <FounderDashboard user={user} />}
        {activeTab === "tasks" && user && user.role === "Owner" && <CommandCentre user={user} />}
+       {activeTab === "tasks" && user && (user.role === "Asst. Ops Manager" || user.role === "Custom Cakes & Asst Ops") && <div className="mb-8"><MyOutletsDashboard user={user} /></div>}
       {activeTab === "tasks" && user?.role === "Head Chef" && (
           <div>
             <div className="flex justify-between items-end mb-6 pb-5 border-b border-zinc-800">
