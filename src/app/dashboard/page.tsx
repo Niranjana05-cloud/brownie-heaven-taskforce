@@ -8,6 +8,7 @@ import { computeScores, type ScoreRow } from "@/lib/score";
 import PayoutTab from "./PayoutTab";
 import FounderDashboard from "./FounderDashboard";
 import CommandCentre from "./CommandCentre";
+import MyOutletsDashboard from "./MyOutletsDashboard";
 import ReconciliationTab from "./ReconciliationTab";
 import supabaseStock from "@/lib/supabaseStock";
 import { buildSwiggyUrl } from "@/lib/swiggyLiveOffers";
