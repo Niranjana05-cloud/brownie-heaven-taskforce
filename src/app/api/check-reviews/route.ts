@@ -69,6 +69,7 @@ async function processGoogleBatch(client: ImapFlow, out: BatchResult) {
     const { error } = await supabase.from("outlet_reviews").insert({
       outlet_id: outletId, staff_id: staffId, report_date: emailDate,
       platform: "Google", rating: review.rating, valid_complaint: false, refund_given: false, note,
+      review_url: review.reviewUrl,
     });
 
     if (error) { recordSkip(out, uid, "db insert failed", { error: error.message }); continue; }
