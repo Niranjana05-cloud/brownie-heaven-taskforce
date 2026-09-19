@@ -10,6 +10,7 @@ import FounderDashboard from "./FounderDashboard";
 import CommandCentre from "./CommandCentre";
 import MyOutletsDashboard from "./MyOutletsDashboard";
 import TeamDashboards from "./TeamDashboards";
+import NotifyTab from "./NotifyTab";
 import ReconciliationTab from "./ReconciliationTab";
 import supabaseStock from "@/lib/supabaseStock";
 import { buildSwiggyUrl } from "@/lib/swiggyLiveOffers";
