@@ -20,6 +20,7 @@ import { matchItemCost } from "@/lib/itemPerfCosts";
 import { useActivityHeartbeat } from "@/lib/useActivityHeartbeat";
 import ActivityToastStack from "@/components/ActivityToastStack";
 import NudgeButton from "@/components/NudgeButton";
+import PushRegister from "@/components/PushRegister";
 import NudgeToast from "@/components/NudgeToast";
 import { parseSwiggyPayoutEmail } from "@/lib/swiggyPayoutParser";
 
@@ -845,10 +846,15 @@ export default function DashboardPage() {
     if (fineStaff.length === 0) { alert("Pick at least one person to fine."); return; }
     const amt = Number(fineAmount) || 0;
     setFineBusy(true);
-    for (const sid of fineStaff) {
+      for (const sid of fineStaff) {
       const st = (ALL_STAFF as any[]).find((x) => x.id === sid);
       await supabase.from("fines").insert({ staff_id: sid, staff_name: st?.name || sid, reason: fineReason.trim() || null, amount: amt, outlet: fineOutlet || null, fine_date: fineDate, entered_by: user?.id || null });
       await supabase.from("point_adjustments").insert({ staff_id: sid, points: -amt, reason: `Fine: ${fineReason.trim() || "review"}` });
+      fetch("/api/push/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ staff_ids: [sid], title: "⚖️ Fine issued", body: `₹${amt} — ${fineReason.trim() || "review"}`, tag: "fine" }),
+      }).catch(() => {});
     }
     setFineBusy(false);
     setFineStaff([]);
@@ -3054,7 +3060,8 @@ else await fetchOutletReportsByDate(outletEntryDate);
 
   return (
     <div className="min-h-screen bg-[#0a0a0b] text-white flex">
-      {(user?.role === "Owner" || (user as any)?.isFO) && <ActivityToastStack />}
+       {(user?.role === "Owner" || (user as any)?.isFO) && <ActivityToastStack />}
+      {user && <PushRegister staffId={user.id} />}
       {isOwner && <NudgeButton />}
       {isFO && <NudgeToast />}
       {sidebarOpen && <div className="fixed inset-0 bg-black/50 z-30 md:hidden" onClick={() => setSidebarOpen(false)} />}
