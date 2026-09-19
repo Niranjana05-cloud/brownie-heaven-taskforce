@@ -17,7 +17,7 @@ export async function POST(req: Request) {
 
     const { data: subs } = await supabase
       .from("push_subscriptions")
-      .select("id, staff_id, endpoint, p256dh, auth")
+      .select("staff_id, endpoint, p256dh, auth")
       .in("staff_id", ids);
 
     if (!subs || subs.length === 0) {
@@ -25,15 +25,15 @@ export async function POST(req: Request) {
     }
 
     let sent = 0;
-    const deadIds: string[] = [];
+    const deadEndpoints: string[] = [];
     for (const sub of subs) {
       const result = await sendPushToSubscription(sub as any, { title, body: body || "", url, tag });
       if (result === "ok") sent++;
-      if (result === "gone") deadIds.push((sub as any).id);
+      if (result === "gone") deadEndpoints.push((sub as any).endpoint);
     }
 
-    if (deadIds.length > 0) {
-      await supabase.from("push_subscriptions").delete().in("id", deadIds);
+    if (deadEndpoints.length > 0) {
+      await supabase.from("push_subscriptions").delete().in("endpoint", deadEndpoints);
     }
 
     return NextResponse.json({ ok: true, sent, total: subs.length });
