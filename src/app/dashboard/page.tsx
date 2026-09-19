@@ -3220,7 +3220,7 @@ else await fetchOutletReportsByDate(outletEntryDate);
               <span>📈</span> Item Performance
             </div>
           )}
-          {canAssign && (
+                    {canAssign && (
             <>
              <div onClick={() => { setActiveTab("all_reports"); setSidebarOpen(false); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "all_reports" ? "text-white bg-zinc-900 border-l-2 border-yellow-400" : "text-zinc-500 hover:text-white"}`}>
                 <span>📋</span> Reports
@@ -3232,7 +3232,7 @@ else await fetchOutletReportsByDate(outletEntryDate);
               <span>🏪</span> Outlet Reports
               </div>
           )}
-                    {canAssign && (
+          {canAssign && (
             <>
               <div onClick={() => { setActiveTab("history"); setSidebarOpen(false); fetchHistoryReports(historyDate); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "history" ? "text-white bg-zinc-900 border-l-2 border-yellow-400" : "text-zinc-500 hover:text-white"}`}>
              <span>📅</span> History
