@@ -11,6 +11,7 @@ import CommandCentre from "./CommandCentre";
 import MyOutletsDashboard from "./MyOutletsDashboard";
 import TeamDashboards from "./TeamDashboards";
 import NotifyTab from "./NotifyTab";
+import MessagesTab from "./MessagesTab";
 import ReconciliationTab from "./ReconciliationTab";
 import supabaseStock from "@/lib/supabaseStock";
 import { buildSwiggyUrl } from "@/lib/swiggyLiveOffers";
@@ -388,11 +389,12 @@ export default function DashboardPage() {
     useActivityHeartbeat(typeof window !== "undefined" ? localStorage.getItem("tf_session_id") : null);
   const router = useRouter();
   const [user, setUser] = useState<Staff | null>(null);
+  const [msgUnreadCount, setMsgUnreadCount] = useState(0);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [reports, setReports] = useState<Report[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
-  const [activeTab, setActiveTab] = useState<"tasks" | "my_report" | "all_reports" | "analytics" | "outlet_reports" | "owner_outlets" | "history" | "attendance" | "sales_target" | "payout" | "reconciliation" | "competition" | "item_perf" | "ceo_report" | "fines" | "niranjana_report" | "pnl" | "contribution_margins" | "net_realisation" | "cash_flow" | "cheques" | "auto_reviews" | "purchase_vendors" | "team_dashboards" | "notify">("tasks");
+  const [activeTab, setActiveTab] = useState<"tasks" | "my_report" | "all_reports" | "analytics" | "outlet_reports" | "owner_outlets" | "history" | "attendance" | "sales_target" | "payout" | "reconciliation" | "competition" | "item_perf" | "ceo_report" | "fines" | "niranjana_report" | "pnl" | "contribution_margins" | "net_realisation" | "cash_flow" | "cheques" | "auto_reviews" | "purchase_vendors" | "team_dashboards" | "notify" | "messages">("tasks");
   // Real, purchase-data-backed food cost % (trailing 30 days, company-wide) —
   // replaces the flat 29.4% assumption in Outlet P&L, Channel P&L and Command
   // Centre. Falls back to 29.4% if there's no purchase/revenue data yet in the
@@ -2349,16 +2351,32 @@ export default function DashboardPage() {
    fetchAttendance(parsed, new Date(Date.now() - 86400000).toISOString().split("T")[0]);
    fetchSalesTargets(parsed);
   fetchOutletReports(parsed);
-    fetchLastOutletRatings(parsed);
+        fetchLastOutletRatings(parsed);
    if (parsed.role === "Owner" || parsed.role === "Manager") fetchAllOutletReports();
+    fetchMsgUnread(parsed);
   }, [router]);
+
+  // Open straight to a specific tab when a notification link asks for it
+  // (e.g. a push notification's "Reply" deep link into Messages).
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const tab = params.get("tab");
+    if (tab === "messages") setActiveTab("messages");
+  }, []);
 
  useEffect(() => { if (activeOutlet) fetchReviews(activeOutlet, outletEntryDate); else setReviews([]); }, [activeOutlet, outletEntryDate]);
   useEffect(() => {
     if (!user) return;
-    const interval = setInterval(() => { fetchTasks(user); fetchReports(user); }, 30000);
+    const interval = setInterval(() => { fetchTasks(user); fetchReports(user); fetchMsgUnread(user); }, 30000);
     return () => clearInterval(interval);
   }, [user]);
+
+  const fetchMsgUnread = async (u: Staff) => {
+    const filterId = u.role === "Owner" ? "nishant" : u.id;
+    const { count } = await supabase.from("messages").select("id", { count: "exact", head: true }).eq("to_id", filterId).is("read_at", null);
+    setMsgUnreadCount(count || 0);
+  };
 
   const fetchTasks = async (u: Staff) => {
     setLoading(true);
@@ -3121,6 +3139,12 @@ else await fetchOutletReportsByDate(outletEntryDate);
           <div onClick={() => { setActiveTab("tasks"); setSidebarOpen(false); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "tasks" ? "text-white bg-zinc-900 border-l-2 border-yellow-400" : "text-zinc-500 hover:text-white"}`}>
             <span>▣</span> Dashboard
           </div>
+          {!isOwner && (
+            <div onClick={() => { setActiveTab("messages"); setSidebarOpen(false); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "messages" ? "text-white bg-zinc-900 border-l-2 border-yellow-400" : "text-zinc-500 hover:text-white"}`}>
+              <span>💬</span> Messages
+              {msgUnreadCount > 0 && <span className="ml-auto w-2 h-2 bg-yellow-400 rounded-full"></span>}
+            </div>
+          )}
                             {(canAssign || isFO) && (
             <div onClick={() => { setActiveTab("fines"); setSidebarOpen(false); fetchFines(); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "fines" ? "text-white bg-zinc-900 border-l-2 border-yellow-400" : "text-zinc-500 hover:text-white"}`}>
               <span>⚖️</span> Fines
@@ -3245,9 +3269,15 @@ else await fetchOutletReportsByDate(outletEntryDate);
               <span>👥</span> Team Dashboards
             </div>
           )}
-          {isOwner && (
+                   {isOwner && (
             <div onClick={() => { setActiveTab("notify"); setSidebarOpen(false); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "notify" ? "text-white bg-zinc-900 border-l-2 border-yellow-400" : "text-zinc-500 hover:text-white"}`}>
               <span>🔔</span> Send Notification
+            </div>
+          )}
+          {isOwner && (
+            <div onClick={() => { setActiveTab("messages"); setSidebarOpen(false); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "messages" ? "text-white bg-zinc-900 border-l-2 border-yellow-400" : "text-zinc-500 hover:text-white"}`}>
+              <span>💬</span> Messages
+              {msgUnreadCount > 0 && <span className="ml-auto w-2 h-2 bg-yellow-400 rounded-full"></span>}
             </div>
           )}
         </nav>
@@ -5344,8 +5374,14 @@ else await fetchOutletReportsByDate(outletEntryDate);
            {activeTab === "team_dashboards" && isOwner && (
           <TeamDashboards staffList={ALL_STAFF.filter((s) => ["vishnu", "ahila", "arun", "nilani"].includes(s.id))} />
         )}
-        {activeTab === "notify" && isOwner && (
+           activeTab === "notify" && isOwner && (
           <NotifyTab staffList={ALL_STAFF.filter((s) => s.id !== "nishant")} />
+        )}
+        {activeTab === "messages" && isOwner && user && (
+          <MessagesTab mode="owner" currentUserId={user.id} currentUserName={user.name} staffList={ALL_STAFF.filter((s) => s.id !== "nishant")} />
+        )}
+        {activeTab === "messages" && !isOwner && user && (
+          <MessagesTab mode="staff" currentUserId={user.id} currentUserName={user.name} />
         )}
         {activeTab === "auto_reviews" && (isFO || ["nishant","arun","vishnu","ahila","nilani"].includes(user?.id ?? "")) && (
           <div>
