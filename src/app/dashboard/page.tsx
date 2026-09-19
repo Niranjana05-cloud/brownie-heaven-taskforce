@@ -9,6 +9,7 @@ import PayoutTab from "./PayoutTab";
 import FounderDashboard from "./FounderDashboard";
 import CommandCentre from "./CommandCentre";
 import MyOutletsDashboard from "./MyOutletsDashboard";
+import TeamDashboards from "./TeamDashboards";
 import ReconciliationTab from "./ReconciliationTab";
 import supabaseStock from "@/lib/supabaseStock";
 import { buildSwiggyUrl } from "@/lib/swiggyLiveOffers";
@@ -389,7 +390,7 @@ export default function DashboardPage() {
   const [reports, setReports] = useState<Report[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
-  const [activeTab, setActiveTab] = useState<"tasks" | "my_report" | "all_reports" | "analytics" | "outlet_reports" | "owner_outlets" | "history" | "attendance" | "sales_target" | "payout" | "reconciliation" | "competition" | "item_perf" | "ceo_report" | "fines" | "niranjana_report" | "pnl" | "contribution_margins" | "net_realisation" | "cash_flow" | "cheques" | "auto_reviews" | "purchase_vendors">("tasks");
+  const [activeTab, setActiveTab] = useState<"tasks" | "my_report" | "all_reports" | "analytics" | "outlet_reports" | "owner_outlets" | "history" | "attendance" | "sales_target" | "payout" | "reconciliation" | "competition" | "item_perf" | "ceo_report" | "fines" | "niranjana_report" | "pnl" | "contribution_margins" | "net_realisation" | "cash_flow" | "cheques" | "auto_reviews" | "purchase_vendors" | "team_dashboards">("tasks");
   // Real, purchase-data-backed food cost % (trailing 30 days, company-wide) —
   // replaces the flat 29.4% assumption in Outlet P&L, Channel P&L and Command
   // Centre. Falls back to 29.4% if there's no purchase/revenue data yet in the
@@ -3226,10 +3227,17 @@ else await fetchOutletReportsByDate(outletEntryDate);
           )}
           {canAssign && (
             <>
+                       {canAssign && (
+            <>
               <div onClick={() => { setActiveTab("history"); setSidebarOpen(false); fetchHistoryReports(historyDate); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "history" ? "text-white bg-zinc-900 border-l-2 border-yellow-400" : "text-zinc-500 hover:text-white"}`}>
              <span>📅</span> History
              </div>
             </>
+          )}
+          {isOwner && (
+            <div onClick={() => { setActiveTab("team_dashboards"); setSidebarOpen(false); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "team_dashboards" ? "text-white bg-zinc-900 border-l-2 border-yellow-400" : "text-zinc-500 hover:text-white"}`}>
+              <span>👥</span> Team Dashboards
+            </div>
           )}
         </nav>
         <div className="px-4 py-4 border-t border-zinc-800 flex items-center gap-2">
@@ -5322,6 +5330,9 @@ else await fetchOutletReportsByDate(outletEntryDate);
     </div>
   </div>
 )}
+                {activeTab === "team_dashboards" && isOwner && (
+          <TeamDashboards staffList={ALL_STAFF.filter((s) => ["vishnu", "ahila", "arun", "nilani"].includes(s.id))} />
+        )}
         {activeTab === "auto_reviews" && (isFO || ["nishant","arun","vishnu","ahila","nilani"].includes(user?.id ?? "")) && (
           <div>
             <div className="mb-6 flex items-center justify-between flex-wrap gap-3">
