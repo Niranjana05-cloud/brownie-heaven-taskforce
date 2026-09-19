@@ -10,7 +10,6 @@ import FounderDashboard from "./FounderDashboard";
 import CommandCentre from "./CommandCentre";
 import MyOutletsDashboard from "./MyOutletsDashboard";
 import TeamDashboards from "./TeamDashboards";
-import NotifyTab from "./NotifyTab";
 import MessagesTab from "./MessagesTab";
 import ReconciliationTab from "./ReconciliationTab";
 import supabaseStock from "@/lib/supabaseStock";
@@ -3269,11 +3268,6 @@ else await fetchOutletReportsByDate(outletEntryDate);
               <span>👥</span> Team Dashboards
             </div>
           )}
-                   {isOwner && (
-            <div onClick={() => { setActiveTab("notify"); setSidebarOpen(false); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "notify" ? "text-white bg-zinc-900 border-l-2 border-yellow-400" : "text-zinc-500 hover:text-white"}`}>
-              <span>🔔</span> Send Notification
-            </div>
-          )}
           {isOwner && (
             <div onClick={() => { setActiveTab("messages"); setSidebarOpen(false); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "messages" ? "text-white bg-zinc-900 border-l-2 border-yellow-400" : "text-zinc-500 hover:text-white"}`}>
               <span>💬</span> Messages
@@ -5373,9 +5367,6 @@ else await fetchOutletReportsByDate(outletEntryDate);
 )}
           {activeTab === "team_dashboards" && isOwner && (
           <TeamDashboards staffList={ALL_STAFF.filter((s) => ["vishnu", "ahila", "arun", "nilani"].includes(s.id))} />
-        )}
-        {activeTab === "notify" && isOwner && (
-          <NotifyTab staffList={ALL_STAFF.filter((s) => s.id !== "nishant")} />
         )}
         {activeTab === "messages" && isOwner && user && (
           <MessagesTab mode="owner" currentUserId={user.id} currentUserName={user.name} staffList={ALL_STAFF.filter((s) => s.id !== "nishant")} />
