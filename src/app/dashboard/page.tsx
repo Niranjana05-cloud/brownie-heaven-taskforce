@@ -5446,7 +5446,14 @@ else await fetchOutletReportsByDate(outletEntryDate);
                       <span className="text-yellow-400">{"★".repeat(r.rating || 0)}{"☆".repeat(5 - (r.rating || 0))}</span>
                     </div>
                     <p className="text-sm text-zinc-400">{r.note}</p>
-                    <p className="text-xs text-zinc-600 mt-2">{r.report_date}</p>
+                    <div className="flex items-center justify-between mt-2">
+                      <p className="text-xs text-zinc-600">{r.report_date}</p>
+                      {r.review_url && (
+                        <a href={r.review_url} target="_blank" rel="noopener noreferrer" className="text-xs text-yellow-400 hover:text-yellow-300 transition-colors">
+                          View full review ↗
+                        </a>
+                      )}
+                    </div>
                   </div>
                 ))}
               </div>
