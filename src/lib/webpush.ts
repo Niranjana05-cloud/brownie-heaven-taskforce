@@ -12,7 +12,6 @@ function ensureConfigured() {
 }
 
 export type PushSubscriptionRow = {
-  id: string;
   staff_id: string;
   endpoint: string;
   p256dh: string;
