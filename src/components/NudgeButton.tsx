@@ -17,19 +17,23 @@ export default function NudgeButton() {
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
 
-  const send = async () => {
+   const send = async () => {
     if (!message.trim()) return;
     setSending(true);
     await supabase.from("app_settings").upsert(
       { key: "niranjana_nudge", value: JSON.stringify({ message: message.trim(), ts: new Date().toISOString() }), updated_at: new Date().toISOString() },
       { onConflict: "key" }
     );
+    fetch("/api/push/send", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ staff_ids: ["niranjana"], title: "📌 Nudge from Nishant", body: message.trim(), tag: "nudge" }),
+    }).catch(() => {});
     setSending(false);
     setSent(true);
     setMessage("");
     setTimeout(() => { setSent(false); setOpen(false); }, 1500);
   };
-
   return (
     <div className="fixed bottom-4 left-4 z-50">
       {open && (
