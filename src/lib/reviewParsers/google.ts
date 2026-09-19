@@ -7,6 +7,7 @@ export type ParsedReview = {
   reviewerName: string;
   rating: number;          // 1-5
   reviewText: string;
+  reviewUrl: string | null; // direct link to the review on Google, when the email includes one
 };
 
 export function isGoogleReviewEmail(fromAddress: string): boolean {
@@ -28,18 +29,22 @@ export function parseGoogleReview(subject: string, plainTextBody: string): Parse
   const rating = parseInt(ratingMatch[1], 10);
 
   // Body structure after the "Read review" link:
+  //   Read review <https://...>
+  //   (blank line)
   //   <reviewer full name>
   //   (blank line)
-  //   <review text, may span multiple lines>
+  //   <review text, may span multiple lines — Google truncates long reviews here with "...",
+  //    the link above is the only way to read the full text for those>
   //   (blank line)
   //   Reply to review
   const bodyMatch = plainTextBody.match(
-    /Read review\s+<[\s\S]+?>\r?\n\r?\n(.+?)\r?\n\r?\n([\s\S]+?)\r?\n\r?\nReply to review/i
+    /Read review\s+<([\s\S]+?)>\r?\n\r?\n(.+?)\r?\n\r?\n([\s\S]+?)\r?\n\r?\nReply to review/i
   );
   if (!bodyMatch) return null;
 
-  const reviewerName = bodyMatch[1].trim();
-  const reviewText = bodyMatch[2].replace(/\r/g, "").replace(/\s+/g, " ").trim();
+  const reviewUrl = bodyMatch[1].trim() || null;
+  const reviewerName = bodyMatch[2].trim();
+  const reviewText = bodyMatch[3].replace(/\r/g, "").replace(/\s+/g, " ").trim();
 
   return {
     platform: "google",
@@ -47,5 +52,6 @@ export function parseGoogleReview(subject: string, plainTextBody: string): Parse
     reviewerName,
     rating,
     reviewText,
+    reviewUrl,
   };
 }
