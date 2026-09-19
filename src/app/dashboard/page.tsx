@@ -3144,44 +3144,19 @@ else await fetchOutletReportsByDate(outletEntryDate);
               {msgUnreadCount > 0 && <span className="ml-auto w-2 h-2 bg-yellow-400 rounded-full"></span>}
             </div>
           )}
-                            {(canAssign || isFO) && (
-            <div onClick={() => { setActiveTab("fines"); setSidebarOpen(false); fetchFines(); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "fines" ? "text-white bg-zinc-900 border-l-2 border-yellow-400" : "text-zinc-500 hover:text-white"}`}>
-              <span>⚖️</span> Fines
-            </div>
+          {(canAssign || hasOutlets) && (
+              <div onClick={() => { setActiveTab("owner_outlets"); setSidebarOpen(false); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "owner_outlets" ? "text-white bg-zinc-900 border-l-2 border-yellow-400" : "text-zinc-500 hover:text-white"}`}>
+              <span>🏪</span> Outlet Reports
+              </div>
           )}
-                {user?.role === "Financial Analyst" && (
-            <div onClick={() => { setActiveTab("pnl"); setSidebarOpen(false); fetchPnl(); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "pnl" ? "text-white bg-zinc-900 border-l-2 border-yellow-400" : "text-zinc-500 hover:text-white"}`}>
-              <span>💹</span> Channel P&amp;L
-            </div>
-          )}
-                   {user?.role === "Financial Analyst" && (
-            <div onClick={() => { setActiveTab("contribution_margins"); setSidebarOpen(false); fetchContributionMargins(); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "contribution_margins" ? "text-white bg-zinc-900 border-l-2 border-yellow-400" : "text-zinc-500 hover:text-white"}`}>
-              <span>📐</span> Contribution Margins
-            </div>
-          )}
-                  {(user?.role === "Financial Analyst" || user?.role === "Owner") && (
-            <div onClick={() => { setActiveTab("net_realisation"); setSidebarOpen(false); fetchNetRealisation(); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "net_realisation" ? "text-white bg-zinc-900 border-l-2 border-yellow-400" : "text-zinc-500 hover:text-white"}`}>
-              <span>🧾</span> Net Realisation
+         {((user.outlets && user.outlets.length > 0) || canAssign) && (
+            <div onClick={() => { setActiveTab("sales_target"); setSidebarOpen(false); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "sales_target" ? "text-white bg-zinc-900 border-l-2 border-yellow-400" : "text-zinc-500 hover:text-white"}`}>
+              <span>🎯</span> Outlet P&amp;L
             </div>
           )}
                   {(user?.role === "Financial Analyst" || user?.role === "Owner") && (
             <div onClick={() => { setActiveTab("purchase_vendors"); setSidebarOpen(false); fetchPurchaseVendors(); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "purchase_vendors" ? "text-white bg-zinc-900 border-l-2 border-yellow-400" : "text-zinc-500 hover:text-white"}`}>
               <span>🛒</span> Purchase &amp; Vendors
-            </div>
-          )}
-          {user?.role === "Financial Analyst" && (
-            <div onClick={() => { setActiveTab("cash_flow"); setSidebarOpen(false); fetchCashFlowForecast(); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "cash_flow" ? "text-white bg-zinc-900 border-l-2 border-yellow-400" : "text-zinc-500 hover:text-white"}`}>
-              <span>📉</span> Cash-Flow Forecast
-            </div>
-          )}
-                    {(isOwner || isFO) && (
-            <div onClick={() => { setActiveTab("ceo_report"); setSidebarOpen(false); fetchCeoData(ceoWin); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "ceo_report" ? "text-white bg-zinc-900 border-l-2 border-yellow-400" : "text-zinc-500 hover:text-white"}`}>
-              <span>📊</span> CEO Report
-            </div>
-          )}
-                   {(isOwner || isFO) && (
-            <div onClick={() => { setActiveTab("niranjana_report"); setSidebarOpen(false); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "niranjana_report" ? "text-white bg-zinc-900 border-l-2 border-yellow-400" : "text-zinc-500 hover:text-white"}`}>
-              <span>📝</span> Niranjana's Report
             </div>
           )}
           {(isFO || ["nishant","arun","vishnu","ahila","nilani"].includes(user?.id ?? "")) && (
@@ -3197,44 +3172,12 @@ else await fetchOutletReportsByDate(outletEntryDate);
               <span>⚔️</span> Orders Race
             </div>
           )}
-          {hasReportDuty && (
-            <div onClick={() => { setActiveTab("my_report"); setSidebarOpen(false); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "my_report" ? "text-white bg-zinc-900 border-l-2 border-yellow-400" : "text-zinc-500 hover:text-white"}`}>
-              <span>📋</span> My Report
-             {!todayReport && <span className="ml-auto w-2 h-2 bg-yellow-400 rounded-full"></span>}
-            </div>
-          )}
-          {user.role === "HR" && (
-            <div onClick={() => { setActiveTab("attendance"); setSidebarOpen(false); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "attendance" ? "text-white bg-zinc-900 border-l-2 border-yellow-400" : "text-zinc-500 hover:text-white"}`}>
-              <span>👥</span> Attendance
-            </div>
-          )}
-         {((user.outlets && user.outlets.length > 0) || canAssign) && (
-  <div onClick={() => { setActiveTab("outlet_reports"); setSidebarOpen(false); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "outlet_reports" ? "text-white bg-zinc-900 border-l-2 border-yellow-400" : "text-zinc-500 hover:text-white"}`}>
-    <span>🏪</span> Outlets
-  {Object.keys(outletReports).length < (user.outlets?.length || 0) && <span className="ml-auto w-2 h-2 bg-yellow-400 rounded-full"></span>}
-  </div>
-)}
-         {((user.outlets && user.outlets.length > 0) || canAssign) && (
-            <div onClick={() => { setActiveTab("sales_target"); setSidebarOpen(false); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "sales_target" ? "text-white bg-zinc-900 border-l-2 border-yellow-400" : "text-zinc-500 hover:text-white"}`}>
-              <span>🎯</span> Outlet P&amp;L
-            </div>
-          )}
-                {user?.role === "Financial Analyst" && (
-            <div onClick={() => { setActiveTab("payout"); setSidebarOpen(false); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "payout" ? "text-white bg-zinc-900 border-l-2 border-yellow-400" : "text-zinc-500 hover:text-white"}`}>
-              <span>💰</span> Payout
-            </div>
-          )}
-                    {false && user?.role === "Owner" && (
-            <div onClick={() => { setActiveTab("reconciliation"); setSidebarOpen(false); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "reconciliation" ? "text-white bg-zinc-900 border-l-2 border-yellow-400" : "text-zinc-500 hover:text-white"}`}>
-              <span>⚖️</span> Reconciliation
-            </div>
-          )}
          {(canAssign || isFO) && (
             <div onClick={() => { setActiveTab("analytics"); setSidebarOpen(false); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "analytics" ? "text-white bg-zinc-900 border-l-2 border-yellow-400" : "text-zinc-500 hover:text-white"}`}>
              <span>◬</span> Analytics
             </div>
           )}
-          {(canAssign || isFO) && (
+          {false && (canAssign || isFO) && (
             <div onClick={() => { setActiveTab("competition"); setSidebarOpen(false); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "competition" ? "text-white bg-zinc-900 border-l-2 border-yellow-400" : "text-zinc-500 hover:text-white"}`}>
               <span>🥊</span> Competition
             </div>
@@ -3251,11 +3194,12 @@ else await fetchOutletReportsByDate(outletEntryDate);
               </div>
             </>
           )}
-          {(canAssign || hasOutlets) && (
-              <div onClick={() => { setActiveTab("owner_outlets"); setSidebarOpen(false); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "owner_outlets" ? "text-white bg-zinc-900 border-l-2 border-yellow-400" : "text-zinc-500 hover:text-white"}`}>
-              <span>🏪</span> Outlet Reports
-              </div>
-          )}
+         {((user.outlets && user.outlets.length > 0) || canAssign) && (
+  <div onClick={() => { setActiveTab("outlet_reports"); setSidebarOpen(false); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "outlet_reports" ? "text-white bg-zinc-900 border-l-2 border-yellow-400" : "text-zinc-500 hover:text-white"}`}>
+    <span>🏪</span> Outlets
+  {Object.keys(outletReports).length < (user.outlets?.length || 0) && <span className="ml-auto w-2 h-2 bg-yellow-400 rounded-full"></span>}
+  </div>
+)}
           {canAssign && (
             <>
               <div onClick={() => { setActiveTab("history"); setSidebarOpen(false); fetchHistoryReports(historyDate); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "history" ? "text-white bg-zinc-900 border-l-2 border-yellow-400" : "text-zinc-500 hover:text-white"}`}>
@@ -3272,6 +3216,57 @@ else await fetchOutletReportsByDate(outletEntryDate);
             <div onClick={() => { setActiveTab("messages"); setSidebarOpen(false); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "messages" ? "text-white bg-zinc-900 border-l-2 border-yellow-400" : "text-zinc-500 hover:text-white"}`}>
               <span>💬</span> Messages
               {msgUnreadCount > 0 && <span className="ml-auto w-2 h-2 bg-yellow-400 rounded-full"></span>}
+            </div>
+          )}
+                  {(user?.role === "Financial Analyst" || user?.role === "Owner") && (
+            <div onClick={() => { setActiveTab("net_realisation"); setSidebarOpen(false); fetchNetRealisation(); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "net_realisation" ? "text-white bg-zinc-900 border-l-2 border-yellow-400" : "text-zinc-500 hover:text-white"}`}>
+              <span>🧾</span> Net Realisation
+            </div>
+          )}
+                {user?.role === "Financial Analyst" && (
+            <div onClick={() => { setActiveTab("pnl"); setSidebarOpen(false); fetchPnl(); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "pnl" ? "text-white bg-zinc-900 border-l-2 border-yellow-400" : "text-zinc-500 hover:text-white"}`}>
+              <span>💹</span> Channel P&amp;L
+            </div>
+          )}
+                   {user?.role === "Financial Analyst" && (
+            <div onClick={() => { setActiveTab("contribution_margins"); setSidebarOpen(false); fetchContributionMargins(); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "contribution_margins" ? "text-white bg-zinc-900 border-l-2 border-yellow-400" : "text-zinc-500 hover:text-white"}`}>
+              <span>📐</span> Contribution Margins
+            </div>
+          )}
+          {user?.role === "Financial Analyst" && (
+            <div onClick={() => { setActiveTab("cash_flow"); setSidebarOpen(false); fetchCashFlowForecast(); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "cash_flow" ? "text-white bg-zinc-900 border-l-2 border-yellow-400" : "text-zinc-500 hover:text-white"}`}>
+              <span>📉</span> Cash-Flow Forecast
+            </div>
+          )}
+                {user?.role === "Financial Analyst" && (
+            <div onClick={() => { setActiveTab("payout"); setSidebarOpen(false); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "payout" ? "text-white bg-zinc-900 border-l-2 border-yellow-400" : "text-zinc-500 hover:text-white"}`}>
+              <span>💰</span> Payout
+            </div>
+          )}
+                    {false && user?.role === "Owner" && (
+            <div onClick={() => { setActiveTab("reconciliation"); setSidebarOpen(false); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "reconciliation" ? "text-white bg-zinc-900 border-l-2 border-yellow-400" : "text-zinc-500 hover:text-white"}`}>
+              <span>⚖️</span> Reconciliation
+            </div>
+          )}
+          {hasReportDuty && (
+            <div onClick={() => { setActiveTab("my_report"); setSidebarOpen(false); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "my_report" ? "text-white bg-zinc-900 border-l-2 border-yellow-400" : "text-zinc-500 hover:text-white"}`}>
+              <span>📋</span> My Report
+             {!todayReport && <span className="ml-auto w-2 h-2 bg-yellow-400 rounded-full"></span>}
+            </div>
+          )}
+          {user.role === "HR" && (
+            <div onClick={() => { setActiveTab("attendance"); setSidebarOpen(false); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "attendance" ? "text-white bg-zinc-900 border-l-2 border-yellow-400" : "text-zinc-500 hover:text-white"}`}>
+              <span>👥</span> Attendance
+            </div>
+          )}
+                            {(canAssign || isFO) && (
+            <div onClick={() => { setActiveTab("fines"); setSidebarOpen(false); fetchFines(); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "fines" ? "text-white bg-zinc-900 border-l-2 border-yellow-400" : "text-zinc-500 hover:text-white"}`}>
+              <span>⚖️</span> Fines
+            </div>
+          )}
+                   {(isOwner || isFO) && (
+            <div onClick={() => { setActiveTab("niranjana_report"); setSidebarOpen(false); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "niranjana_report" ? "text-white bg-zinc-900 border-l-2 border-yellow-400" : "text-zinc-500 hover:text-white"}`}>
+              <span>📝</span> Niranjana's Report
             </div>
           )}
         </nav>
@@ -3323,6 +3318,13 @@ else await fetchOutletReportsByDate(outletEntryDate);
           </div>
         )}
 
+       {activeTab === "tasks" && (isOwner || isFO) && (
+         <div className="mb-4 flex justify-end">
+           <button onClick={() => { setActiveTab("ceo_report"); fetchCeoData(ceoWin); }} className="text-[11px] font-mono uppercase tracking-widest text-yellow-400 hover:text-yellow-300 border border-yellow-400/40 px-3 py-2 transition-colors">
+             📊 CEO Report →
+           </button>
+         </div>
+       )}
        {activeTab === "tasks" && user && user.role === "Founder's Office" && <FounderDashboard user={user} />}
        {activeTab === "tasks" && user && user.role === "Owner" && <CommandCentre user={user} />}
        {activeTab === "tasks" && user && (user.role === "Asst. Ops Manager" || user.role === "Custom Cakes & Asst Ops") && <div className="mb-8"><MyOutletsDashboard user={user} /></div>}
