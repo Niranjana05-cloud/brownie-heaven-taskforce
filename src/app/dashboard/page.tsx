@@ -5371,10 +5371,10 @@ else await fetchOutletReportsByDate(outletEntryDate);
     </div>
   </div>
 )}
-           {activeTab === "team_dashboards" && isOwner && (
+          {activeTab === "team_dashboards" && isOwner && (
           <TeamDashboards staffList={ALL_STAFF.filter((s) => ["vishnu", "ahila", "arun", "nilani"].includes(s.id))} />
         )}
-           activeTab === "notify" && isOwner && (
+        {activeTab === "notify" && isOwner && (
           <NotifyTab staffList={ALL_STAFF.filter((s) => s.id !== "nishant")} />
         )}
         {activeTab === "messages" && isOwner && user && (
