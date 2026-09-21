@@ -19,13 +19,16 @@ export default function ActiveStatusTab({ staffList }: { staffList: StaffLite[] 
   useEffect(() => {
     (async () => {
       setLoading(true);
-      const start = `${date}T00:00:00.000Z`;
-      const end = `${date}T23:59:59.999Z`;
+      const dayStart = `${date}T00:00:00.000Z`;
+      const dayEnd = `${date}T23:59:59.999Z`;
+      // A session started before this day but still running (last_seen_at falls
+      // on or after this day) needs to count too — people don't log out daily,
+      // so filtering by created_at alone hides every ongoing session.
       const { data } = await supabase
         .from("activity_log")
         .select("staff_id, created_at, last_seen_at")
-        .gte("created_at", start)
-        .lte("created_at", end);
+        .lte("created_at", dayEnd)
+        .gte("last_seen_at", dayStart);
       setRows(data || []);
       setLoading(false);
     })();
@@ -46,6 +49,9 @@ export default function ActiveStatusTab({ staffList }: { staffList: StaffLite[] 
     return `${h}h ${diffMin % 60}m ago`;
   };
 
+  const dayStartMs = new Date(`${date}T00:00:00.000Z`).getTime();
+  const dayEndMs = new Date(`${date}T23:59:59.999Z`).getTime();
+
   const perStaff = staffList
     .map((s) => {
       const sessions = rows.filter((r) => r.staff_id === s.id);
@@ -54,13 +60,19 @@ export default function ActiveStatusTab({ staffList }: { staffList: StaffLite[] 
       sessions.forEach((sess) => {
         const start = new Date(sess.created_at).getTime();
         const end = new Date(sess.last_seen_at || sess.created_at).getTime();
-        totalMs += Math.max(0, end - start);
+        // Only count the slice of this session that actually falls on the
+        // selected day — a session spanning several days shouldn't dump its
+        // whole duration onto just one of them.
+        const overlapStart = Math.max(start, dayStartMs);
+        const overlapEnd = Math.min(end, dayEndMs);
+        if (overlapEnd > overlapStart) totalMs += overlapEnd - overlapStart;
         if (!latestSeen || sess.last_seen_at > latestSeen) latestSeen = sess.last_seen_at;
       });
       const activeNow = latestSeen ? now - new Date(latestSeen).getTime() < 5 * 60 * 1000 : false;
       return { id: s.id, name: s.name, totalMs, latestSeen, activeNow };
     })
     .sort((a, b) => (a.activeNow === b.activeNow ? b.totalMs - a.totalMs : a.activeNow ? -1 : 1));
+
 
   return (
     <div>
