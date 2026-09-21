@@ -11,6 +11,8 @@ import CommandCentre from "./CommandCentre";
 import MyOutletsDashboard from "./MyOutletsDashboard";
 import TeamDashboards from "./TeamDashboards";
 import MessagesTab from "./MessagesTab";
+import ActiveStatusTab from "./ActiveStatusTab";
+import HelpTab from "./HelpTab";
 import ReconciliationTab from "./ReconciliationTab";
 import supabaseStock from "@/lib/supabaseStock";
 import { buildSwiggyUrl } from "@/lib/swiggyLiveOffers";
@@ -393,7 +395,7 @@ export default function DashboardPage() {
   const [reports, setReports] = useState<Report[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
-  const [activeTab, setActiveTab] = useState<"tasks" | "my_report" | "all_reports" | "analytics" | "outlet_reports" | "owner_outlets" | "history" | "attendance" | "sales_target" | "payout" | "reconciliation" | "competition" | "item_perf" | "ceo_report" | "fines" | "niranjana_report" | "pnl" | "contribution_margins" | "net_realisation" | "cash_flow" | "cheques" | "auto_reviews" | "purchase_vendors" | "team_dashboards" | "notify" | "messages">("tasks");
+  const [activeTab, setActiveTab] = useState<"tasks" | "my_report" | "all_reports" | "analytics" | "outlet_reports" | "owner_outlets" | "history" | "attendance" | "sales_target" | "payout" | "reconciliation" | "competition" | "item_perf" | "ceo_report" | "fines" | "niranjana_report" | "pnl" | "contribution_margins" | "net_realisation" | "cash_flow" | "cheques" | "auto_reviews" | "purchase_vendors" | "team_dashboards" | "notify" | "messages" | "active_status" | "help">("tasks");
   // Real, purchase-data-backed food cost % (trailing 30 days, company-wide) —
   // replaces the flat 29.4% assumption in Outlet P&L, Channel P&L and Command
   // Centre. Falls back to 29.4% if there's no purchase/revenue data yet in the
@@ -3212,6 +3214,11 @@ else await fetchOutletReportsByDate(outletEntryDate);
               <span>👥</span> Team Dashboards
             </div>
           )}
+          {(isOwner || isFO) && (
+            <div onClick={() => { setActiveTab("active_status"); setSidebarOpen(false); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "active_status" ? "text-white bg-zinc-900 border-l-2 border-yellow-400" : "text-zinc-500 hover:text-white"}`}>
+              <span>🟢</span> Active Status
+            </div>
+          )}
           {isOwner && (
             <div onClick={() => { setActiveTab("messages"); setSidebarOpen(false); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "messages" ? "text-white bg-zinc-900 border-l-2 border-yellow-400" : "text-zinc-500 hover:text-white"}`}>
               <span>💬</span> Messages
@@ -3269,6 +3276,9 @@ else await fetchOutletReportsByDate(outletEntryDate);
               <span>📝</span> Niranjana's Report
             </div>
           )}
+          <div onClick={() => { setActiveTab("help"); setSidebarOpen(false); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "help" ? "text-white bg-zinc-900 border-l-2 border-yellow-400" : "text-zinc-500 hover:text-white"}`}>
+            <span>🛟</span> Help
+          </div>
         </nav>
         <div className="px-4 py-4 border-t border-zinc-800 flex items-center gap-2">
           <div className="w-9 h-9 bg-yellow-400 text-black flex items-center justify-center font-bold text-sm shrink-0">
@@ -5370,12 +5380,16 @@ else await fetchOutletReportsByDate(outletEntryDate);
           {activeTab === "team_dashboards" && isOwner && (
           <TeamDashboards staffList={ALL_STAFF.filter((s) => ["vishnu", "ahila", "arun", "nilani"].includes(s.id))} />
         )}
+        {activeTab === "active_status" && (isOwner || isFO) && (
+          <ActiveStatusTab staffList={ALL_STAFF.filter((s) => s.id !== "nishant")} />
+        )}
         {activeTab === "messages" && isOwner && user && (
           <MessagesTab mode="owner" currentUserId={user.id} currentUserName={user.name} staffList={ALL_STAFF.filter((s) => s.id !== "nishant")} />
         )}
         {activeTab === "messages" && !isOwner && user && (
           <MessagesTab mode="staff" currentUserId={user.id} currentUserName={user.name} />
         )}
+        {activeTab === "help" && <HelpTab />}
         {activeTab === "auto_reviews" && (isFO || ["nishant","arun","vishnu","ahila","nilani"].includes(user?.id ?? "")) && (
           <div>
             <div className="mb-6 flex items-center justify-between flex-wrap gap-3">
