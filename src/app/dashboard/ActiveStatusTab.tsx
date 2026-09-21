@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 
 type StaffLite = { id: string; name: string };
-type Row = { staff_id: string; created_at: string; last_seen_at: string };
+type Row = { staff_id: string; login_at: string; last_seen_at: string };
 
 export default function ActiveStatusTab({ staffList }: { staffList: StaffLite[] }) {
   const [date, setDate] = useState<string>(() => new Date().toISOString().slice(0, 10));
@@ -23,11 +23,11 @@ export default function ActiveStatusTab({ staffList }: { staffList: StaffLite[] 
       const dayEnd = `${date}T23:59:59.999Z`;
       // A session started before this day but still running (last_seen_at falls
       // on or after this day) needs to count too — people don't log out daily,
-      // so filtering by created_at alone hides every ongoing session.
+      // so filtering by login_at alone hides every ongoing session.
       const { data } = await supabase
         .from("activity_log")
-        .select("staff_id, created_at, last_seen_at")
-        .lte("created_at", dayEnd)
+        .select("staff_id, login_at, last_seen_at")
+        .lte("login_at", dayEnd)
         .gte("last_seen_at", dayStart);
       setRows(data || []);
       setLoading(false);
@@ -58,8 +58,8 @@ export default function ActiveStatusTab({ staffList }: { staffList: StaffLite[] 
       let totalMs = 0;
       let latestSeen: string | null = null;
       sessions.forEach((sess) => {
-        const start = new Date(sess.created_at).getTime();
-        const end = new Date(sess.last_seen_at || sess.created_at).getTime();
+        const start = new Date(sess.login_at).getTime();
+        const end = new Date(sess.last_seen_at || sess.login_at).getTime();
         // Only count the slice of this session that actually falls on the
         // selected day — a session spanning several days shouldn't dump its
         // whole duration onto just one of them.
