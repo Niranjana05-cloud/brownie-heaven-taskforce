@@ -5389,7 +5389,7 @@ else await fetchOutletReportsByDate(outletEntryDate);
         {activeTab === "messages" && !isOwner && user && (
           <MessagesTab mode="staff" currentUserId={user.id} currentUserName={user.name} />
         )}
-        {activeTab === "help" && <HelpTab />}
+        {activeTab === "help" && <HelpTab canEdit={isOwner || isFO} />}
         {activeTab === "auto_reviews" && (isFO || ["nishant","arun","vishnu","ahila","nilani"].includes(user?.id ?? "")) && (
           <div>
             <div className="mb-6 flex items-center justify-between flex-wrap gap-3">
