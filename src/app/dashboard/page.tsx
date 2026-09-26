@@ -3081,6 +3081,7 @@ else await fetchOutletReportsByDate(outletEntryDate);
 
   return (
     <div className="min-h-screen bg-canvas text-text flex">
+      <ThemePicker />
        {(user?.role === "Owner" || (user as any)?.isFO) && <ActivityToastStack />}
       {user && <PushRegister staffId={user.id} />}
       {isOwner && <NudgeButton />}
@@ -3289,7 +3290,6 @@ else await fetchOutletReportsByDate(outletEntryDate);
             <p className="text-sm font-semibold truncate">{user.name}</p>
             <p className="text-[10px] font-mono text-text-faint uppercase tracking-wide">{user.role}</p>
           </div>
-          <ThemePicker />
           <button onClick={() => setShowPinModal(true)} className="text-[10px] font-mono text-text-faint uppercase hover:text-accent transition-colors shrink-0">PIN</button>
           <button onClick={() => { localStorage.removeItem("currentUser"); router.push("/"); }} className="text-[10px] font-mono text-text-faint uppercase hover:text-red-500 transition-colors shrink-0">Exit</button>
         </div>
