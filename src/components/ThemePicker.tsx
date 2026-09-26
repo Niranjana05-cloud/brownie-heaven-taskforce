@@ -10,6 +10,22 @@ const ACCENTS: { id: ThemeAccent; label: string; swatch: string }[] = [
   { id: "orange", label: "Orange", swatch: "#fb923c" },
 ];
 
+// Planned theme packs — only Brownie is actually built (palette + icons +
+// loader + sound). The rest are shown as a roadmap so people can see what's
+// coming, but picking them does nothing yet.
+const UPCOMING_PACKS = [
+  { emoji: "🍦", label: "Ice Cream" },
+  { emoji: "🎂", label: "Cake" },
+  { emoji: "☕", label: "Coffee & Chocolate" },
+  { emoji: "🍬", label: "Candy" },
+  { emoji: "🎃", label: "Spooky" },
+  { emoji: "🪔", label: "Festive" },
+  { emoji: "🌊", label: "Ocean" },
+  { emoji: "🌆", label: "Neon" },
+  { emoji: "⬛", label: "Mono" },
+  { emoji: "🌲", label: "Forest" },
+];
+
 export default function ThemePicker() {
   const { theme, accent, brownieMode, muted, setTheme, setAccent, setBrownieMode, setMuted } = useTheme();
   const [open, setOpen] = useState(false);
@@ -80,6 +96,17 @@ export default function ThemePicker() {
                 <span className="text-[10px] font-mono uppercase">{muted ? "Muted" : "On"}</span>
               </button>
             )}
+          </div>
+          <div className="mt-4 pt-3 border-t border-line">
+            <p className="text-[10px] font-mono text-text-faint uppercase tracking-widest mb-2">More themes — coming soon</p>
+            <div className="space-y-0.5 max-h-40 overflow-y-auto pr-1">
+              {UPCOMING_PACKS.map((p) => (
+                <div key={p.label} className="w-full flex items-center justify-between text-xs text-text-faint py-1.5 px-2.5 opacity-60 cursor-not-allowed">
+                  <span>{p.emoji} {p.label}</span>
+                  <span className="text-[9px] font-mono uppercase">Soon</span>
+                </div>
+              ))}
+            </div>
           </div>
           <p className="text-[10px] text-text-faint mt-3">Saved on this device only.</p>
         </div>
