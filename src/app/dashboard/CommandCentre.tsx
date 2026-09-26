@@ -505,15 +505,15 @@ const downloadPDF = async () => {
     }
   };
   const Hero = ({ label, value, sub, accent }: any) => (
-    <div className="flex-1 min-w-[150px] bg-gradient-to-b from-zinc-900 to-[#0e0e10] border border-zinc-800 p-5">
-      <p className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-2">{label}</p>
-      <p className={`text-2xl md:text-3xl font-black ${accent || "text-white"}`}>{value}</p>
-      {sub && <p className="text-[11px] text-zinc-500 mt-1">{sub}</p>}
+    <div className="flex-1 min-w-[150px] bg-gradient-to-b from-surface to-surface border border-line p-5">
+      <p className="text-[10px] font-mono text-text-muted uppercase tracking-widest mb-2">{label}</p>
+      <p className={`text-2xl md:text-3xl font-black ${accent || "text-text"}`}>{value}</p>
+      {sub && <p className="text-[11px] text-text-muted mt-1">{sub}</p>}
     </div>
   );
   const Card = ({ title, children, right }: any) => (
-    <div className="bg-[#131316] border border-zinc-800 p-5 mb-5">
-      <div className="flex justify-between items-center mb-4"><p className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest">{title}</p>{right}</div>
+    <div className="bg-surface border border-line p-5 mb-5">
+      <div className="flex justify-between items-center mb-4"><p className="text-[10px] font-mono text-text-muted uppercase tracking-widest">{title}</p>{right}</div>
       {children}
     </div>
   );
@@ -525,20 +525,20 @@ const downloadPDF = async () => {
       <div className="flex flex-wrap justify-between items-end gap-3 mb-6">
         <div>
           <h2 className="text-2xl md:text-3xl font-black tracking-tight">Command Centre</h2>
-          <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mt-1">{dayLabel}</p>
+          <p className="text-[11px] font-mono text-text-muted uppercase tracking-widest mt-1">{dayLabel}</p>
         </div>
        <div className="flex items-center gap-2">
-          <button onClick={downloadPDF} className="bg-yellow-400 text-black font-bold text-[10px] px-4 py-2.5 uppercase tracking-widest hover:opacity-90">📄 Download PDF</button>
-          <input type="date" max={today} value={date} onChange={e => setDate(e.target.value)} className="bg-black border border-zinc-800 text-white px-3 py-2 focus:outline-none focus:border-yellow-400 text-sm font-mono" />
+          <button onClick={downloadPDF} className="bg-accent text-accent-ink font-bold text-[10px] px-4 py-2.5 uppercase tracking-widest hover:opacity-90">📄 Download PDF</button>
+          <input type="date" max={today} value={date} onChange={e => setDate(e.target.value)} className="bg-canvas border border-line text-text px-3 py-2 focus:outline-none focus:border-accent text-sm font-mono" />
         </div>
       </div>
 
-      <p className="text-[11px] font-mono text-zinc-500 mb-5 border-l-2 border-yellow-400/40 pl-3">📊 Outlet sales reflect the <span className="text-yellow-400">previous day&apos;s</span> business — figures below are {new Date(d0.getTime() - 86400000).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}&apos;s sales, filed this morning.</p>
+      <p className="text-[11px] font-mono text-text-muted mb-5 border-l-2 border-accent/40 pl-3">📊 Outlet sales reflect the <span className="text-accent">previous day&apos;s</span> business — figures below are {new Date(d0.getTime() - 86400000).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}&apos;s sales, filed this morning.</p>
 
-      {loading ? <p className="text-zinc-600 font-mono text-sm">Loading…</p> : (
+      {loading ? <p className="text-text-faint font-mono text-sm">Loading…</p> : (
         <>
           <div className="flex flex-wrap gap-3 mb-5">
-            <Hero label="Today's sales" value={inr(tTotal)} sub={`${out.length}/12 reported`} accent="text-yellow-400" />
+            <Hero label="Today's sales" value={inr(tTotal)} sub={`${out.length}/12 reported`} accent="text-accent" />
             <Hero label="Month to date" value={lakh(mtd)} sub={`${dayOfMonth} days`} />
             <Hero label="Projected month-end" value={lakh(projected)} sub={onTrack ? "on track" : "below target"} accent={onTrack ? "text-green-400" : "text-red-400"} />
           </div>
@@ -547,7 +547,7 @@ const downloadPDF = async () => {
             <div className="overflow-x-auto">
               <table className="w-full text-xs font-mono whitespace-nowrap">
                 <thead>
-                  <tr className="text-zinc-500 uppercase tracking-widest text-[10px] border-b border-zinc-800">
+                  <tr className="text-text-muted uppercase tracking-widest text-[10px] border-b border-line">
                     <th className="text-left py-2 pr-3">Metric</th>
                     <th className="text-right py-2 pl-3">Today</th>
                     <th className="text-right py-2 pl-3">Yesterday</th>
@@ -555,21 +555,21 @@ const downloadPDF = async () => {
                   </tr>
                 </thead>
                 <tbody>
-                  <tr className="border-b border-zinc-800/40"><td className="py-2 pr-3 text-zinc-300">Sales</td><td className="py-2 pl-3 text-right text-white font-bold">{inr(todayFin.sales)}</td><td className="py-2 pl-3 text-right text-zinc-400">{inr(yesterdayFin.sales)}</td><td className="py-2 pl-3 text-right text-zinc-400">{inr(mtdFin.sales)}</td></tr>
-                  <tr className="border-b border-zinc-800/40"><td className="py-2 pr-3 text-zinc-300">Gross margin <span className="text-zinc-600">(@70.6%)</span></td><td className="py-2 pl-3 text-right text-white">{inr(todayFin.grossMargin)}</td><td className="py-2 pl-3 text-right text-zinc-400">{inr(yesterdayFin.grossMargin)}</td><td className="py-2 pl-3 text-right text-zinc-400">{inr(mtdFin.grossMargin)}</td></tr>
-                  <tr className="border-b border-zinc-800/40"><td className="py-2 pr-3 text-zinc-300">Contribution</td><td className="py-2 pl-3 text-right text-white">{inr(todayFin.contribution)}</td><td className="py-2 pl-3 text-right text-zinc-400">{inr(yesterdayFin.contribution)}</td><td className="py-2 pl-3 text-right text-zinc-400">{inr(mtdFin.contribution)}</td></tr>
-                  <tr><td className="py-2 pr-3 text-zinc-200 font-bold">EBITDA (est.)</td><td className={`py-2 pl-3 text-right font-bold ${todayFin.ebitda >= 0 ? "text-green-400" : "text-red-400"}`}>{inr(todayFin.ebitda)}</td><td className={`py-2 pl-3 text-right font-bold ${yesterdayFin.ebitda >= 0 ? "text-green-400" : "text-red-400"}`}>{inr(yesterdayFin.ebitda)}</td><td className={`py-2 pl-3 text-right font-bold ${mtdFin.ebitda >= 0 ? "text-green-400" : "text-red-400"}`}>{inr(mtdFin.ebitda)}</td></tr>
+                  <tr className="border-b border-line/40"><td className="py-2 pr-3 text-text">Sales</td><td className="py-2 pl-3 text-right text-text font-bold">{inr(todayFin.sales)}</td><td className="py-2 pl-3 text-right text-text-muted">{inr(yesterdayFin.sales)}</td><td className="py-2 pl-3 text-right text-text-muted">{inr(mtdFin.sales)}</td></tr>
+                  <tr className="border-b border-line/40"><td className="py-2 pr-3 text-text">Gross margin <span className="text-text-faint">(@70.6%)</span></td><td className="py-2 pl-3 text-right text-text">{inr(todayFin.grossMargin)}</td><td className="py-2 pl-3 text-right text-text-muted">{inr(yesterdayFin.grossMargin)}</td><td className="py-2 pl-3 text-right text-text-muted">{inr(mtdFin.grossMargin)}</td></tr>
+                  <tr className="border-b border-line/40"><td className="py-2 pr-3 text-text">Contribution</td><td className="py-2 pl-3 text-right text-text">{inr(todayFin.contribution)}</td><td className="py-2 pl-3 text-right text-text-muted">{inr(yesterdayFin.contribution)}</td><td className="py-2 pl-3 text-right text-text-muted">{inr(mtdFin.contribution)}</td></tr>
+                  <tr><td className="py-2 pr-3 text-text font-bold">EBITDA (est.)</td><td className={`py-2 pl-3 text-right font-bold ${todayFin.ebitda >= 0 ? "text-green-400" : "text-red-400"}`}>{inr(todayFin.ebitda)}</td><td className={`py-2 pl-3 text-right font-bold ${yesterdayFin.ebitda >= 0 ? "text-green-400" : "text-red-400"}`}>{inr(yesterdayFin.ebitda)}</td><td className={`py-2 pl-3 text-right font-bold ${mtdFin.ebitda >= 0 ? "text-green-400" : "text-red-400"}`}>{inr(mtdFin.ebitda)}</td></tr>
                 </tbody>
               </table>
             </div>
-            <p className="text-[10px] text-zinc-600 mt-3">Uses a real {(cogsRate * 100).toFixed(1)}% COGS (from actual purchase data, trailing {REAL_FOOD_COST_WINDOW_DAYS} days, company-wide — not yet per-outlet), 5% wastage, 50% online commission. EBITDA = contribution minus fixed costs; this business has no separate interest/depreciation line to strip out.</p>
+            <p className="text-[10px] text-text-faint mt-3">Uses a real {(cogsRate * 100).toFixed(1)}% COGS (from actual purchase data, trailing {REAL_FOOD_COST_WINDOW_DAYS} days, company-wide — not yet per-outlet), 5% wastage, 50% online commission. EBITDA = contribution minus fixed costs; this business has no separate interest/depreciation line to strip out.</p>
           </Card>
 
           <Card title="2. Outlet ranking — growth, profitability, ratings, compliance">
             <div className="overflow-x-auto">
               <table className="w-full text-xs font-mono whitespace-nowrap">
                 <thead>
-                  <tr className="text-zinc-500 uppercase tracking-widest text-[10px] border-b border-zinc-800">
+                  <tr className="text-text-muted uppercase tracking-widest text-[10px] border-b border-line">
                     <th className="text-left py-2 pr-3">Outlet</th>
                     <th className="text-right py-2 pl-3">Sales growth (MoM)</th>
                     <th className="text-right py-2 pl-3">Profitability</th>
@@ -579,38 +579,38 @@ const downloadPDF = async () => {
                 </thead>
                 <tbody>
                   {[...outletRanking].sort((a, b) => (b.profitabilityPct ?? -999) - (a.profitabilityPct ?? -999)).map((r) => (
-                    <tr key={r.o} className="border-b border-zinc-800/40">
-                      <td className="py-1.5 pr-3 text-zinc-300">{r.name}</td>
-                      <td className={`py-1.5 pl-3 text-right ${r.growthPct == null ? "text-zinc-600" : r.growthPct >= 0 ? "text-green-400" : "text-red-400"}`}>{r.growthPct == null ? "—" : `${r.growthPct >= 0 ? "+" : ""}${r.growthPct.toFixed(0)}%`}</td>
-                      <td className={`py-1.5 pl-3 text-right ${r.profitabilityPct == null ? "text-zinc-600" : r.profitabilityPct >= 0 ? "text-green-400" : "text-red-400"}`}>{r.profitabilityPct == null ? "—" : `${r.profitabilityPct.toFixed(1)}%`}</td>
-                      <td className="py-1.5 pl-3 text-right text-zinc-300">{r.avgRating == null ? "—" : `${r.avgRating.toFixed(1)}★ (${r.ratingCount})`}</td>
+                    <tr key={r.o} className="border-b border-line/40">
+                      <td className="py-1.5 pr-3 text-text">{r.name}</td>
+                      <td className={`py-1.5 pl-3 text-right ${r.growthPct == null ? "text-text-faint" : r.growthPct >= 0 ? "text-green-400" : "text-red-400"}`}>{r.growthPct == null ? "—" : `${r.growthPct >= 0 ? "+" : ""}${r.growthPct.toFixed(0)}%`}</td>
+                      <td className={`py-1.5 pl-3 text-right ${r.profitabilityPct == null ? "text-text-faint" : r.profitabilityPct >= 0 ? "text-green-400" : "text-red-400"}`}>{r.profitabilityPct == null ? "—" : `${r.profitabilityPct.toFixed(1)}%`}</td>
+                      <td className="py-1.5 pl-3 text-right text-text">{r.avgRating == null ? "—" : `${r.avgRating.toFixed(1)}★ (${r.ratingCount})`}</td>
                       <td className={`py-1.5 pl-3 text-right ${r.compliancePct >= 90 ? "text-green-400" : r.compliancePct >= 70 ? "text-yellow-400" : "text-red-400"}`}>{r.compliancePct.toFixed(0)}%</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
-            <p className="text-[10px] text-zinc-600 mt-3">Food cost isn't ranked here — it's a real {(cogsRate * 100).toFixed(1)}% figure now (not a guess), but still company-wide and applied the same way to every outlet, so ranking on it wouldn't show anything outlet-specific yet. Needs per-outlet Inventory &amp; Food Cost data first.</p>
+            <p className="text-[10px] text-text-faint mt-3">Food cost isn't ranked here — it's a real {(cogsRate * 100).toFixed(1)}% figure now (not a guess), but still company-wide and applied the same way to every outlet, so ranking on it wouldn't show anything outlet-specific yet. Needs per-outlet Inventory &amp; Food Cost data first.</p>
           </Card>
 
           <Card title="3. Top opportunities, profit leakages &amp; operational risks">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
                 <p className="text-[10px] font-mono text-green-400 uppercase tracking-widest mb-2">Opportunities</p>
-                {opportunities.length === 0 ? <p className="text-xs text-zinc-600">None with full cost data yet.</p> : opportunities.map((o) => (
-                  <div key={o.o} className="text-xs py-1.5 border-t border-zinc-800/60"><span className="text-zinc-200">{o.name}</span><br /><span className="text-green-400 font-bold">+{inr(o.netProfit)}</span></div>
+                {opportunities.length === 0 ? <p className="text-xs text-text-faint">None with full cost data yet.</p> : opportunities.map((o) => (
+                  <div key={o.o} className="text-xs py-1.5 border-t border-line/60"><span className="text-text">{o.name}</span><br /><span className="text-green-400 font-bold">+{inr(o.netProfit)}</span></div>
                 ))}
               </div>
               <div>
                 <p className="text-[10px] font-mono text-red-400 uppercase tracking-widest mb-2">Profit leakages</p>
-                {leakages.length === 0 ? <p className="text-xs text-zinc-600">No outlet in the red.</p> : leakages.map((o) => (
-                  <div key={o.o} className="text-xs py-1.5 border-t border-zinc-800/60"><span className="text-zinc-200">{o.name}</span><br /><span className="text-red-400 font-bold">{inr(o.netProfit)}</span> <span className="text-zinc-600">— {whyBleed(o)}</span></div>
+                {leakages.length === 0 ? <p className="text-xs text-text-faint">No outlet in the red.</p> : leakages.map((o) => (
+                  <div key={o.o} className="text-xs py-1.5 border-t border-line/60"><span className="text-text">{o.name}</span><br /><span className="text-red-400 font-bold">{inr(o.netProfit)}</span> <span className="text-text-faint">— {whyBleed(o)}</span></div>
                 ))}
               </div>
               <div>
                 <p className="text-[10px] font-mono text-yellow-400 uppercase tracking-widest mb-2">Operational risks</p>
-                {complianceRisks.length === 0 ? <p className="text-xs text-zinc-600">All outlets filing reliably.</p> : complianceRisks.slice(0, 5).map((o) => (
-                  <div key={o.o} className="text-xs py-1.5 border-t border-zinc-800/60"><span className="text-zinc-200">{o.name}</span><br /><span className="text-yellow-400 font-bold">{o.compliancePct.toFixed(0)}% reporting</span> <span className="text-zinc-600">this month — data below this point is unreliable</span></div>
+                {complianceRisks.length === 0 ? <p className="text-xs text-text-faint">All outlets filing reliably.</p> : complianceRisks.slice(0, 5).map((o) => (
+                  <div key={o.o} className="text-xs py-1.5 border-t border-line/60"><span className="text-text">{o.name}</span><br /><span className="text-yellow-400 font-bold">{o.compliancePct.toFixed(0)}% reporting</span> <span className="text-text-faint">this month — data below this point is unreliable</span></div>
                 ))}
               </div>
             </div>
@@ -620,98 +620,98 @@ const downloadPDF = async () => {
             <div className="space-y-3">
               <div>
                 <p className="text-[10px] font-mono text-red-400 uppercase tracking-widest mb-1.5">📉 Sales decline (today, &lt;50% of target)</p>
-                {salesDeclineAlerts.length === 0 ? <p className="text-xs text-zinc-600">No outlet below half its target today.</p> : salesDeclineAlerts.map((a) => (
-                  <p key={a.o} className="text-xs text-zinc-300">{a.name} — {inr(a.tot)} of {inr(a.tgt)} target ({a.pct.toFixed(0)}%)</p>
+                {salesDeclineAlerts.length === 0 ? <p className="text-xs text-text-faint">No outlet below half its target today.</p> : salesDeclineAlerts.map((a) => (
+                  <p key={a.o} className="text-xs text-text">{a.name} — {inr(a.tot)} of {inr(a.tgt)} target ({a.pct.toFixed(0)}%)</p>
                 ))}
               </div>
               <div>
                 <p className="text-[10px] font-mono text-red-400 uppercase tracking-widest mb-1.5">💬 Unresolved complaints (this month)</p>
-                {unresolvedComplaints.length === 0 ? <p className="text-xs text-zinc-600">Nothing outstanding.</p> : unresolvedComplaints.slice(0, 5).map((c: any, i: number) => (
-                  <p key={i} className="text-xs text-zinc-300">{OUTLET_NAMES[c.outlet_id] || c.outlet_id} — {c.rating}★, no refund logged yet</p>
+                {unresolvedComplaints.length === 0 ? <p className="text-xs text-text-faint">Nothing outstanding.</p> : unresolvedComplaints.slice(0, 5).map((c: any, i: number) => (
+                  <p key={i} className="text-xs text-text">{OUTLET_NAMES[c.outlet_id] || c.outlet_id} — {c.rating}★, no refund logged yet</p>
                 ))}
               </div>
               <div className="grid grid-cols-3 gap-2 pt-2">
-                <div className="bg-black/30 border border-dashed border-zinc-800 p-2 text-center"><p className="text-[10px] text-zinc-600">📦 Stock-outs</p><p className="text-[10px] text-zinc-700 mt-1">🔒 Needs Inventory data</p></div>
-                <div className="bg-black/30 border border-dashed border-zinc-800 p-2 text-center"><p className="text-[10px] text-zinc-600">🗑️ High wastage</p><p className="text-[10px] text-zinc-700 mt-1">🔒 Needs Inventory data</p></div>
-                <div className="bg-black/30 border border-dashed border-zinc-800 p-2 text-center"><p className="text-[10px] text-zinc-600">👥 Staffing problems</p><p className="text-[10px] text-zinc-700 mt-1">🔒 Needs Labour data</p></div>
+                <div className="bg-surface-2/60 border border-dashed border-line p-2 text-center"><p className="text-[10px] text-text-faint">📦 Stock-outs</p><p className="text-[10px] text-text-faint mt-1">🔒 Needs Inventory data</p></div>
+                <div className="bg-surface-2/60 border border-dashed border-line p-2 text-center"><p className="text-[10px] text-text-faint">🗑️ High wastage</p><p className="text-[10px] text-text-faint mt-1">🔒 Needs Inventory data</p></div>
+                <div className="bg-surface-2/60 border border-dashed border-line p-2 text-center"><p className="text-[10px] text-text-faint">👥 Staffing problems</p><p className="text-[10px] text-text-faint mt-1">🔒 Needs Labour data</p></div>
               </div>
             </div>
           </Card>
 
-          <Card title="5. Today's action list" right={<span className="text-[10px] font-mono text-zinc-600">{openTasks.length} open</span>}>
+          <Card title="5. Today's action list" right={<span className="text-[10px] font-mono text-text-faint">{openTasks.length} open</span>}>
             {openTasks.length === 0 ? (
-              <p className="text-zinc-600 text-xs">Nothing open — all caught up.</p>
+              <p className="text-text-faint text-xs">Nothing open — all caught up.</p>
             ) : (
               <div className="space-y-1.5">
                 {openTasks.slice(0, 15).map((t: any) => {
                   const overdue = t.due_at && new Date(t.due_at) < new Date() && t.status !== "completed";
                   const dueStr = t.due_at ? new Date(t.due_at).toLocaleDateString("en-IN", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" }) : "no deadline";
                   return (
-                    <div key={t.id} className="flex justify-between items-start text-xs py-1.5 border-t border-zinc-800/60 gap-3">
+                    <div key={t.id} className="flex justify-between items-start text-xs py-1.5 border-t border-line/60 gap-3">
                       <div className="min-w-0">
-                        <p className="text-zinc-200 truncate">{t.title}{t.outlet_id ? <span className="text-zinc-600"> · {OUTLET_NAMES[t.outlet_id] || t.outlet_id}</span> : ""}</p>
-                        <p className="text-[10px] text-zinc-500">{staffNames[t.assigned_to] || t.assigned_to} · {t.priority}{overdue ? <span className="text-red-400"> · overdue</span> : ""}</p>
+                        <p className="text-text truncate">{t.title}{t.outlet_id ? <span className="text-text-faint"> · {OUTLET_NAMES[t.outlet_id] || t.outlet_id}</span> : ""}</p>
+                        <p className="text-[10px] text-text-muted">{staffNames[t.assigned_to] || t.assigned_to} · {t.priority}{overdue ? <span className="text-red-400"> · overdue</span> : ""}</p>
                       </div>
-                      <span className={`text-[10px] font-mono whitespace-nowrap ${overdue ? "text-red-400" : "text-zinc-500"}`}>{dueStr}</span>
+                      <span className={`text-[10px] font-mono whitespace-nowrap ${overdue ? "text-red-400" : "text-text-muted"}`}>{dueStr}</span>
                     </div>
                   );
                 })}
-                {openTasks.length > 15 && <p className="text-[10px] text-zinc-600 pt-1">+{openTasks.length - 15} more — see Tasks tab for the full list.</p>}
+                {openTasks.length > 15 && <p className="text-[10px] text-text-faint pt-1">+{openTasks.length - 15} more — see Tasks tab for the full list.</p>}
               </div>
             )}
           </Card>
 
           <Card title="📊 Data volume — Supabase health">
-            <p className="text-[10px] text-zinc-600 mb-3">Any single query pulls at most ~1000 rows unless it's specifically built to fetch in batches — a table crossing that size is worth double-checking. Outlet Health and Purchase &amp; Vendors already had this bug and are now fixed.</p>
+            <p className="text-[10px] text-text-faint mb-3">Any single query pulls at most ~1000 rows unless it's specifically built to fetch in batches — a table crossing that size is worth double-checking. Outlet Health and Purchase &amp; Vendors already had this bug and are now fixed.</p>
             <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
               {tableCounts.map((t) => {
                 const risk = t.count == null ? "unknown" : t.count >= 1000 ? "high" : t.count >= 700 ? "watch" : "ok";
-                const color = risk === "high" ? "text-red-400 border-red-500/30" : risk === "watch" ? "text-yellow-400 border-yellow-500/30" : "text-green-400 border-zinc-800";
+                const color = risk === "high" ? "text-red-400 border-red-500/30" : risk === "watch" ? "text-yellow-400 border-yellow-500/30" : "text-green-400 border-line";
                 return (
-                  <div key={t.name} className={`bg-black/30 border p-2 text-center ${color}`}>
-                    <p className="text-[9px] font-mono text-zinc-600 uppercase truncate">{t.name}</p>
+                  <div key={t.name} className={`bg-surface-2/60 border p-2 text-center ${color}`}>
+                    <p className="text-[9px] font-mono text-text-faint uppercase truncate">{t.name}</p>
                     <p className={`text-sm font-bold ${color.split(" ")[0]}`}>{t.count ?? "—"}</p>
-                    <p className="text-[9px] text-zinc-700">{t.source}</p>
+                    <p className="text-[9px] text-text-faint">{t.source}</p>
                   </div>
                 );
               })}
             </div>
           </Card>
 
-          <p className="text-[10px] font-mono text-zinc-700 uppercase tracking-widest mt-8 mb-3">Supporting detail</p>
+          <p className="text-[10px] font-mono text-text-faint uppercase tracking-widest mt-8 mb-3">Supporting detail</p>
 
           <Card title="Profit / Loss — month to date (all outlets)">
             <div className="flex items-baseline gap-3 mb-2">
               <span className={`text-3xl font-black ${totalProfit >= 0 ? "text-green-400" : "text-red-400"}`}>{totalProfit >= 0 ? "Making " : "Losing "}{inr(Math.abs(totalProfit))}</span>
-              <span className="text-[11px] font-mono text-zinc-500">net this month</span>
+              <span className="text-[11px] font-mono text-text-muted">net this month</span>
             </div>
-           <p className="text-[11px] text-zinc-500 mb-2">Based on {_complete.length} of {OUTLETS.length} outlets with full cost data{_incompleteCount > 0 ? ` · ${_incompleteCount} excluded (no P&L uploaded)` : ""}.</p>
+           <p className="text-[11px] text-text-muted mb-2">Based on {_complete.length} of {OUTLETS.length} outlets with full cost data{_incompleteCount > 0 ? ` · ${_incompleteCount} excluded (no P&L uploaded)` : ""}.</p>
             {worstPnl ? (
-              <p className="text-xs text-zinc-300 mb-1"><span className="text-red-400 font-bold">Bleeding most: {worstPnl.name}</span> ({inr(worstPnl.netProfit)}) — {whyBleed(worstPnl)}</p>
+              <p className="text-xs text-text mb-1"><span className="text-red-400 font-bold">Bleeding most: {worstPnl.name}</span> ({inr(worstPnl.netProfit)}) — {whyBleed(worstPnl)}</p>
             ) : <p className="text-xs text-green-400 mb-1">No outlet is in the red this month.</p>}
-            {worstPnl && <p className="text-xs text-zinc-400 mb-2"><span className="text-yellow-400">Fix:</span> {fixBleed(worstPnl)}</p>}
-            {bleeders.length > 1 && <p className="text-[11px] font-mono text-zinc-500">Also in red: {bleeders.slice(1, 4).map(b => `${b.name} (${inr(b.netProfit)})`).join(", ")}</p>}
+            {worstPnl && <p className="text-xs text-text-muted mb-2"><span className="text-yellow-400">Fix:</span> {fixBleed(worstPnl)}</p>}
+            {bleeders.length > 1 && <p className="text-[11px] font-mono text-text-muted">Also in red: {bleeders.slice(1, 4).map(b => `${b.name} (${inr(b.netProfit)})`).join(", ")}</p>}
             {noFixedCount > 0 && <p className="text-[10px] text-orange-400 mt-2">⚠ Fixed costs not entered for {noFixedCount} outlet(s) in Outlet P&amp;L — their profit is overstated until you add rent/staff/etc.</p>}
           </Card>
 
           <Card title={`Monthly target · ${d0.toLocaleDateString("en-IN", { month: "long" })}`}>
-            <div className="flex justify-between text-xs mb-2"><span className="text-zinc-400">Achieved {lakh(mtd)}</span><span className="text-zinc-400">Target {lakh(MONTHLY_TARGET)}</span></div>
-            <div className="h-3 bg-black border border-zinc-800 overflow-hidden mb-1"><div className="h-full bg-yellow-400" style={{ width: `${Math.min(targetPct, 100)}%` }} /></div>
-            <p className="text-[11px] text-zinc-500 mb-4">{targetPct.toFixed(1)}% of target · {lakh(Math.max(MONTHLY_TARGET - mtd, 0))} to go</p>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 pt-3 border-t border-zinc-800">
-              <div><p className="text-[10px] text-zinc-500 uppercase">Current run rate</p><p className="text-base font-bold">{lakh(runRate)}<span className="text-[10px] text-zinc-500">/day</span></p></div>
-             <div><p className="text-[10px] text-zinc-500 uppercase">Required run rate</p><p className={`text-base font-bold ${required > runRate ? "text-red-400" : "text-green-400"}`}>{daysLeft <= 2 ? "Month ending" : <>{lakh(required)}<span className="text-[10px] text-zinc-500">/day</span></>}</p></div>
-             <div><p className="text-[10px] text-zinc-500 uppercase">Gap / day</p><p className={`text-base font-bold ${required > runRate ? "text-red-400" : "text-green-400"}`}>{daysLeft <= 2 ? "—" : (required > runRate ? lakh(required - runRate) : "On pace")}</p></div>
-              <div><p className="text-[10px] text-zinc-500 uppercase">Proj. shortfall</p><p className={`text-base font-bold ${shortfall >= 0 ? "text-green-400" : "text-red-400"}`}>{shortfall >= 0 ? "+" : "−"}{lakh(Math.abs(shortfall))}</p></div>
+            <div className="flex justify-between text-xs mb-2"><span className="text-text-muted">Achieved {lakh(mtd)}</span><span className="text-text-muted">Target {lakh(MONTHLY_TARGET)}</span></div>
+            <div className="h-3 bg-canvas border border-line overflow-hidden mb-1"><div className="h-full bg-accent" style={{ width: `${Math.min(targetPct, 100)}%` }} /></div>
+            <p className="text-[11px] text-text-muted mb-4">{targetPct.toFixed(1)}% of target · {lakh(Math.max(MONTHLY_TARGET - mtd, 0))} to go</p>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 pt-3 border-t border-line">
+              <div><p className="text-[10px] text-text-muted uppercase">Current run rate</p><p className="text-base font-bold">{lakh(runRate)}<span className="text-[10px] text-text-muted">/day</span></p></div>
+             <div><p className="text-[10px] text-text-muted uppercase">Required run rate</p><p className={`text-base font-bold ${required > runRate ? "text-red-400" : "text-green-400"}`}>{daysLeft <= 2 ? "Month ending" : <>{lakh(required)}<span className="text-[10px] text-text-muted">/day</span></>}</p></div>
+             <div><p className="text-[10px] text-text-muted uppercase">Gap / day</p><p className={`text-base font-bold ${required > runRate ? "text-red-400" : "text-green-400"}`}>{daysLeft <= 2 ? "—" : (required > runRate ? lakh(required - runRate) : "On pace")}</p></div>
+              <div><p className="text-[10px] text-text-muted uppercase">Proj. shortfall</p><p className={`text-base font-bold ${shortfall >= 0 ? "text-green-400" : "text-red-400"}`}>{shortfall >= 0 ? "+" : "−"}{lakh(Math.abs(shortfall))}</p></div>
             </div>
-            <p className="text-[11px] text-zinc-500 mt-3 pt-3 border-t border-zinc-800">Channel mix (MTD): Offline {lakh(mShop)} · Online {lakh(mOnline)} — for every ₹1 walk-in, <span className="text-yellow-400 font-bold">₹{offlineRatio.toFixed(1)}</span> online.</p>
+            <p className="text-[11px] text-text-muted mt-3 pt-3 border-t border-line">Channel mix (MTD): Offline {lakh(mShop)} · Online {lakh(mOnline)} — for every ₹1 walk-in, <span className="text-yellow-400 font-bold">₹{offlineRatio.toFixed(1)}</span> online.</p>
           </Card>
-<Card title={`Sales by channel · ${new Date(date + "T00:00:00").toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}`} right={<span className="text-[10px] font-mono text-zinc-600">{dayOfMonth}/{daysInMonth}</span>}>
+<Card title={`Sales by channel · ${new Date(date + "T00:00:00").toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}`} right={<span className="text-[10px] font-mono text-text-faint">{dayOfMonth}/{daysInMonth}</span>}>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div><p className="text-[10px] text-zinc-500 uppercase">Shop</p><p className="text-lg font-bold">{inr(tShop)}</p></div>
-              <div><p className="text-[10px] text-zinc-500 uppercase">Swiggy</p><p className="text-lg font-bold text-orange-400">{inr(tSw)}</p></div>
-              <div><p className="text-[10px] text-zinc-500 uppercase">Zomato</p><p className="text-lg font-bold text-red-400">{inr(tZo)}</p></div>
-              <div><p className="text-[10px] text-zinc-500 uppercase">Orders Sw / Zo</p><p className="text-lg font-bold">{swC} / {zoC}</p></div>
+              <div><p className="text-[10px] text-text-muted uppercase">Shop</p><p className="text-lg font-bold">{inr(tShop)}</p></div>
+              <div><p className="text-[10px] text-text-muted uppercase">Swiggy</p><p className="text-lg font-bold text-orange-400">{inr(tSw)}</p></div>
+              <div><p className="text-[10px] text-text-muted uppercase">Zomato</p><p className="text-lg font-bold text-red-400">{inr(tZo)}</p></div>
+              <div><p className="text-[10px] text-text-muted uppercase">Orders Sw / Zo</p><p className="text-lg font-bold">{swC} / {zoC}</p></div>
             </div>
           </Card>
 
@@ -727,8 +727,8 @@ const downloadPDF = async () => {
                 const tgtPct = Math.min((tgt / maxV) * 100, 100);
                 return (
                   <div key={o}>
-                    <div className="flex justify-between text-[11px] mb-0.5"><span className="text-zinc-300">{OUTLET_NAMES[o]}</span><span className="font-mono text-zinc-500">{inr(tot)}{tgt > 0 ? ` / ${inr(tgt)}` : ""}</span></div>
-                    <div className="relative h-4 bg-black border border-zinc-800">
+                    <div className="flex justify-between text-[11px] mb-0.5"><span className="text-text">{OUTLET_NAMES[o]}</span><span className="font-mono text-text-muted">{inr(tot)}{tgt > 0 ? ` / ${inr(tgt)}` : ""}</span></div>
+                    <div className="relative h-4 bg-canvas border border-line">
                       <div className={`absolute top-0 left-0 h-full ${!r ? "bg-zinc-700" : hit ? "bg-green-500" : "bg-orange-500"}`} style={{ width: `${salesPct}%` }} />
                       {tgt > 0 && <div className="absolute top-0 h-full w-0.5 bg-yellow-300" style={{ left: `${tgtPct}%` }} title="target" />}
                     </div>
@@ -736,34 +736,34 @@ const downloadPDF = async () => {
                 );
               })}
             </div>
-            <p className="text-[10px] font-mono text-zinc-600 mb-4">▮ green = hit · ▮ orange = below · ▮ grey = not reported · | yellow line = target</p>
+            <p className="text-[10px] font-mono text-text-faint mb-4">▮ green = hit · ▮ orange = below · ▮ grey = not reported · | yellow line = target</p>
           <div className="hidden">
             <div className="space-y-1">
               {OUTLETS.map(o => {
                 const r = out.find(x => x.outlet_id === o);
-                if (!r) return <div key={o} className="flex justify-between text-xs py-1.5 border-t border-zinc-800/60"><span className="text-zinc-500">{OUTLET_NAMES[o]}</span><span className="text-zinc-600">not reported</span></div>;
+                if (!r) return <div key={o} className="flex justify-between text-xs py-1.5 border-t border-line/60"><span className="text-text-muted">{OUTLET_NAMES[o]}</span><span className="text-text-faint">not reported</span></div>;
                 const tot = n(r.shop_sales_value) + n(r.swiggy_sales_value) + n(r.zomato_sales_value);
                 const t = n(r.target) || OUTLET_TARGETS[o]; const hit = t > 0 && tot >= t;
-                return <div key={o} className="flex justify-between items-center text-xs py-1.5 border-t border-zinc-800/60"><span className="text-zinc-300">{OUTLET_NAMES[o]}</span><span className="font-mono">{inr(tot)} {t > 0 && <span className={hit ? "text-green-400 ml-1" : "text-red-400 ml-1"}>{hit ? "✓" : "✗"}</span>}</span></div>;
+                return <div key={o} className="flex justify-between items-center text-xs py-1.5 border-t border-line/60"><span className="text-text">{OUTLET_NAMES[o]}</span><span className="font-mono">{inr(tot)} {t > 0 && <span className={hit ? "text-green-400 ml-1" : "text-red-400 ml-1"}>{hit ? "✓" : "✗"}</span>}</span></div>;
               })}
             </div>
           </div>
           </Card>
 
           <Card title="Reporting status (today)">
-            <p className="text-[10px] text-zinc-500 uppercase mb-1">Daily reports</p>
-            <p className="text-xs mb-3">{DUTY_STAFF.map(s => { const isOff = offRows.includes(s.id); return <span key={s.id} className={isOff ? "text-zinc-500 mr-3 inline-block" : filedDaily.has(s.id) ? "text-green-400 mr-3 inline-block" : "text-red-400 mr-3 inline-block"}>{isOff ? "🌙" : filedDaily.has(s.id) ? "✓" : "✗"} {s.name}{isOff ? " (off)" : ""}</span>; })}</p>
-            <p className="text-[10px] text-zinc-500 uppercase mb-1">Outlet reports</p>
+            <p className="text-[10px] text-text-muted uppercase mb-1">Daily reports</p>
+            <p className="text-xs mb-3">{DUTY_STAFF.map(s => { const isOff = offRows.includes(s.id); return <span key={s.id} className={isOff ? "text-text-muted mr-3 inline-block" : filedDaily.has(s.id) ? "text-green-400 mr-3 inline-block" : "text-red-400 mr-3 inline-block"}>{isOff ? "🌙" : filedDaily.has(s.id) ? "✓" : "✗"} {s.name}{isOff ? " (off)" : ""}</span>; })}</p>
+            <p className="text-[10px] text-text-muted uppercase mb-1">Outlet reports</p>
             <p className="text-xs">{OUTLETS.map(o => <span key={o} className={filedOutlets.has(o) ? "text-green-400 mr-3 inline-block" : "text-red-400 mr-3 inline-block"}>{filedOutlets.has(o) ? "✓" : "✗"} {OUTLET_NAMES[o]}</span>)}</p>
           </Card>
 
           <Card title="Reviews & complaints (today)">
-            {revs.length === 0 ? <p className="text-zinc-600 text-xs">No reviews logged.</p> : (
+            {revs.length === 0 ? <p className="text-text-faint text-xs">No reviews logged.</p> : (
               <div className="space-y-1">
-                <p className="text-xs text-zinc-400 mb-2">{revs.length} review(s) · {revs.filter(r => r.valid_complaint).length} valid complaint(s) · {revs.filter(r => r.refund_given).length} refunded</p>
+                <p className="text-xs text-text-muted mb-2">{revs.length} review(s) · {revs.filter(r => r.valid_complaint).length} valid complaint(s) · {revs.filter(r => r.refund_given).length} refunded</p>
                 {revs.map(rv => { const p = reviewPoints(n(rv.rating), rv.valid_complaint); return (
-                  <div key={rv.id} className="flex justify-between text-xs py-1 border-t border-zinc-800/60">
-                    <span className="text-zinc-300">{OUTLET_NAMES[rv.outlet_id] || rv.outlet_id} · {rv.platform} · {rv.rating}★{rv.valid_complaint ? " · complaint" : ""}</span>
+                  <div key={rv.id} className="flex justify-between text-xs py-1 border-t border-line/60">
+                    <span className="text-text">{OUTLET_NAMES[rv.outlet_id] || rv.outlet_id} · {rv.platform} · {rv.rating}★{rv.valid_complaint ? " · complaint" : ""}</span>
                     <span className={p >= 0 ? "text-green-400 font-bold" : "text-red-400 font-bold"}>{p >= 0 ? "+" : ""}{p}</span>
                   </div>
                 ); })}
@@ -774,13 +774,13 @@ const downloadPDF = async () => {
           <Card title={`Points earned · ${d0.toLocaleDateString("en-IN", { day: "numeric", month: "short" })}`}>
             <div className="space-y-1">
               {DUTY_STAFF.map(s => (
-                <div key={s.id} className="flex justify-between text-sm py-1.5 border-t border-zinc-800/60">
-                  <span className="text-zinc-300">{s.name}</span>
+                <div key={s.id} className="flex justify-between text-sm py-1.5 border-t border-line/60">
+                  <span className="text-text">{s.name}</span>
                   <span className={`font-bold font-mono ${(pts[s.id] || 0) >= 0 ? "text-yellow-400" : "text-red-400"}`}>{(pts[s.id] || 0) >= 0 ? "+" : ""}{pts[s.id] || 0}</span>
                 </div>
               ))}
             </div>
-            <p className="text-[10px] text-zinc-600 mt-2">Daily +10 / late −5 · outlet +20 (+30 target) · reviews. Season totals on Leaderboard.</p>
+            <p className="text-[10px] text-text-faint mt-2">Daily +10 / late −5 · outlet +20 (+30 target) · reviews. Season totals on Leaderboard.</p>
           </Card>
 
           <Card title="Payout — latest week per outlet">
@@ -788,21 +788,21 @@ const downloadPDF = async () => {
               {OUTLETS.map(o => {
                 const sw = latestPay[o + "_swiggy"], zo = latestPay[o + "_zomato"];
                 if (!sw && !zo) return null;
-                return <div key={o} className="flex justify-between text-xs py-1 border-t border-zinc-800/60"><span className="text-zinc-300">{OUTLET_NAMES[o]}</span><span className="font-mono text-zinc-400">{sw ? `Sw ${inr(n(sw.amount_transferable))}` : ""} {zo ? `Zo ${inr(n(zo.net_payout))}` : ""}</span></div>;
+                return <div key={o} className="flex justify-between text-xs py-1 border-t border-line/60"><span className="text-text">{OUTLET_NAMES[o]}</span><span className="font-mono text-text-muted">{sw ? `Sw ${inr(n(sw.amount_transferable))}` : ""} {zo ? `Zo ${inr(n(zo.net_payout))}` : ""}</span></div>;
               })}
-              {OUTLETS.every(o => !latestPay[o + "_swiggy"] && !latestPay[o + "_zomato"]) && <p className="text-zinc-600 text-xs">No payout data yet.</p>}
+              {OUTLETS.every(o => !latestPay[o + "_swiggy"] && !latestPay[o + "_zomato"]) && <p className="text-text-faint text-xs">No payout data yet.</p>}
             </div>
           </Card>
 
           <Card title={`Atlas Reconciliation — ${d0.toLocaleDateString("en-IN", { month: "long", year: "numeric" })}`}>
             {atlasResults.length === 0 ? (
-              <p className="text-zinc-600 text-xs font-mono">No Atlas data saved for {d0.toLocaleDateString("en-IN", { month: "long", year: "numeric" })} yet — run Reconciliation for this month and save to dashboard.</p>
+              <p className="text-text-faint text-xs font-mono">No Atlas data saved for {d0.toLocaleDateString("en-IN", { month: "long", year: "numeric" })} yet — run Reconciliation for this month and save to dashboard.</p>
             ) : (
               <>
                 <div className="overflow-x-auto">
                   <table className="w-full text-xs font-mono whitespace-nowrap">
                     <thead>
-                      <tr className="text-zinc-500 uppercase tracking-widest text-[10px] border-b border-zinc-800">
+                      <tr className="text-text-muted uppercase tracking-widest text-[10px] border-b border-line">
                         <th className="text-left py-2 pr-3">Outlet</th>
                         <th className="text-right py-2 pl-3">Atlas Gross</th>
                         <th className="text-right py-2 pl-3">Reported</th>
@@ -817,11 +817,11 @@ const downloadPDF = async () => {
                         const hasAtlas = r.atlasGross !== null;
                         const ok = hasAtlas && Math.abs(r.diff!) <= ATLAS_THRESHOLD;
                         return (
-                          <tr key={r.outlet_id} className="border-b border-zinc-800/40">
-                            <td className="py-1.5 pr-3 text-zinc-300">{OUTLET_NAMES[r.outlet_id]}</td>
-                            <td className="py-1.5 pl-3 text-right">{hasAtlas ? inr(r.atlasGross!) : <span className="text-zinc-600">—</span>}</td>
-                            <td className="py-1.5 pl-3 text-right text-zinc-400">{inr(r.reportedGross)}</td>
-                            <td className={`py-1.5 pl-3 text-right font-semibold ${!hasAtlas ? "text-zinc-600" : ok ? "text-zinc-500" : r.diff! < 0 ? "text-red-400" : "text-yellow-400"}`}>
+                          <tr key={r.outlet_id} className="border-b border-line/40">
+                            <td className="py-1.5 pr-3 text-text">{OUTLET_NAMES[r.outlet_id]}</td>
+                            <td className="py-1.5 pl-3 text-right">{hasAtlas ? inr(r.atlasGross!) : <span className="text-text-faint">—</span>}</td>
+                            <td className="py-1.5 pl-3 text-right text-text-muted">{inr(r.reportedGross)}</td>
+                            <td className={`py-1.5 pl-3 text-right font-semibold ${!hasAtlas ? "text-text-faint" : ok ? "text-text-muted" : r.diff! < 0 ? "text-red-400" : "text-yellow-400"}`}>
                               {!hasAtlas ? "—" : `${r.diff! >= 0 ? "+" : "−"}${inr(Math.abs(r.diff!))}`}
                             </td>
                             <td className="py-1.5 pl-3 text-center">
@@ -831,8 +831,8 @@ const downloadPDF = async () => {
                                 </span>
                               )}
                             </td>
-                            <td className="py-1.5 pl-3 text-right text-blue-400">{hasAtlas ? inr(r.atlasNet!) : <span className="text-zinc-600">—</span>}</td>
-                            <td className="py-1.5 pl-3 text-right text-red-400">{hasAtlas && r.atlasLost! > 0 ? inr(r.atlasLost!) : <span className="text-zinc-600">—</span>}</td>
+                            <td className="py-1.5 pl-3 text-right text-blue-400">{hasAtlas ? inr(r.atlasNet!) : <span className="text-text-faint">—</span>}</td>
+                            <td className="py-1.5 pl-3 text-right text-red-400">{hasAtlas && r.atlasLost! > 0 ? inr(r.atlasLost!) : <span className="text-text-faint">—</span>}</td>
                           </tr>
                         );
                       })}
@@ -843,10 +843,10 @@ const downloadPDF = async () => {
                         const tRG = atlasReconRows.reduce((s, r) => s + r.reportedGross, 0);
                         const tD = tAG - tRG;
                         return (
-                          <tr className="border-t border-zinc-700">
-                            <td className="py-2 text-zinc-400 font-bold text-[10px] uppercase tracking-widest">Total</td>
-                            <td className="py-2 pl-3 text-right font-bold text-white">{inr(tAG)}</td>
-                            <td className="py-2 pl-3 text-right font-bold text-zinc-300">{inr(tRG)}</td>
+                          <tr className="border-t border-line">
+                            <td className="py-2 text-text-muted font-bold text-[10px] uppercase tracking-widest">Total</td>
+                            <td className="py-2 pl-3 text-right font-bold text-text">{inr(tAG)}</td>
+                            <td className="py-2 pl-3 text-right font-bold text-text">{inr(tRG)}</td>
                             <td className={`py-2 pl-3 text-right font-bold ${tD < 0 ? "text-red-400" : "text-yellow-400"}`}>{tD >= 0 ? "+" : "−"}{inr(Math.abs(tD))}</td>
                             <td></td>
                             <td className="py-2 pl-3 text-right font-bold text-blue-400">{inr(atlasReconRows.reduce((s, r) => s + (r.atlasNet ?? 0), 0))}</td>
@@ -857,7 +857,7 @@ const downloadPDF = async () => {
                     </tfoot>
                   </table>
                 </div>
-                <p className="text-[10px] font-mono text-zinc-600 mt-2">Atlas Gross vs staff-reported MTD (shop + Swiggy + Zomato) · ⚠ = gap &gt; {inr(ATLAS_THRESHOLD)} · Atlas Net = verified founder figure · Lost Rev. = platform cancellations</p>
+                <p className="text-[10px] font-mono text-text-faint mt-2">Atlas Gross vs staff-reported MTD (shop + Swiggy + Zomato) · ⚠ = gap &gt; {inr(ATLAS_THRESHOLD)} · Atlas Net = verified founder figure · Lost Rev. = platform cancellations</p>
               </>
             )}
           </Card>
