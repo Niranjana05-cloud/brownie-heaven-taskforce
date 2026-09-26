@@ -5792,52 +5792,56 @@ else await fetchOutletReportsByDate(outletEntryDate);
           </div>
         )}
 
-        {activeTab === "ops_audits" && (canAssign || isFO) && (
+                {activeTab === "ops_audits" && (canAssign || isFO) && (
           <div>
-            <div className="mb-6 pb-5 border-b border-zinc-800">
-              <h2 className="text-2xl font-black tracking-tight">Operations &amp; Audits</h2>
-              <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mt-1">Bharani's daily audit reports</p>
+            <div className="mb-6 pb-5 border-b border-line">
+              <h2 className="text-2xl font-black tracking-tight text-text">Operations &amp; Audits</h2>
+              <p className="text-[11px] font-mono text-text-muted uppercase tracking-widest mt-1">Bharani&apos;s daily audit reports</p>
             </div>
             {auditReportsLoading ? (
-              <p className="text-sm text-zinc-600">Loading…</p>
+              <p className="text-sm text-text-faint">Loading…</p>
             ) : auditReports.length === 0 ? (
-              <p className="text-sm text-zinc-600">No audit reports submitted yet.</p>
+              <p className="text-sm text-text-faint">No audit reports submitted yet.</p>
             ) : (
-              <div className="max-w-5xl overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest border-b border-zinc-800">
-                      <th className="text-left py-2 pr-4">Date</th>
-                      <th className="text-left py-2 pr-4">Outlets Audited</th>
-                      <th className="text-left py-2 pr-4">Wastage (₹)</th>
-                      <th className="text-left py-2 pr-4">Stock Mismatch</th>
-                      <th className="text-left py-2 pr-4">Cash Recon.</th>
-                      <th className="text-left py-2 pr-4">Exceptions</th>
-                      <th className="text-left py-2 pr-4">Discrepancy (₹)</th>
-                      <th className="text-left py-2 pr-4">Outlets w/ Issues</th>
-                      <th className="text-left py-2">Notes</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {auditReports.map((r, i) => {
-                      const d = r.report_data || {};
-                      const notes = [d.issue_1, d.issue_2, d.issue_3, d.action_1, d.action_2, d.action_3].filter((x) => x && String(x).trim() && String(x).trim().toLowerCase() !== "none" && String(x).trim() !== "-").join("; ");
-                      return (
-                        <tr key={i} className="border-b border-zinc-900">
-                          <td className="py-2 pr-4 font-mono text-zinc-400">{r.report_date}</td>
-                          <td className="py-2 pr-4">{d.outlets_audited || "—"}</td>
-                          <td className="py-2 pr-4">{d.total_wastage || "—"}</td>
-                          <td className="py-2 pr-4">{d.stock_mismatch || "—"}</td>
-                          <td className="py-2 pr-4">{d.cash_reconciliation || "—"}</td>
-                          <td className="py-2 pr-4">{d.exceptions_found || "—"}</td>
-                          <td className="py-2 pr-4">{d.discrepancy_value || "—"}</td>
-                          <td className="py-2 pr-4">{d.outlets_with_issues || "—"}</td>
-                          <td className="py-2 text-zinc-400 max-w-xs">{notes || "—"}</td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
+              <div className="max-w-3xl space-y-4">
+                {auditReports.map((r, i) => {
+                  const d = r.report_data || {};
+                  const notes = [d.issue_1, d.issue_2, d.issue_3, d.action_1, d.action_2, d.action_3].filter((x) => x && String(x).trim() && String(x).trim().toLowerCase() !== "none" && String(x).trim() !== "-").join(" · ");
+                  const isEmpty = (v: any) => v === undefined || v === null || String(v).trim() === "" || String(v).trim() === "-" || String(v).trim().toLowerCase() === "none";
+                  const fields = [
+                    { label: "Outlets audited", value: d.outlets_audited },
+                    { label: "Wastage", value: d.total_wastage, money: true },
+                    { label: "Stock mismatch", value: d.stock_mismatch, flag: !isEmpty(d.stock_mismatch) && String(d.stock_mismatch).toLowerCase() !== "no" },
+                    { label: "Cash reconciliation", value: d.cash_reconciliation },
+                    { label: "Exceptions found", value: d.exceptions_found },
+                    { label: "Discrepancy", value: d.discrepancy_value, money: true },
+                    { label: "Outlets w/ issues", value: d.outlets_with_issues },
+                  ].filter((f) => !isEmpty(f.value));
+                  const dateLabel = new Date(r.report_date + "T00:00:00").toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short", year: "numeric" });
+                  return (
+                    <div key={i} className="bg-surface border border-line p-5">
+                      <p className="text-sm font-bold text-text mb-3">{dateLabel}</p>
+                      {fields.length === 0 ? (
+                        <p className="text-xs text-text-faint mb-3">No structured figures logged for this audit.</p>
+                      ) : (
+                        <div className="grid grid-cols-2 md:grid-cols-3 gap-x-6 gap-y-3 mb-4">
+                          {fields.map((f) => (
+                            <div key={f.label}>
+                              <p className="text-[10px] font-mono text-text-muted uppercase tracking-widest mb-0.5">{f.label}</p>
+                              <p className={`text-sm font-semibold ${f.flag ? "text-red-400" : "text-text"}`}>{f.money ? `₹${f.value}` : String(f.value)}</p>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      {notes && (
+                        <div className="pt-3 border-t border-line">
+                          <p className="text-[10px] font-mono text-text-muted uppercase tracking-widest mb-1.5">Notes</p>
+                          <p className="text-sm text-text-muted leading-relaxed">{notes}</p>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>
