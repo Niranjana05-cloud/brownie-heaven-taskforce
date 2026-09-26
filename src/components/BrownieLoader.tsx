@@ -30,14 +30,14 @@ export default function BrownieLoader({ tick }: { tick: number }) {
       <div className="relative w-40 h-40 md:w-52 md:h-52">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
-          src="/whole.png"
+          src="/brownie/whole.png"
           alt=""
           className="absolute inset-0 w-full h-full object-contain transition-all duration-150"
           style={{ opacity: cracked ? 0 : 1, transform: cracked ? "scale(0.9)" : "scale(1)" }}
         />
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
-          src="/broken.png"
+          src="/brownie/broken.png"
           alt=""
           className="absolute inset-0 w-full h-full object-contain transition-all duration-300"
           style={{
