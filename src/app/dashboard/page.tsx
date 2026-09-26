@@ -13,6 +13,7 @@ import TeamDashboards from "./TeamDashboards";
 import MessagesTab from "./MessagesTab";
 import ActiveStatusTab from "./ActiveStatusTab";
 import HelpTab from "./HelpTab";
+import ThemePicker from "@/components/ThemePicker";
 import ReconciliationTab from "./ReconciliationTab";
 import supabaseStock from "@/lib/supabaseStock";
 import { buildSwiggyUrl } from "@/lib/swiggyLiveOffers";
@@ -3079,7 +3080,7 @@ else await fetchOutletReportsByDate(outletEntryDate);
   );
 
   return (
-    <div className="min-h-screen bg-[#0a0a0b] text-white flex">
+    <div className="min-h-screen bg-canvas text-text flex">
        {(user?.role === "Owner" || (user as any)?.isFO) && <ActivityToastStack />}
       {user && <PushRegister staffId={user.id} />}
       {isOwner && <NudgeButton />}
@@ -3130,166 +3131,167 @@ else await fetchOutletReportsByDate(outletEntryDate);
       })()}
       <button onClick={() => setSidebarOpen(!sidebarOpen)} className="fixed top-4 left-4 z-50 md:hidden bg-zinc-900 border border-zinc-700 p-2 text-white">☰</button>
 
-      <aside className={`fixed inset-y-0 left-0 z-40 w-60 bg-[#131316] border-r border-zinc-800 flex flex-col shrink-0 transition-transform duration-200 md:relative md:translate-x-0 ${sidebarOpen ? "translate-x-0" : "-translate-x-full"}`}>
-        <div className="px-6 py-6 border-b border-zinc-800">
-          <h1 className="text-xl font-black tracking-tight">TASK<span className="text-yellow-400">FORCE IQ</span></h1>
-          <p className="text-[10px] font-mono text-zinc-600 uppercase tracking-widest mt-1">Brownie Heaven</p>
+      <aside className={`fixed inset-y-0 left-0 z-40 w-60 bg-surface border-r border-line flex flex-col shrink-0 transition-transform duration-200 md:relative md:translate-x-0 ${sidebarOpen ? "translate-x-0" : "-translate-x-full"}`}>
+        <div className="px-6 py-6 border-b border-line">
+          <h1 className="text-xl font-black tracking-tight">TASK<span className="text-accent">FORCE IQ</span></h1>
+          <p className="text-[10px] font-mono text-text-faint uppercase tracking-widest mt-1">Brownie Heaven</p>
         </div>
         <nav className="flex-1 px-3 py-4">
-          <p className="text-[10px] font-mono text-zinc-600 uppercase tracking-widest px-3 pb-2">Workspace</p>
-          <div onClick={() => { setActiveTab("tasks"); setSidebarOpen(false); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "tasks" ? "text-white bg-zinc-900 border-l-2 border-yellow-400" : "text-zinc-500 hover:text-white"}`}>
+          <p className="text-[10px] font-mono text-text-faint uppercase tracking-widest px-3 pb-2">Workspace</p>
+          <div onClick={() => { setActiveTab("tasks"); setSidebarOpen(false); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "tasks" ? "text-text bg-surface-2 border-l-2 border-accent" : "text-text-muted hover:text-text"}`}>
             <span>▣</span> Dashboard
           </div>
           {!isOwner && (
-            <div onClick={() => { setActiveTab("messages"); setSidebarOpen(false); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "messages" ? "text-white bg-zinc-900 border-l-2 border-yellow-400" : "text-zinc-500 hover:text-white"}`}>
+            <div onClick={() => { setActiveTab("messages"); setSidebarOpen(false); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "messages" ? "text-text bg-surface-2 border-l-2 border-accent" : "text-text-muted hover:text-text"}`}>
               <span>💬</span> Messages
-              {msgUnreadCount > 0 && <span className="ml-auto w-2 h-2 bg-yellow-400 rounded-full"></span>}
+              {msgUnreadCount > 0 && <span className="ml-auto w-2 h-2 bg-accent rounded-full"></span>}
             </div>
           )}
           {(canAssign || hasOutlets) && (
-              <div onClick={() => { setActiveTab("owner_outlets"); setSidebarOpen(false); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "owner_outlets" ? "text-white bg-zinc-900 border-l-2 border-yellow-400" : "text-zinc-500 hover:text-white"}`}>
+              <div onClick={() => { setActiveTab("owner_outlets"); setSidebarOpen(false); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "owner_outlets" ? "text-text bg-surface-2 border-l-2 border-accent" : "text-text-muted hover:text-text"}`}>
               <span>🏪</span> Outlet Reports
               </div>
           )}
          {((user.outlets && user.outlets.length > 0) || canAssign) && (
-            <div onClick={() => { setActiveTab("sales_target"); setSidebarOpen(false); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "sales_target" ? "text-white bg-zinc-900 border-l-2 border-yellow-400" : "text-zinc-500 hover:text-white"}`}>
+            <div onClick={() => { setActiveTab("sales_target"); setSidebarOpen(false); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "sales_target" ? "text-text bg-surface-2 border-l-2 border-accent" : "text-text-muted hover:text-text"}`}>
               <span>🎯</span> Outlet P&amp;L
             </div>
           )}
                   {(user?.role === "Financial Analyst" || user?.role === "Owner") && (
-            <div onClick={() => { setActiveTab("purchase_vendors"); setSidebarOpen(false); fetchPurchaseVendors(); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "purchase_vendors" ? "text-white bg-zinc-900 border-l-2 border-yellow-400" : "text-zinc-500 hover:text-white"}`}>
+            <div onClick={() => { setActiveTab("purchase_vendors"); setSidebarOpen(false); fetchPurchaseVendors(); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "purchase_vendors" ? "text-text bg-surface-2 border-l-2 border-accent" : "text-text-muted hover:text-text"}`}>
               <span>🛒</span> Purchase &amp; Vendors
             </div>
           )}
           {(isFO || ["nishant","arun","vishnu","ahila","nilani"].includes(user?.id ?? "")) && (
-            <div onClick={() => { setActiveTab("auto_reviews"); setSidebarOpen(false); fetchAutoReviews(); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "auto_reviews" ? "text-white bg-zinc-900 border-l-2 border-yellow-400" : "text-zinc-500 hover:text-white"}`}>
+            <div onClick={() => { setActiveTab("auto_reviews"); setSidebarOpen(false); fetchAutoReviews(); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "auto_reviews" ? "text-text bg-surface-2 border-l-2 border-accent" : "text-text-muted hover:text-text"}`}>
               <span>⭐</span> Auto Reviews
             </div>
           )}
-        <div onClick={() => { router.push("/leaderboard"); }} className="flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors text-zinc-500 hover:text-white">
+        <div onClick={() => { router.push("/leaderboard"); }} className="flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors text-text-muted hover:text-text">
             <span>🏆</span> Leaderboard
           </div>
          {["nishant","arun","nilani","vishnu","ahila"].includes(user?.id ?? "") && (
-            <div onClick={() => { router.push("/orders-race"); }} className="flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors text-zinc-500 hover:text-white">
+            <div onClick={() => { router.push("/orders-race"); }} className="flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors text-text-muted hover:text-text">
               <span>⚔️</span> Orders Race
             </div>
           )}
          {(canAssign || isFO) && (
-            <div onClick={() => { setActiveTab("analytics"); setSidebarOpen(false); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "analytics" ? "text-white bg-zinc-900 border-l-2 border-yellow-400" : "text-zinc-500 hover:text-white"}`}>
+            <div onClick={() => { setActiveTab("analytics"); setSidebarOpen(false); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "analytics" ? "text-text bg-surface-2 border-l-2 border-accent" : "text-text-muted hover:text-text"}`}>
              <span>◬</span> Analytics
             </div>
           )}
           {false && (canAssign || isFO) && (
-            <div onClick={() => { setActiveTab("competition"); setSidebarOpen(false); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "competition" ? "text-white bg-zinc-900 border-l-2 border-yellow-400" : "text-zinc-500 hover:text-white"}`}>
+            <div onClick={() => { setActiveTab("competition"); setSidebarOpen(false); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "competition" ? "text-text bg-surface-2 border-l-2 border-accent" : "text-text-muted hover:text-text"}`}>
               <span>🥊</span> Competition
             </div>
           )}
           {canViewItemPerf && (
-            <div onClick={() => { setActiveTab("item_perf"); setSidebarOpen(false); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "item_perf" ? "text-white bg-zinc-900 border-l-2 border-yellow-400" : "text-zinc-500 hover:text-white"}`}>
+            <div onClick={() => { setActiveTab("item_perf"); setSidebarOpen(false); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "item_perf" ? "text-text bg-surface-2 border-l-2 border-accent" : "text-text-muted hover:text-text"}`}>
               <span>📈</span> Item Performance
             </div>
           )}
                     {canAssign && (
             <>
-             <div onClick={() => { setActiveTab("all_reports"); setSidebarOpen(false); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "all_reports" ? "text-white bg-zinc-900 border-l-2 border-yellow-400" : "text-zinc-500 hover:text-white"}`}>
+             <div onClick={() => { setActiveTab("all_reports"); setSidebarOpen(false); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "all_reports" ? "text-text bg-surface-2 border-l-2 border-accent" : "text-text-muted hover:text-text"}`}>
                 <span>📋</span> Reports
               </div>
             </>
           )}
          {((user.outlets && user.outlets.length > 0) || canAssign) && (
-  <div onClick={() => { setActiveTab("outlet_reports"); setSidebarOpen(false); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "outlet_reports" ? "text-white bg-zinc-900 border-l-2 border-yellow-400" : "text-zinc-500 hover:text-white"}`}>
+  <div onClick={() => { setActiveTab("outlet_reports"); setSidebarOpen(false); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "outlet_reports" ? "text-text bg-surface-2 border-l-2 border-accent" : "text-text-muted hover:text-text"}`}>
     <span>🏪</span> Outlets
-  {Object.keys(outletReports).length < (user.outlets?.length || 0) && <span className="ml-auto w-2 h-2 bg-yellow-400 rounded-full"></span>}
+  {Object.keys(outletReports).length < (user.outlets?.length || 0) && <span className="ml-auto w-2 h-2 bg-accent rounded-full"></span>}
   </div>
 )}
           {canAssign && (
             <>
-              <div onClick={() => { setActiveTab("history"); setSidebarOpen(false); fetchHistoryReports(historyDate); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "history" ? "text-white bg-zinc-900 border-l-2 border-yellow-400" : "text-zinc-500 hover:text-white"}`}>
+              <div onClick={() => { setActiveTab("history"); setSidebarOpen(false); fetchHistoryReports(historyDate); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "history" ? "text-text bg-surface-2 border-l-2 border-accent" : "text-text-muted hover:text-text"}`}>
              <span>📅</span> History
              </div>
             </>
           )}
                     {isOwner && (
-            <div onClick={() => { setActiveTab("team_dashboards"); setSidebarOpen(false); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "team_dashboards" ? "text-white bg-zinc-900 border-l-2 border-yellow-400" : "text-zinc-500 hover:text-white"}`}>
+            <div onClick={() => { setActiveTab("team_dashboards"); setSidebarOpen(false); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "team_dashboards" ? "text-text bg-surface-2 border-l-2 border-accent" : "text-text-muted hover:text-text"}`}>
               <span>👥</span> Team Dashboards
             </div>
           )}
           {(isOwner || isFO) && (
-            <div onClick={() => { setActiveTab("active_status"); setSidebarOpen(false); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "active_status" ? "text-white bg-zinc-900 border-l-2 border-yellow-400" : "text-zinc-500 hover:text-white"}`}>
+            <div onClick={() => { setActiveTab("active_status"); setSidebarOpen(false); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "active_status" ? "text-text bg-surface-2 border-l-2 border-accent" : "text-text-muted hover:text-text"}`}>
               <span>🟢</span> Active Status
             </div>
           )}
           {isOwner && (
-            <div onClick={() => { setActiveTab("messages"); setSidebarOpen(false); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "messages" ? "text-white bg-zinc-900 border-l-2 border-yellow-400" : "text-zinc-500 hover:text-white"}`}>
+            <div onClick={() => { setActiveTab("messages"); setSidebarOpen(false); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "messages" ? "text-text bg-surface-2 border-l-2 border-accent" : "text-text-muted hover:text-text"}`}>
               <span>💬</span> Messages
-              {msgUnreadCount > 0 && <span className="ml-auto w-2 h-2 bg-yellow-400 rounded-full"></span>}
+              {msgUnreadCount > 0 && <span className="ml-auto w-2 h-2 bg-accent rounded-full"></span>}
             </div>
           )}
                   {(user?.role === "Financial Analyst" || user?.role === "Owner") && (
-            <div onClick={() => { setActiveTab("net_realisation"); setSidebarOpen(false); fetchNetRealisation(); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "net_realisation" ? "text-white bg-zinc-900 border-l-2 border-yellow-400" : "text-zinc-500 hover:text-white"}`}>
+            <div onClick={() => { setActiveTab("net_realisation"); setSidebarOpen(false); fetchNetRealisation(); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "net_realisation" ? "text-text bg-surface-2 border-l-2 border-accent" : "text-text-muted hover:text-text"}`}>
               <span>🧾</span> Net Realisation
             </div>
           )}
                 {user?.role === "Financial Analyst" && (
-            <div onClick={() => { setActiveTab("pnl"); setSidebarOpen(false); fetchPnl(); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "pnl" ? "text-white bg-zinc-900 border-l-2 border-yellow-400" : "text-zinc-500 hover:text-white"}`}>
+            <div onClick={() => { setActiveTab("pnl"); setSidebarOpen(false); fetchPnl(); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "pnl" ? "text-text bg-surface-2 border-l-2 border-accent" : "text-text-muted hover:text-text"}`}>
               <span>💹</span> Channel P&amp;L
             </div>
           )}
                    {user?.role === "Financial Analyst" && (
-            <div onClick={() => { setActiveTab("contribution_margins"); setSidebarOpen(false); fetchContributionMargins(); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "contribution_margins" ? "text-white bg-zinc-900 border-l-2 border-yellow-400" : "text-zinc-500 hover:text-white"}`}>
+            <div onClick={() => { setActiveTab("contribution_margins"); setSidebarOpen(false); fetchContributionMargins(); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "contribution_margins" ? "text-text bg-surface-2 border-l-2 border-accent" : "text-text-muted hover:text-text"}`}>
               <span>📐</span> Contribution Margins
             </div>
           )}
           {user?.role === "Financial Analyst" && (
-            <div onClick={() => { setActiveTab("cash_flow"); setSidebarOpen(false); fetchCashFlowForecast(); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "cash_flow" ? "text-white bg-zinc-900 border-l-2 border-yellow-400" : "text-zinc-500 hover:text-white"}`}>
+            <div onClick={() => { setActiveTab("cash_flow"); setSidebarOpen(false); fetchCashFlowForecast(); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "cash_flow" ? "text-text bg-surface-2 border-l-2 border-accent" : "text-text-muted hover:text-text"}`}>
               <span>📉</span> Cash-Flow Forecast
             </div>
           )}
                 {user?.role === "Financial Analyst" && (
-            <div onClick={() => { setActiveTab("payout"); setSidebarOpen(false); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "payout" ? "text-white bg-zinc-900 border-l-2 border-yellow-400" : "text-zinc-500 hover:text-white"}`}>
+            <div onClick={() => { setActiveTab("payout"); setSidebarOpen(false); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "payout" ? "text-text bg-surface-2 border-l-2 border-accent" : "text-text-muted hover:text-text"}`}>
               <span>💰</span> Payout
             </div>
           )}
                     {false && user?.role === "Owner" && (
-            <div onClick={() => { setActiveTab("reconciliation"); setSidebarOpen(false); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "reconciliation" ? "text-white bg-zinc-900 border-l-2 border-yellow-400" : "text-zinc-500 hover:text-white"}`}>
+            <div onClick={() => { setActiveTab("reconciliation"); setSidebarOpen(false); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "reconciliation" ? "text-text bg-surface-2 border-l-2 border-accent" : "text-text-muted hover:text-text"}`}>
               <span>⚖️</span> Reconciliation
             </div>
           )}
           {hasReportDuty && (
-            <div onClick={() => { setActiveTab("my_report"); setSidebarOpen(false); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "my_report" ? "text-white bg-zinc-900 border-l-2 border-yellow-400" : "text-zinc-500 hover:text-white"}`}>
+            <div onClick={() => { setActiveTab("my_report"); setSidebarOpen(false); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "my_report" ? "text-text bg-surface-2 border-l-2 border-accent" : "text-text-muted hover:text-text"}`}>
               <span>📋</span> My Report
-             {!todayReport && <span className="ml-auto w-2 h-2 bg-yellow-400 rounded-full"></span>}
+             {!todayReport && <span className="ml-auto w-2 h-2 bg-accent rounded-full"></span>}
             </div>
           )}
           {user.role === "HR" && (
-            <div onClick={() => { setActiveTab("attendance"); setSidebarOpen(false); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "attendance" ? "text-white bg-zinc-900 border-l-2 border-yellow-400" : "text-zinc-500 hover:text-white"}`}>
+            <div onClick={() => { setActiveTab("attendance"); setSidebarOpen(false); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "attendance" ? "text-text bg-surface-2 border-l-2 border-accent" : "text-text-muted hover:text-text"}`}>
               <span>👥</span> Attendance
             </div>
           )}
                             {(canAssign || isFO) && (
-            <div onClick={() => { setActiveTab("fines"); setSidebarOpen(false); fetchFines(); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "fines" ? "text-white bg-zinc-900 border-l-2 border-yellow-400" : "text-zinc-500 hover:text-white"}`}>
+            <div onClick={() => { setActiveTab("fines"); setSidebarOpen(false); fetchFines(); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "fines" ? "text-text bg-surface-2 border-l-2 border-accent" : "text-text-muted hover:text-text"}`}>
               <span>⚖️</span> Fines
             </div>
           )}
                    {(isOwner || isFO) && (
-            <div onClick={() => { setActiveTab("niranjana_report"); setSidebarOpen(false); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "niranjana_report" ? "text-white bg-zinc-900 border-l-2 border-yellow-400" : "text-zinc-500 hover:text-white"}`}>
+            <div onClick={() => { setActiveTab("niranjana_report"); setSidebarOpen(false); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "niranjana_report" ? "text-text bg-surface-2 border-l-2 border-accent" : "text-text-muted hover:text-text"}`}>
               <span>📝</span> Niranjana's Report
             </div>
           )}
-          <div onClick={() => { setActiveTab("help"); setSidebarOpen(false); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "help" ? "text-white bg-zinc-900 border-l-2 border-yellow-400" : "text-zinc-500 hover:text-white"}`}>
+          <div onClick={() => { setActiveTab("help"); setSidebarOpen(false); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "help" ? "text-text bg-surface-2 border-l-2 border-accent" : "text-text-muted hover:text-text"}`}>
             <span>🛟</span> Help
           </div>
         </nav>
-        <div className="px-4 py-4 border-t border-zinc-800 flex items-center gap-2">
-          <div className="w-9 h-9 bg-yellow-400 text-black flex items-center justify-center font-bold text-sm shrink-0">
+        <div className="px-4 py-4 border-t border-line flex items-center gap-2">
+          <div className="w-9 h-9 bg-accent text-accent-ink flex items-center justify-center font-bold text-sm shrink-0">
             {user.name.split(" ").map((n: string) => n[0]).join("").slice(0, 2)}
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-sm font-semibold truncate">{user.name}</p>
-            <p className="text-[10px] font-mono text-zinc-600 uppercase tracking-wide">{user.role}</p>
+            <p className="text-[10px] font-mono text-text-faint uppercase tracking-wide">{user.role}</p>
           </div>
-          <button onClick={() => setShowPinModal(true)} className="text-[10px] font-mono text-zinc-600 uppercase hover:text-yellow-400 transition-colors shrink-0">PIN</button>
-          <button onClick={() => { localStorage.removeItem("currentUser"); router.push("/"); }} className="text-[10px] font-mono text-zinc-600 uppercase hover:text-red-500 transition-colors shrink-0">Exit</button>
+          <ThemePicker />
+          <button onClick={() => setShowPinModal(true)} className="text-[10px] font-mono text-text-faint uppercase hover:text-accent transition-colors shrink-0">PIN</button>
+          <button onClick={() => { localStorage.removeItem("currentUser"); router.push("/"); }} className="text-[10px] font-mono text-text-faint uppercase hover:text-red-500 transition-colors shrink-0">Exit</button>
         </div>
       </aside>
 
