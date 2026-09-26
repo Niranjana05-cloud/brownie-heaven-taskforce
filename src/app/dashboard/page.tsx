@@ -398,7 +398,7 @@ export default function DashboardPage() {
   const [reports, setReports] = useState<Report[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
-  const [activeTab, setActiveTab] = useState<"tasks" | "my_report" | "all_reports" | "analytics" | "outlet_reports" | "owner_outlets" | "history" | "attendance" | "sales_target" | "payout" | "reconciliation" | "competition" | "item_perf" | "ceo_report" | "fines" | "niranjana_report" | "pnl" | "contribution_margins" | "net_realisation" | "cash_flow" | "cheques" | "auto_reviews" | "purchase_vendors" | "team_dashboards" | "notify" | "messages" | "active_status" | "help">("tasks");
+  const [activeTab, setActiveTab] = useState<"tasks" | "my_report" | "all_reports" | "analytics" | "outlet_reports" | "owner_outlets" | "history" | "attendance" | "sales_target" | "payout" | "reconciliation" | "competition" | "item_perf" | "ceo_report" | "fines" | "niranjana_report" | "pnl" | "contribution_margins" | "net_realisation" | "cash_flow" | "cheques" | "auto_reviews" | "purchase_vendors" | "team_dashboards" | "notify" | "messages" | "active_status" | "help" | "production" | "ops_audits">("tasks");
   // Brownie mode's tab-switch loader — bumping this tick is what tells
   // BrownieLoader to play its whole->broken animation + crack sound. Only
   // does anything when the viewer has Brownie mode turned on (personal,
@@ -855,7 +855,15 @@ export default function DashboardPage() {
   const [fineOutlet, setFineOutlet] = useState("");
   const [fines, setFines] = useState<any[]>([]);
   const [fineBusy, setFineBusy] = useState(false);
-  const fetchFines = async () => { const { data } = await supabase.from("fines").select("*").order("created_at", { ascending: false }).limit(50); setFines(data || []); };
+    const fetchFines = async () => { const { data } = await supabase.from("fines").select("*").order("created_at", { ascending: false }).limit(50); setFines(data || []); };
+  const [auditReports, setAuditReports] = useState<any[]>([]);
+  const [auditReportsLoading, setAuditReportsLoading] = useState(false);
+  const fetchAuditReports = async () => {
+    setAuditReportsLoading(true);
+    const { data } = await supabase.from("reports").select("report_date, report_data, submitted_at").eq("staff_id", "bharani").order("report_date", { ascending: false }).limit(60);
+    setAuditReports(data || []);
+    setAuditReportsLoading(false);
+  };
   const saveFine = async () => {
     if (fineStaff.length === 0) { alert("Pick at least one person to fine."); return; }
     const amt = Number(fineAmount) || 0;
@@ -3274,8 +3282,18 @@ else await fetchOutletReportsByDate(outletEntryDate);
             </div>
           )}
           {user.role === "HR" && (
-            <div onClick={() => { fireBrownieTransition(); setActiveTab("attendance"); setSidebarOpen(false); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "attendance" ? "text-text bg-surface-2 border-l-2 border-accent" : "text-text-muted hover:text-text"}`}>
-              <span>👥</span> Attendance
+                <div onClick={() => { fireBrownieTransition(); setActiveTab("attendance"); setSidebarOpen(false); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "attendance" ? "text-text bg-surface-2 border-l-2 border-accent" : "text-text-muted hover:text-text"}`}>
+              <span>👥</span> People &amp; Labour
+            </div>
+          )}
+          {user?.role === "Head Chef" && (
+            <div onClick={() => { fireBrownieTransition(); setActiveTab("production"); setSidebarOpen(false); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "production" ? "text-text bg-surface-2 border-l-2 border-accent" : "text-text-muted hover:text-text"}`}>
+              <span>🏭</span> Production
+            </div>
+          )}
+          {(canAssign || isFO) && (
+            <div onClick={() => { fireBrownieTransition(); setActiveTab("ops_audits"); setSidebarOpen(false); fetchAuditReports(); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "ops_audits" ? "text-text bg-surface-2 border-l-2 border-accent" : "text-text-muted hover:text-text"}`}>
+              <span>🔍</span> Operations &amp; Audits
             </div>
           )}
                             {(canAssign || isFO) && (
@@ -3350,7 +3368,7 @@ else await fetchOutletReportsByDate(outletEntryDate);
        {activeTab === "tasks" && user && user.role === "Founder's Office" && <FounderDashboard user={user} />}
        {activeTab === "tasks" && user && user.role === "Owner" && <CommandCentre user={user} />}
        {activeTab === "tasks" && user && (user.role === "Asst. Ops Manager" || user.role === "Custom Cakes & Asst Ops") && <div className="mb-8"><MyOutletsDashboard user={user} /></div>}
-      {activeTab === "tasks" && user?.role === "Head Chef" && (
+        {(activeTab === "tasks" || activeTab === "production") && user?.role === "Head Chef" && (
           <div>
             <div className="flex justify-between items-end mb-6 pb-5 border-b border-zinc-800">
               <div>
@@ -5771,6 +5789,57 @@ else await fetchOutletReportsByDate(outletEntryDate);
                 </div>
               )}
             </div>
+          </div>
+        )}
+
+        {activeTab === "ops_audits" && (canAssign || isFO) && (
+          <div>
+            <div className="mb-6 pb-5 border-b border-zinc-800">
+              <h2 className="text-2xl font-black tracking-tight">Operations &amp; Audits</h2>
+              <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mt-1">Bharani's daily audit reports</p>
+            </div>
+            {auditReportsLoading ? (
+              <p className="text-sm text-zinc-600">Loading…</p>
+            ) : auditReports.length === 0 ? (
+              <p className="text-sm text-zinc-600">No audit reports submitted yet.</p>
+            ) : (
+              <div className="max-w-5xl overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest border-b border-zinc-800">
+                      <th className="text-left py-2 pr-4">Date</th>
+                      <th className="text-left py-2 pr-4">Outlets Audited</th>
+                      <th className="text-left py-2 pr-4">Wastage (₹)</th>
+                      <th className="text-left py-2 pr-4">Stock Mismatch</th>
+                      <th className="text-left py-2 pr-4">Cash Recon.</th>
+                      <th className="text-left py-2 pr-4">Exceptions</th>
+                      <th className="text-left py-2 pr-4">Discrepancy (₹)</th>
+                      <th className="text-left py-2 pr-4">Outlets w/ Issues</th>
+                      <th className="text-left py-2">Notes</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {auditReports.map((r, i) => {
+                      const d = r.report_data || {};
+                      const notes = [d.issue_1, d.issue_2, d.issue_3, d.action_1, d.action_2, d.action_3].filter((x) => x && String(x).trim() && String(x).trim().toLowerCase() !== "none" && String(x).trim() !== "-").join("; ");
+                      return (
+                        <tr key={i} className="border-b border-zinc-900">
+                          <td className="py-2 pr-4 font-mono text-zinc-400">{r.report_date}</td>
+                          <td className="py-2 pr-4">{d.outlets_audited || "—"}</td>
+                          <td className="py-2 pr-4">{d.total_wastage || "—"}</td>
+                          <td className="py-2 pr-4">{d.stock_mismatch || "—"}</td>
+                          <td className="py-2 pr-4">{d.cash_reconciliation || "—"}</td>
+                          <td className="py-2 pr-4">{d.exceptions_found || "—"}</td>
+                          <td className="py-2 pr-4">{d.discrepancy_value || "—"}</td>
+                          <td className="py-2 pr-4">{d.outlets_with_issues || "—"}</td>
+                          <td className="py-2 text-zinc-400 max-w-xs">{notes || "—"}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         )}
 
