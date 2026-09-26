@@ -11,7 +11,7 @@ const ACCENTS: { id: ThemeAccent; label: string; swatch: string }[] = [
 ];
 
 export default function ThemePicker() {
-  const { theme, accent, setTheme, setAccent } = useTheme();
+  const { theme, accent, brownieMode, muted, setTheme, setAccent, setBrownieMode, setMuted } = useTheme();
   const [open, setOpen] = useState(false);
   const boxRef = useRef<HTMLDivElement>(null);
   const currentSwatch = ACCENTS.find((a) => a.id === accent)?.swatch || "#facc15";
@@ -63,7 +63,25 @@ export default function ThemePicker() {
               />
             ))}
           </div>
-          <p className="text-[10px] text-text-faint mt-4">Saved on this device only.</p>
+          <div className="mt-4 pt-3 border-t border-line">
+            <button
+              onClick={() => setBrownieMode(!brownieMode)}
+              className={`w-full flex items-center justify-between text-sm font-semibold py-2 px-2.5 border rounded transition-colors ${brownieMode ? "border-accent text-accent" : "border-line text-text-muted hover:text-text"}`}
+            >
+              <span>🍫 Brownie mode</span>
+              <span className="text-[10px] font-mono uppercase">{brownieMode ? "On" : "Off"}</span>
+            </button>
+            {brownieMode && (
+              <button
+                onClick={() => setMuted(!muted)}
+                className="w-full flex items-center justify-between text-xs text-text-muted hover:text-text py-2 px-2.5 mt-1"
+              >
+                <span>{muted ? "🔇" : "🔊"} Sound effects</span>
+                <span className="text-[10px] font-mono uppercase">{muted ? "Muted" : "On"}</span>
+              </button>
+            )}
+          </div>
+          <p className="text-[10px] text-text-faint mt-3">Saved on this device only.</p>
         </div>
       )}
     </div>
