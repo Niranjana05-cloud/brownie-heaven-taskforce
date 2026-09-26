@@ -19,6 +19,14 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
+      <head>
+        {/* Applies the saved theme/accent before first paint, so there's no flash of the wrong colors. */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){try{var t=localStorage.getItem("tf_theme")||"dark";var a=localStorage.getItem("tf_accent")||"yellow";document.documentElement.setAttribute("data-theme",t);document.documentElement.setAttribute("data-accent",a);}catch(e){}})();`,
+          }}
+        />
+      </head>
       <body>{children}</body>
     </html>
   );
