@@ -26,7 +26,7 @@ export default function BrownieLoader({ tick }: { tick: number }) {
   if (!visible) return null;
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-canvas/70 backdrop-blur-sm pointer-events-none">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center pointer-events-none">
       <div className="relative w-40 h-40 md:w-52 md:h-52">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
