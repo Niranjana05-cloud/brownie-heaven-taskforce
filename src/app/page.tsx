@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@supabase/supabase-js";
 
@@ -26,7 +26,33 @@ export default function LoginPage() {
   const [pin, setPin] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [checkingSession, setCheckingSession] = useState(true);
   const router = useRouter();
+
+  // This is the fix for "asks for login every single time" — opening the app
+  // (or reopening the installed icon) used to always show this form first,
+  // even when a valid session was still sitting in localStorage from before.
+  // Now: if we're already logged in, skip straight to the dashboard instead
+  // of making them re-enter their PIN. Also remembers the last person who
+  // used this device, so even a fresh login starts on their name instead of
+  // defaulting back to Nishant every time.
+  useEffect(() => {
+    const stored = localStorage.getItem("currentUser");
+    if (stored) {
+      try {
+        const parsed = JSON.parse(stored);
+        if (parsed && typeof parsed === "object" && parsed.id) {
+          router.replace("/dashboard");
+          return;
+        }
+      } catch {
+        localStorage.removeItem("currentUser");
+      }
+    }
+    const lastUser = localStorage.getItem("tf_last_user");
+    if (lastUser && STAFF.some((s) => s.id === lastUser)) setSelectedUser(lastUser);
+    setCheckingSession(false);
+  }, [router]);
 
   const handleLogin = async () => {
     setError("");
@@ -41,6 +67,7 @@ export default function LoginPage() {
     if (dbError) { setError("Login is temporarily unavailable. Please try again in a moment."); return; }
     if (!data) { setError("Wrong PIN. Try again."); return; }
     localStorage.setItem("currentUser", JSON.stringify(data));
+    localStorage.setItem("tf_last_user", selectedUser);
 
 try {
   const res = await fetch("/api/activity/login", {
@@ -56,6 +83,10 @@ try {
 
 router.push("/dashboard");
   };
+
+  if (checkingSession) {
+    return <div className="min-h-screen bg-black" />;
+  }
 
   return (
     <div className="min-h-screen bg-black flex items-center justify-center relative overflow-hidden">
