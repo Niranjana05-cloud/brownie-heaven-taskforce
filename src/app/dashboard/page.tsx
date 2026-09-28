@@ -20,6 +20,7 @@ import ReconciliationTab from "./ReconciliationTab";
 import supabaseStock from "@/lib/supabaseStock";
 import { buildSwiggyUrl } from "@/lib/swiggyLiveOffers";
 import { fetchRealFoodCostPct, REAL_FOOD_COST_WINDOW_DAYS } from "@/lib/realFoodCost";
+import { fetchRealCommissionPct, REAL_COMMISSION_WINDOW_DAYS } from "@/lib/realCommission";
 import { OUTLET_ID_TO_STOCK_NAME } from "@/lib/outletMap";
 import { FOOD_COST_MAP } from "@/lib/foodCosts";
 import { matchItemCost } from "@/lib/itemPerfCosts";
@@ -419,6 +420,19 @@ export default function DashboardPage() {
     }).catch((err) => console.error("real food cost fetch failed", err));
   }, []);
   const cogsRate = (realFoodCostPct ?? 29.4) / 100;
+  // Real, payout-data-backed online commission % (trailing 60 days,
+  // company-wide) — replaces the flat 50% assumption in Outlet P&L, Channel
+  // P&L and Command Centre. Falls back to 50% if there isn't enough settled
+  // Swiggy/Zomato payout data yet in the window.
+  const [realCommissionPct, setRealCommissionPct] = useState<number | null>(null);
+  const [realCommissionWindow, setRealCommissionWindow] = useState<{ from: string; to: string } | null>(null);
+  useEffect(() => {
+    fetchRealCommissionPct().then(({ pct, windowFrom, windowTo }) => {
+      setRealCommissionPct(pct);
+      setRealCommissionWindow({ from: windowFrom, to: windowTo });
+    }).catch((err) => console.error("real commission fetch failed", err));
+  }, []);
+  const commissionRate = (realCommissionPct ?? 50) / 100;
   const RANGE_PRESETS = [
     { id: "yesterday", label: "Yesterday" },
     { id: "last7", label: "Last 7 days" },
@@ -926,7 +940,7 @@ export default function DashboardPage() {
       const chan = (sales: number, isOnline: boolean) => {
         const cogs = sales * cogsRate;
         const wastage = sales * 0.05;
-        const commission = isOnline ? sales * 0.5 : 0;
+        const commission = isOnline ? sales * commissionRate : 0;
         const contrib = sales - cogs - wastage - commission;
         return { sales, cogs, wastage, commission, contrib, margin: sales > 0 ? (contrib / sales) * 100 : 0 };
       };
@@ -1387,7 +1401,7 @@ export default function DashboardPage() {
     const totals = pnlRows.reduce((a, r) => ({ shop: a.shop + r.shop.sales, swiggy: a.swiggy + r.swiggy.sales, zomato: a.zomato + r.zomato.sales, sales: a.sales + r.totalSales, contrib: a.contrib + r.totalContrib, fixed: a.fixed + r.fixed, net: a.net + r.netProfit }), { shop: 0, swiggy: 0, zomato: 0, sales: 0, contrib: 0, fixed: 0, net: 0 });
     const rowsHtml = pnlRows.map((r) => `<tr><td style="padding:6px 8px;border-bottom:1px solid ${C.line};font-size:10px;font-weight:600">${r.name}</td><td style="padding:6px 8px;border-bottom:1px solid ${C.line};text-align:right;font-size:10px">${inr(r.shop.sales)}</td><td style="padding:6px 8px;border-bottom:1px solid ${C.line};text-align:right;font-size:10px">${inr(r.swiggy.sales)}</td><td style="padding:6px 8px;border-bottom:1px solid ${C.line};text-align:right;font-size:10px">${inr(r.zomato.sales)}</td><td style="padding:6px 8px;border-bottom:1px solid ${C.line};text-align:right;font-size:10px;font-weight:700">${inr(r.totalSales)}</td><td style="padding:6px 8px;border-bottom:1px solid ${C.line};text-align:right;font-size:10px;color:${C.soft}">${inr(r.totalContrib)}</td><td style="padding:6px 8px;border-bottom:1px solid ${C.line};text-align:right;font-size:10px;color:${C.soft}">${inr(r.fixed)}</td><td style="padding:6px 8px;border-bottom:1px solid ${C.line};text-align:right;font-size:10px;font-weight:700;color:${r.netProfit >= 0 ? C.green : C.red}">${inr(r.netProfit)}</td><td style="padding:6px 8px;border-bottom:1px solid ${C.line};text-align:right;font-size:10px;font-weight:700;color:${r.netMargin >= 0 ? C.green : C.red}">${r.netMargin.toFixed(1)}%</td></tr>`).join("");
     const totalRow = `<tr style="background:${C.line};border-top:2px solid ${C.ink}"><td style="padding:8px;font-size:10px;font-weight:900">TOTAL</td><td style="padding:8px;text-align:right;font-size:10px;font-weight:700">${inr(totals.shop)}</td><td style="padding:8px;text-align:right;font-size:10px;font-weight:700">${inr(totals.swiggy)}</td><td style="padding:8px;text-align:right;font-size:10px;font-weight:700">${inr(totals.zomato)}</td><td style="padding:8px;text-align:right;font-size:10px;font-weight:900">${inr(totals.sales)}</td><td style="padding:8px;text-align:right;font-size:10px;font-weight:700">${inr(totals.contrib)}</td><td style="padding:8px;text-align:right;font-size:10px;font-weight:700">${inr(totals.fixed)}</td><td style="padding:8px;text-align:right;font-size:10px;font-weight:900;color:${totals.net >= 0 ? C.green : C.red}">${inr(totals.net)}</td><td style="padding:8px;text-align:right;font-size:10px;font-weight:900;color:${totals.net >= 0 ? C.green : C.red}">${totals.sales > 0 ? ((totals.net / totals.sales) * 100).toFixed(1) + "%" : "-"}</td></tr>`;
-    const html = `<div style="width:1000px;background:${C.bg};font-family:'Segoe UI',Arial,sans-serif;color:${C.ink};padding:34px"><div style="font-size:22px;font-weight:900">Brownie Heaven — Channel P&amp;L</div><div style="font-size:11px;color:${C.soft};margin-bottom:16px">${pnlFrom} to ${pnlTo} · real fixed costs from Outlet P&amp;L · ${(cogsRate * 100).toFixed(1)}% COGS (real, trailing ${REAL_FOOD_COST_WINDOW_DAYS}d) · 5% wastage · 50% online commission</div><table style="width:100%;border-collapse:collapse;background:${C.card};border:1px solid ${C.line};border-radius:10px;overflow:hidden"><thead><tr style="background:${C.ink}"><th style="padding:8px;text-align:left;color:#FFF6E5;font-size:9px">OUTLET</th><th style="padding:8px;text-align:right;color:#FFF6E5;font-size:9px">SHOP</th><th style="padding:8px;text-align:right;color:#FFF6E5;font-size:9px">SWIGGY</th><th style="padding:8px;text-align:right;color:#FFF6E5;font-size:9px">ZOMATO</th><th style="padding:8px;text-align:right;color:#FFF6E5;font-size:9px">TOTAL SALES</th><th style="padding:8px;text-align:right;color:#FFF6E5;font-size:9px">CONTRIBUTION</th><th style="padding:8px;text-align:right;color:#FFF6E5;font-size:9px">FIXED COSTS</th><th style="padding:8px;text-align:right;color:#FFF6E5;font-size:9px">NET PROFIT</th><th style="padding:8px;text-align:right;color:#FFF6E5;font-size:9px">NET %</th></tr></thead><tbody>${rowsHtml}${totalRow}</tbody></table><div style="font-size:9px;color:${C.soft};margin-top:12px">Generated ${new Date().toISOString().split("T")[0]}</div></div>`;
+    const html = `<div style="width:1000px;background:${C.bg};font-family:'Segoe UI',Arial,sans-serif;color:${C.ink};padding:34px"><div style="font-size:22px;font-weight:900">Brownie Heaven — Channel P&amp;L</div><div style="font-size:11px;color:${C.soft};margin-bottom:16px">${pnlFrom} to ${pnlTo} · real fixed costs from Outlet P&amp;L · ${(cogsRate * 100).toFixed(1)}% COGS (real, trailing ${REAL_FOOD_COST_WINDOW_DAYS}d) · 5% wastage · ${(commissionRate * 100).toFixed(1)}% online commission (real, trailing ${REAL_COMMISSION_WINDOW_DAYS}d)</div><table style="width:100%;border-collapse:collapse;background:${C.card};border:1px solid ${C.line};border-radius:10px;overflow:hidden"><thead><tr style="background:${C.ink}"><th style="padding:8px;text-align:left;color:#FFF6E5;font-size:9px">OUTLET</th><th style="padding:8px;text-align:right;color:#FFF6E5;font-size:9px">SHOP</th><th style="padding:8px;text-align:right;color:#FFF6E5;font-size:9px">SWIGGY</th><th style="padding:8px;text-align:right;color:#FFF6E5;font-size:9px">ZOMATO</th><th style="padding:8px;text-align:right;color:#FFF6E5;font-size:9px">TOTAL SALES</th><th style="padding:8px;text-align:right;color:#FFF6E5;font-size:9px">CONTRIBUTION</th><th style="padding:8px;text-align:right;color:#FFF6E5;font-size:9px">FIXED COSTS</th><th style="padding:8px;text-align:right;color:#FFF6E5;font-size:9px">NET PROFIT</th><th style="padding:8px;text-align:right;color:#FFF6E5;font-size:9px">NET %</th></tr></thead><tbody>${rowsHtml}${totalRow}</tbody></table><div style="font-size:9px;color:${C.soft};margin-top:12px">Generated ${new Date().toISOString().split("T")[0]}</div></div>`;
     const lib = await loadH2P();
     window.scrollTo(0, 0); await new Promise((r) => setTimeout(r, 50));
     const holder = document.createElement("div"); holder.style.position = "fixed"; holder.style.left = "-9999px"; holder.style.top = "0"; holder.innerHTML = html; document.body.appendChild(holder);
@@ -3516,7 +3530,7 @@ else await fetchOutletReportsByDate(outletEntryDate);
             <div className="flex justify-between items-start mb-6 pb-5 border-b border-zinc-800">
               <div>
                 <h2 className="text-2xl md:text-3xl font-black tracking-tight">Channel P&amp;L</h2>
-                <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mt-1">Real fixed costs from Outlet P&amp;L · {(cogsRate * 100).toFixed(1)}% COGS (real, trailing {REAL_FOOD_COST_WINDOW_DAYS}d) · 5% wastage · 50% online commission</p>
+                <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mt-1">Real fixed costs from Outlet P&amp;L · {(cogsRate * 100).toFixed(1)}% COGS (real, trailing {REAL_FOOD_COST_WINDOW_DAYS}d) · 5% wastage · {(commissionRate * 100).toFixed(1)}% online commission (real, trailing {REAL_COMMISSION_WINDOW_DAYS}d)</p>
               </div>
               <div className="flex gap-2">
                 <input type="date" value={pnlFrom} onChange={(e) => setPnlFrom(e.target.value)} className="bg-black border border-zinc-800 text-white px-3 py-2 focus:outline-none focus:border-yellow-400 text-sm font-mono" />
@@ -4453,7 +4467,7 @@ else await fetchOutletReportsByDate(outletEntryDate);
               const stYear = Number(stDate.slice(0, 4)), stMonthNum = Number(stDate.slice(5, 7));
               const daysInThisMonth = new Date(stYear, stMonthNum, 0).getDate();
               const todayTotalSales = dayNet + dayOnline;
-              const todayCogs = cogsRate * todayTotalSales, todayWastage = 0.05 * todayTotalSales, todayComm = 0.5 * dayOnline;
+              const todayCogs = cogsRate * todayTotalSales, todayWastage = 0.05 * todayTotalSales, todayComm = commissionRate * dayOnline;
               const todayContrib = todayTotalSales - todayCogs - todayWastage - todayComm;
               const todayFixedShare = totalFixed / daysInThisMonth;
               const todayNetProfit = todayContrib - todayFixedShare;
@@ -4525,7 +4539,7 @@ else await fetchOutletReportsByDate(outletEntryDate);
                   const fEb = isSharedFixed ? 0 : _ab(f.eb);
                   const fTransport = isSharedFixed ? 0 : _ab(f.transport);
                  const totalSales = net + online;
-                  const cogs = cogsRate * totalSales, wastage = 0.05 * totalSales, comm = 0.5 * online;
+                  const cogs = cogsRate * totalSales, wastage = 0.05 * totalSales, comm = commissionRate * online;
                   const contrib = totalSales - cogs - wastage - comm;
                   const rm = 0.2 * fRent;
                   const totalFixed = fStaff+fRent+fEb+fTransport+rm+_ab(f.pest)+_ab(f.water)+_ab(f.airtel);
@@ -4540,7 +4554,7 @@ else await fetchOutletReportsByDate(outletEntryDate);
                   const stYear = Number(stDate.slice(0, 4)), stMonthNum = Number(stDate.slice(5, 7));
                   const daysInThisMonth = new Date(stYear, stMonthNum, 0).getDate();
                   const todayTotalSales = dayNet + dayOnline;
-                  const todayCogs = cogsRate * todayTotalSales, todayWastage = 0.05 * todayTotalSales, todayComm = 0.5 * dayOnline;
+                  const todayCogs = cogsRate * todayTotalSales, todayWastage = 0.05 * todayTotalSales, todayComm = commissionRate * dayOnline;
                   const todayContrib = todayTotalSales - todayCogs - todayWastage - todayComm;
                   const todayFixedShare = totalFixed / daysInThisMonth;
                   const todayNetProfit = todayContrib - todayFixedShare;
@@ -4580,7 +4594,7 @@ else await fetchOutletReportsByDate(outletEntryDate);
                           {row("Today's Total Sales", m(todayTotalSales), { bold: true })}
                           {row(`Less: COGS @ ${(cogsRate * 100).toFixed(1)}% (real, trailing ${REAL_FOOD_COST_WINDOW_DAYS}d)`, m(todayCogs), { neg: true })}
                           {row("Less: Wastage @ 5%", m(todayWastage), { neg: true })}
-                          {row("Less: Commission @ 50% (online)", m(todayComm), { neg: true })}
+                          {row(`Less: Commission @ ${(commissionRate * 100).toFixed(1)}% (online, real trailing ${REAL_COMMISSION_WINDOW_DAYS}d)`, m(todayComm), { neg: true })}
                           {row("Today's Contribution", m(todayContrib), { bold: true })}
                           {row(`Less: Fixed cost share (monthly ÷ ${daysInThisMonth})`, m(todayFixedShare), { fixedCost: true })}
                           {row("TODAY'S NET PROFIT / (LOSS)", m(todayNetProfit), { bold: true })}
@@ -4591,7 +4605,7 @@ else await fetchOutletReportsByDate(outletEntryDate);
                           {row("Total Sales (shop + online)", m(totalSales), { bold: true })}
                           {row(`Less: COGS (food cost) @ ${(cogsRate * 100).toFixed(1)}% of total (real, trailing ${REAL_FOOD_COST_WINDOW_DAYS}d)`, m(cogs), { neg: true })}
                           {row("Less: Wastage @ 5% of total", m(wastage), { neg: true })}
-                          {row("Less: Commission @ 50% (online)", m(comm), { neg: true })}
+                          {row(`Less: Commission @ ${(commissionRate * 100).toFixed(1)}% (online, real trailing ${REAL_COMMISSION_WINDOW_DAYS}d)`, m(comm), { neg: true })}
                           {row("Contribution (before fixed)", m(contrib), { bold: true })}
                           {row("   Contribution margin %", (cMargin * 100).toFixed(1) + "%")}
                           {row("Less: Staff salaries", isSharedFixed ? <span className="text-zinc-600">0</span> : inp("staff", Number(f.staff) || 0), { fixedCost: !isSharedFixed })}
@@ -5792,7 +5806,7 @@ else await fetchOutletReportsByDate(outletEntryDate);
           </div>
         )}
 
-                {activeTab === "ops_audits" && (canAssign || isFO) && (
+        {activeTab === "ops_audits" && (canAssign || isFO) && (
           <div>
             <div className="mb-6 pb-5 border-b border-line">
               <h2 className="text-2xl font-black tracking-tight text-text">Operations &amp; Audits</h2>
