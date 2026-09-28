@@ -47,6 +47,7 @@ const lakh = (n: number) => "₹" + (n / 100000).toFixed(2) + " L";
   const [daily, setDaily] = useState<any[]>([]);
   const [offRows, setOffRows] = useState<string[]>([]);
   const [stFixed, setStFixed] = useState<Record<string, any>>({});
+  const [stTargets, setStTargets] = useState<Record<string, { a?: number; b?: number }>>({});
   const [stMonthSales, setStMonthSales] = useState<Record<string, { net: number; online: number }>>({});
   const [revs, setRevs] = useState<any[]>([]);
   const [payouts, setPayouts] = useState<any[]>([]);
@@ -104,14 +105,15 @@ const lakh = (n: number) => "₹" + (n / 100000).toFixed(2) + " L";
       (staffRaw.data || []).forEach((s: any) => { sn[s.id] = s.name; });
       setStaffNames(sn);
       const fm: Record<string, any> = {}; const sm: Record<string, { net: number; online: number }> = {};
-      (st.data || []).forEach((row: any) => { fm[row.outlet_id] = (row.line_items || {}).fixed || {}; });
+      const tm: Record<string, { a?: number; b?: number }> = {};
+      (st.data || []).forEach((row: any) => { fm[row.outlet_id] = (row.line_items || {}).fixed || {}; tm[row.outlet_id] = (row.line_items || {}).targets || {}; });
       (mo.data || []).forEach((row: any) => {
         const oid = row.outlet_id;
         if (!sm[oid]) sm[oid] = { net: 0, online: 0 };
         sm[oid].net += Number(row.shop_sales_value) || 0;
         sm[oid].online += (Number(row.swiggy_sales_value) || 0) + (Number(row.zomato_sales_value) || 0);
       });
-      setStFixed(fm); setStMonthSales(sm);
+      setStFixed(fm); setStMonthSales(sm); setStTargets(tm);
       setLoading(false);
     })();
   }, [date, monthStart]);
@@ -213,6 +215,20 @@ const lakh = (n: number) => "₹" + (n / 100000).toFixed(2) + " L";
     const netProfit = contribution - fixed;
     return { o, name: OUTLET_NAMES[o] || o, net: oNet, online: oOnline, fixed, comm, contribution, netProfit, reported: rows.length };
   });
+  // Profit budget vs actual — "Target A" is the monthly profit goal you
+  // already set per outlet in Outlet P&L (it's currently only used to work
+  // out required sales); this compares it against actual profit made so
+  // far this month. Same-period-last-year isn't included — the app doesn't
+  // have a full year of history yet, so that comparison isn't real.
+  const budgetRows = pnl.map((p) => {
+    const budget = Number(stTargets[p.o]?.a) || 0;
+    const hasBudget = budget > 0;
+    const variance = p.netProfit - budget;
+    const variancePct = hasBudget ? (variance / budget) * 100 : null;
+    return { ...p, budget, hasBudget, variance, variancePct };
+  }).filter((p) => p.hasBudget);
+  const budgetTotalActual = budgetRows.reduce((s, p) => s + p.netProfit, 0);
+  const budgetTotalPlanned = budgetRows.reduce((s, p) => s + p.budget, 0);
   const _EXCLUDE: string[] = [];
   const _hasCosts = (o: string) => { const f = stFixed[o] || {}; return (Math.abs(Number(f.rent) || 0) + Math.abs(Number(f.staff) || 0) + Math.abs(Number(f.pest) || 0) + Math.abs(Number(f.airtel) || 0)) > 0; };
   const _complete = pnl.filter(p => !_EXCLUDE.includes(p.o) && _hasCosts(p.o) && (p.net > 0 || p.online > 0));
@@ -572,6 +588,42 @@ const downloadPDF = async () => {
               </table>
             </div>
             <p className="text-[10px] text-text-faint mt-3">Uses a real {(cogsRate * 100).toFixed(1)}% COGS (from actual purchase data, trailing {REAL_FOOD_COST_WINDOW_DAYS} days, company-wide — not yet per-outlet), 5% wastage, {(commissionRate * 100).toFixed(1)}% online commission (real, trailing {REAL_COMMISSION_WINDOW_DAYS} days). EBITDA = contribution minus fixed costs; this business has no separate interest/depreciation line to strip out.</p>
+          </Card>
+
+          <Card title="Budget vs Actual — profit (month)">
+            {budgetRows.length === 0 ? (
+              <p className="text-xs text-text-faint">No outlet has a monthly profit goal (&quot;Target A&quot;) set yet — set one in Outlet P&amp;L to see it compared here.</p>
+            ) : (
+              <>
+                <div className="flex items-baseline gap-3 mb-4">
+                  <span className={`text-2xl font-black ${budgetTotalActual >= budgetTotalPlanned ? "text-green-400" : "text-red-400"}`}>{inr(budgetTotalActual)}</span>
+                  <span className="text-[11px] font-mono text-text-muted">actual vs {inr(budgetTotalPlanned)} planned ({budgetRows.length} outlet{budgetRows.length === 1 ? "" : "s"} with a goal set)</span>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs font-mono whitespace-nowrap">
+                    <thead>
+                      <tr className="text-text-muted uppercase tracking-widest text-[10px] border-b border-line">
+                        <th className="text-left py-2 pr-3">Outlet</th>
+                        <th className="text-right py-2 pl-3">Planned (Target A)</th>
+                        <th className="text-right py-2 pl-3">Actual (MTD)</th>
+                        <th className="text-right py-2 pl-3">Variance</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {[...budgetRows].sort((a, b) => (a.variancePct ?? 0) - (b.variancePct ?? 0)).map((r) => (
+                        <tr key={r.o} className="border-b border-line/40">
+                          <td className="py-1.5 pr-3 text-text">{r.name}</td>
+                          <td className="py-1.5 pl-3 text-right text-text-muted">{inr(r.budget)}</td>
+                          <td className="py-1.5 pl-3 text-right text-text">{inr(r.netProfit)}</td>
+                          <td className={`py-1.5 pl-3 text-right font-bold ${r.variance >= 0 ? "text-green-400" : "text-red-400"}`}>{r.variance >= 0 ? "+" : ""}{inr(r.variance)} {r.variancePct !== null ? `(${r.variancePct >= 0 ? "+" : ""}${r.variancePct.toFixed(0)}%)` : ""}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <p className="text-[10px] text-text-faint mt-3">Planned figure is each outlet&apos;s &quot;Target A&quot; profit goal from Outlet P&amp;L. Outlets with no goal set aren&apos;t shown — set one there to track it here.</p>
+              </>
+            )}
           </Card>
 
           <Card title="2. Outlet ranking — growth, profitability, ratings, compliance">
