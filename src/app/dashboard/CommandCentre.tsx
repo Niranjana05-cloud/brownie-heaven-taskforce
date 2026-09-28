@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import supabaseStock from "@/lib/supabaseStock";
 import { fetchRealFoodCostPct, REAL_FOOD_COST_WINDOW_DAYS } from "@/lib/realFoodCost";
+import { fetchRealCommissionPct, REAL_COMMISSION_WINDOW_DAYS } from "@/lib/realCommission";
 
 type Staff = { id: string; name: string; role: string; outlets?: string[] };
 
@@ -58,6 +59,11 @@ const lakh = (n: number) => "₹" + (n / 100000).toFixed(2) + " L";
   const [tableCounts, setTableCounts] = useState<{ name: string; count: number | null; source: string }[]>([]);
   const [realFoodCostPct, setRealFoodCostPct] = useState<number | null>(null);
   const cogsRate = (realFoodCostPct ?? 29.4) / 100;
+  // Real, payout-data-backed online commission % (trailing 60 days,
+  // company-wide) — replaces the flat 50% assumption. Falls back to 50% if
+  // there isn't enough settled Swiggy/Zomato payout data yet in the window.
+  const [realCommissionPct, setRealCommissionPct] = useState<number | null>(null);
+  const commissionRate = (realCommissionPct ?? 50) / 100;
   const [loading, setLoading] = useState(true);
 
   const d0 = new Date(date + "T00:00:00");
@@ -142,6 +148,9 @@ const lakh = (n: number) => "₹" + (n / 100000).toFixed(2) + " L";
   useEffect(() => {
     fetchRealFoodCostPct().then(({ pct }) => setRealFoodCostPct(pct)).catch((err) => console.error("real food cost fetch failed", err));
   }, []);
+  useEffect(() => {
+    fetchRealCommissionPct().then(({ pct }) => setRealCommissionPct(pct)).catch((err) => console.error("real commission fetch failed", err));
+  }, []);
 
   const n = (v: any) => Number(v) || 0;
   const sum = (rows: any[], k: string) => rows.reduce((s, r) => s + n(r[k]), 0);
@@ -159,7 +168,7 @@ const lakh = (n: number) => "₹" + (n / 100000).toFixed(2) + " L";
   // figure; shown as EBITDA to match his terminology.
   const companyFinancials = (totalSales: number, onlineSales: number, fixedTotal: number) => {
     const grossMargin = totalSales * (1 - cogsRate);
-    const commission = 0.5 * onlineSales;
+    const commission = commissionRate * onlineSales;
     const contribution = totalSales - totalSales * cogsRate - totalSales * 0.05 - commission;
     const ebitda = contribution - fixedTotal;
     return { sales: totalSales, grossMargin, grossMarginPct: totalSales > 0 ? (grossMargin / totalSales) * 100 : 0, contribution, ebitda };
@@ -199,7 +208,7 @@ const lakh = (n: number) => "₹" + (n / 100000).toFixed(2) + " L";
     const _abs = (v: any) => Math.abs(Number(v) || 0);
     const fixed = _abs(f.staff) + _abs(f.rent) + _abs(f.eb) + _abs(f.transport) + 0.2 * _abs(f.rent) + _abs(f.pest) + _abs(f.water) + _abs(f.airtel);
     const oTotal = oNet + oOnline;
-    const comm = 0.5 * oOnline;
+    const comm = commissionRate * oOnline;
     const contribution = oTotal - cogsRate * oTotal - 0.05 * oTotal - comm;
     const netProfit = contribution - fixed;
     return { o, name: OUTLET_NAMES[o] || o, net: oNet, online: oOnline, fixed, comm, contribution, netProfit, reported: rows.length };
@@ -212,7 +221,7 @@ const lakh = (n: number) => "₹" + (n / 100000).toFixed(2) + " L";
   const bleeders = _complete.filter(p => p.netProfit < 0).sort((a, b) => a.netProfit - b.netProfit);
   const worstPnl = bleeders[0];
   const noFixedCount = OUTLETS.filter(o => { const f = stFixed[o] || {}; return !((Number(f.staff) || 0) + (Number(f.rent) || 0) + (Number(f.pest) || 0)); }).length;
-  const whyBleed = (p: any) => { if (!p) return ""; if (p.comm > p.contribution + p.fixed) return "aggregator commission (50% on online) is the killer — too online-dependent."; if (p.fixed > p.contribution) return "fixed costs (rent/staff) outweigh what sales bring in — rent is high or sales too low to cover it."; return "sales are simply too low this month to cover its costs."; };
+  const whyBleed = (p: any) => { if (!p) return ""; if (p.comm > p.contribution + p.fixed) return `aggregator commission (${(commissionRate * 100).toFixed(0)}% on online) is the killer — too online-dependent.`; if (p.fixed > p.contribution) return "fixed costs (rent/staff) outweigh what sales bring in — rent is high or sales too low to cover it."; return "sales are simply too low this month to cover its costs."; };
   const fixBleed = (p: any) => { if (!p) return ""; if (p.comm > p.contribution + p.fixed) return "Shift mix toward dine-in/takeaway (commission-free) and cut discounting on the apps."; if (p.fixed > p.contribution) return "Drive volume hard (footfall + online) to cover fixed costs, or review the cost base for that site."; return "Push both channels — promotions, visibility, counter upsell — to lift the topline."; };
 
   // Module 2: "Outlet ranking based on sales growth, profitability, food cost,
@@ -387,7 +396,7 @@ const downloadPDF = async () => {
           <div style="height:14px;border-radius:8px;overflow:hidden;display:flex">
             <div style="width:${offPct}%;background:${C.gold}"></div><div style="width:${onPct}%;background:${C.ink}"></div>
           </div>
-          <div style="font-size:11px;color:${C.soft};margin-top:7px">For every ₹1 walk-in, ₹${offlineRatio > 0 ? (1 / offlineRatio).toFixed(1) : "—"} comes from online (50% app commission territory).</div>
+          <div style="font-size:11px;color:${C.soft};margin-top:7px">For every ₹1 walk-in, ₹${offlineRatio > 0 ? (1 / offlineRatio).toFixed(1) : "—"} comes from online (${(commissionRate * 100).toFixed(0)}% app commission territory, real trailing ${REAL_COMMISSION_WINDOW_DAYS}d).</div>
         </div>
 
         <div style="background:${C.card};border:1px solid ${C.line};border-radius:14px;padding:18px 20px;margin-top:14px;text-align:center">
@@ -562,7 +571,7 @@ const downloadPDF = async () => {
                 </tbody>
               </table>
             </div>
-            <p className="text-[10px] text-text-faint mt-3">Uses a real {(cogsRate * 100).toFixed(1)}% COGS (from actual purchase data, trailing {REAL_FOOD_COST_WINDOW_DAYS} days, company-wide — not yet per-outlet), 5% wastage, 50% online commission. EBITDA = contribution minus fixed costs; this business has no separate interest/depreciation line to strip out.</p>
+            <p className="text-[10px] text-text-faint mt-3">Uses a real {(cogsRate * 100).toFixed(1)}% COGS (from actual purchase data, trailing {REAL_FOOD_COST_WINDOW_DAYS} days, company-wide — not yet per-outlet), 5% wastage, {(commissionRate * 100).toFixed(1)}% online commission (real, trailing {REAL_COMMISSION_WINDOW_DAYS} days). EBITDA = contribution minus fixed costs; this business has no separate interest/depreciation line to strip out.</p>
           </Card>
 
           <Card title="2. Outlet ranking — growth, profitability, ratings, compliance">
