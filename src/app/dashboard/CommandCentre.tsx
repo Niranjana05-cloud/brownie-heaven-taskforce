@@ -237,8 +237,31 @@ const lakh = (n: number) => "₹" + (n / 100000).toFixed(2) + " L";
   const bleeders = _complete.filter(p => p.netProfit < 0).sort((a, b) => a.netProfit - b.netProfit);
   const worstPnl = bleeders[0];
   const noFixedCount = OUTLETS.filter(o => { const f = stFixed[o] || {}; return !((Number(f.staff) || 0) + (Number(f.rent) || 0) + (Number(f.pest) || 0)); }).length;
-  const whyBleed = (p: any) => { if (!p) return ""; if (p.comm > p.contribution + p.fixed) return `aggregator commission (${(commissionRate * 100).toFixed(0)}% on online) is the killer — too online-dependent.`; if (p.fixed > p.contribution) return "fixed costs (rent/staff) outweigh what sales bring in — rent is high or sales too low to cover it."; return "sales are simply too low this month to cover its costs."; };
-  const fixBleed = (p: any) => { if (!p) return ""; if (p.comm > p.contribution + p.fixed) return "Shift mix toward dine-in/takeaway (commission-free) and cut discounting on the apps."; if (p.fixed > p.contribution) return "Drive volume hard (footfall + online) to cover fixed costs, or review the cost base for that site."; return "Push both channels — promotions, visibility, counter upsell — to lift the topline."; };
+  // These 3 outlets are 100% online cloud kitchens — no dine-in counter exists,
+  // so "too online-dependent" isn't a problem to fix, it's the business model.
+  // Keep this list in sync with the one in the Auto Reviews page (page.tsx).
+  const CLOUD_KITCHENS = ["Pallavaram", "Velachery", "Vadapalani"];
+  const isCloudKitchen = (p: any) => !!p && CLOUD_KITCHENS.includes(p.name);
+  const whyBleed = (p: any) => {
+    if (!p) return "";
+    if (p.comm > p.contribution + p.fixed) {
+      return isCloudKitchen(p)
+        ? `aggregator commission (${(commissionRate * 100).toFixed(0)}% on online) is eating most of the margin — expected for a cloud kitchen, but it means volume/pricing has to work harder to cover it.`
+        : `aggregator commission (${(commissionRate * 100).toFixed(0)}% on online) is the killer — too online-dependent.`;
+    }
+    if (p.fixed > p.contribution) return "fixed costs (rent/staff) outweigh what sales bring in — rent is high or sales too low to cover it.";
+    return "sales are simply too low this month to cover its costs.";
+  };
+  const fixBleed = (p: any) => {
+    if (!p) return "";
+    if (p.comm > p.contribution + p.fixed) {
+      return isCloudKitchen(p)
+        ? "No dine-in to shift to here (cloud kitchen) — push order volume and AOV (combos, upsells) to outrun the commission, and see if the platform commission slab can be renegotiated."
+        : "Shift mix toward dine-in/takeaway (commission-free) and cut discounting on the apps.";
+    }
+    if (p.fixed > p.contribution) return "Drive volume hard (footfall + online) to cover fixed costs, or review the cost base for that site.";
+    return "Push both channels — promotions, visibility, counter upsell — to lift the topline.";
+  };
 
   // Module 2: "Outlet ranking based on sales growth, profitability, food cost,
   // customer ratings and operational compliance." Food cost is deliberately
