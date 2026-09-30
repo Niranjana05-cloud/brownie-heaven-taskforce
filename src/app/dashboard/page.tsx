@@ -420,6 +420,7 @@ export default function DashboardPage() {
     }).catch((err) => console.error("real food cost fetch failed", err));
   }, []);
   const cogsRate = (realFoodCostPct ?? 29.4) / 100;
+  const fmtWin = (w: { from: string; to: string } | null) => w ? `${new Date(w.from + "T00:00:00").toLocaleDateString("en-IN", { day: "numeric", month: "short" })}–${new Date(w.to + "T00:00:00").toLocaleDateString("en-IN", { day: "numeric", month: "short" })}` : "";
   // Real, payout-data-backed online commission % (trailing 60 days,
   // company-wide) — replaces the flat 50% assumption in Outlet P&L, Channel
   // P&L and Command Centre. Falls back to 50% if there isn't enough settled
@@ -3530,7 +3531,7 @@ else await fetchOutletReportsByDate(outletEntryDate);
             <div className="flex justify-between items-start mb-6 pb-5 border-b border-zinc-800">
               <div>
                 <h2 className="text-2xl md:text-3xl font-black tracking-tight">Channel P&amp;L</h2>
-                <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mt-1">Real fixed costs from Outlet P&amp;L · {(cogsRate * 100).toFixed(1)}% COGS (real, trailing {REAL_FOOD_COST_WINDOW_DAYS}d) · 5% wastage · {(commissionRate * 100).toFixed(1)}% online commission (real, trailing {REAL_COMMISSION_WINDOW_DAYS}d)</p>
+                <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mt-1">Real fixed costs from Outlet P&amp;L · {(cogsRate * 100).toFixed(1)}% COGS (real, {fmtWin(realFoodCostWindow)}) · 5% wastage · {(commissionRate * 100).toFixed(1)}% online commission (real, {fmtWin(realCommissionWindow)}) · both are rolling windows, they move daily</p>
               </div>
               <div className="flex gap-2">
                 <input type="date" value={pnlFrom} onChange={(e) => setPnlFrom(e.target.value)} className="bg-black border border-zinc-800 text-white px-3 py-2 focus:outline-none focus:border-yellow-400 text-sm font-mono" />
@@ -4592,9 +4593,9 @@ else await fetchOutletReportsByDate(outletEntryDate);
                           {row(`Online Sales (Swiggy+Zomato) · ${dayLbl}`, inp("online", dayOnline))}
                           <tr key="_tpldiv" className="border-t border-zinc-800"><td colSpan={2} className="px-4 pt-3 pb-1 text-[10px] font-mono text-yellow-400 uppercase tracking-widest">Today's P&amp;L · {dayLbl} (fixed cost ÷ {daysInThisMonth} days this month)</td></tr>
                           {row("Today's Total Sales", m(todayTotalSales), { bold: true })}
-                          {row(`Less: COGS @ ${(cogsRate * 100).toFixed(1)}% (real, trailing ${REAL_FOOD_COST_WINDOW_DAYS}d)`, m(todayCogs), { neg: true })}
+                          {row(`Less: COGS @ ${(cogsRate * 100).toFixed(1)}% (real, ${fmtWin(realFoodCostWindow)})`, m(todayCogs), { neg: true })}
                           {row("Less: Wastage @ 5%", m(todayWastage), { neg: true })}
-                          {row(`Less: Commission @ ${(commissionRate * 100).toFixed(1)}% (online, real trailing ${REAL_COMMISSION_WINDOW_DAYS}d)`, m(todayComm), { neg: true })}
+                          {row(`Less: Commission @ ${(commissionRate * 100).toFixed(1)}% (online, real ${fmtWin(realCommissionWindow)})`, m(todayComm), { neg: true })}
                           {row("Today's Contribution", m(todayContrib), { bold: true })}
                           {row(`Less: Fixed cost share (monthly ÷ ${daysInThisMonth})`, m(todayFixedShare), { fixedCost: true })}
                           {row("TODAY'S NET PROFIT / (LOSS)", m(todayNetProfit), { bold: true })}
@@ -4603,9 +4604,9 @@ else await fetchOutletReportsByDate(outletEntryDate);
                           {row(`Net Sales — ${ml} total ${editing ? "✏️ (whole-month override)" : ""}`, editing ? inp("mnet", Number(_moNet) || 0) : m(net))}
                           {row(`Online Sales — ${ml} total ${editing ? "✏️ (whole-month override)" : ""}`, editing ? inp("monline", Number(_moOnline) || 0) : m(online))}
                           {row("Total Sales (shop + online)", m(totalSales), { bold: true })}
-                          {row(`Less: COGS (food cost) @ ${(cogsRate * 100).toFixed(1)}% of total (real, trailing ${REAL_FOOD_COST_WINDOW_DAYS}d)`, m(cogs), { neg: true })}
+                          {row(`Less: COGS (food cost) @ ${(cogsRate * 100).toFixed(1)}% of total (real, ${fmtWin(realFoodCostWindow)})`, m(cogs), { neg: true })}
                           {row("Less: Wastage @ 5% of total", m(wastage), { neg: true })}
-                          {row(`Less: Commission @ ${(commissionRate * 100).toFixed(1)}% (online, real trailing ${REAL_COMMISSION_WINDOW_DAYS}d)`, m(comm), { neg: true })}
+                          {row(`Less: Commission @ ${(commissionRate * 100).toFixed(1)}% (online, real ${fmtWin(realCommissionWindow)})`, m(comm), { neg: true })}
                           {row("Contribution (before fixed)", m(contrib), { bold: true })}
                           {row("   Contribution margin %", (cMargin * 100).toFixed(1) + "%")}
                           {row("Less: Staff salaries", isSharedFixed ? <span className="text-zinc-600">0</span> : inp("staff", Number(f.staff) || 0), { fixedCost: !isSharedFixed })}
