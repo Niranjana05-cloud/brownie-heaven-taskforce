@@ -1182,6 +1182,129 @@ export default function DashboardPage() {
     setSfLoading(false);
   };
   useEffect(() => { if (activeTab === "sales_forecast") fetchSalesForecast(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [activeTab]);
+
+  // ── Production & Purchase Forecast (point 2 of Forecasting) ───────────
+  // What Nishant asked for was "ingredient requirement, production
+  // requirement and purchase requirement forecasts". A true ingredient
+  // forecast (e.g. "you'll need 42kg flour next week") needs a recipe/
+  // bill-of-materials — how much of each raw ingredient goes into one unit
+  // of each product — and that doesn't exist anywhere in the system yet
+  // (the only per-product cost data, FOOD_COST_MAP, is a single landed ₹
+  // cost per product, not an ingredient breakdown). That piece has to wait
+  // until that recipe data exists (Rafiq's side).
+  // What IS real and buildable right now, from data already being logged:
+  //   - Production requirement: kitchen_production logs actual units made
+  //     per product per day — forecast next week's production the same way
+  //     as sales (day-of-week average, trend-adjusted).
+  //   - Purchase requirement: purchase_ledger logs actual raw-material
+  //     purchases (qty + unit + ₹) per product per day — forecast next
+  //     week's purchase quantity the same way, at a weekly grain since
+  //     purchases are lumpy (not every ingredient is bought daily).
+  const [pfLoading, setPfLoading] = useState(false);
+  const [pfProducts, setPfProducts] = useState<any[]>([]);
+  const [pfCategories, setPfCategories] = useState<any[]>([]);
+  const [purchLoading, setPurchLoading] = useState(false);
+  const [purchForecast, setPurchForecast] = useState<any[]>([]);
+
+  const fetchProductionForecast = async () => {
+    setPfLoading(true);
+    const todayIst = new Date(Date.now() + 5.5 * 60 * 60 * 1000);
+    const todayStr = todayIst.toISOString().slice(0, 10);
+    const historyStart = new Date(todayIst); historyStart.setDate(historyStart.getDate() - 70);
+    const { data: products } = await supabase.from("kitchen_products").select("*").eq("active", true).order("sort_order");
+    const { data: prodRows } = await supabase.from("kitchen_production").select("prod_date, flavour, qty").gte("prod_date", historyStart.toISOString().slice(0, 10)).lte("prod_date", todayStr).order("prod_date", { ascending: true });
+
+    const norm = (s: string) => (s || "").trim().toLowerCase();
+    const byProduct: Record<string, number[][]> = {}; // name -> [dow][values]
+    (products || []).forEach((p: any) => { byProduct[norm(p.name)] = [[], [], [], [], [], [], []]; });
+    (prodRows || []).forEach((r: any) => {
+      if (r.prod_date === todayStr) return; // exclude partial day
+      const key = norm(r.flavour);
+      if (!byProduct[key]) return; // custom/off-menu item made once — not enough history to forecast, skip
+      const dow = new Date(r.prod_date + "T00:00:00Z").getUTCDay();
+      byProduct[key][dow].push(Number(r.qty) || 0);
+    });
+    const avg = (arr: number[]) => (arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : 0);
+    const trendFactor: Record<string, number> = {};
+    (products || []).forEach((p: any) => {
+      const key = norm(p.name);
+      const rows = (prodRows || []).filter((r: any) => norm(r.flavour) === key && r.prod_date !== todayStr).sort((a: any, b: any) => a.prod_date.localeCompare(b.prod_date));
+      const totalOf = (rs: any[]) => rs.reduce((s, r) => s + (Number(r.qty) || 0), 0);
+      const last14 = totalOf(rows.slice(-14));
+      const prev14 = totalOf(rows.slice(-28, -14));
+      let f = prev14 > 0 ? last14 / prev14 : 1;
+      f = Math.max(0.7, Math.min(1.3, f));
+      trendFactor[key] = f;
+    });
+
+    const next7: string[] = [];
+    for (let i = 1; i <= 7; i++) { const d = new Date(todayIst); d.setDate(d.getDate() + i); next7.push(d.toISOString().slice(0, 10)); }
+
+    const productForecasts = (products || []).map((p: any) => {
+      const key = norm(p.name);
+      const hasHistory = byProduct[key]?.some((a) => a.length > 0);
+      const weekQty = next7.reduce((s, dateStr) => {
+        const dow = new Date(dateStr + "T00:00:00Z").getUTCDay();
+        return s + avg(byProduct[key][dow]) * (trendFactor[key] ?? 1);
+      }, 0);
+      return { id: p.id, name: p.name, category: p.category || "Other", weekQty, hasHistory };
+    }).filter((p: any) => p.hasHistory);
+
+    const catTotals: Record<string, number> = {};
+    productForecasts.forEach((p: any) => { catTotals[p.category] = (catTotals[p.category] || 0) + p.weekQty; });
+    const categories = Object.entries(catTotals).map(([category, weekQty]) => ({ category, weekQty })).sort((a, b) => b.weekQty - a.weekQty);
+
+    setPfProducts(productForecasts.sort((a: any, b: any) => b.weekQty - a.weekQty));
+    setPfCategories(categories);
+    setPfLoading(false);
+  };
+  useEffect(() => { if (activeTab === "sales_forecast") fetchProductionForecast(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [activeTab]);
+
+  const fetchPurchaseForecast = async () => {
+    setPurchLoading(true);
+    const today = new Date();
+    const historyStart = new Date(today); historyStart.setDate(historyStart.getDate() - 70);
+    const PBATCH = 1000;
+    let all: any[] = [];
+    let offset = 0;
+    while (true) {
+      const { data, error } = await supabaseStock.from("purchase_ledger").select("date, product, category, qty, unit, amount").gte("date", historyStart.toISOString().slice(0, 10)).order("date", { ascending: true }).range(offset, offset + PBATCH - 1);
+      if (error) { console.error("purchase forecast fetch failed", error); break; }
+      all = all.concat(data || []);
+      if (!data || data.length < PBATCH) break;
+      offset += PBATCH;
+    }
+
+    const weekOf = (d: Date) => { const x = new Date(d); const day = x.getDay() || 7; x.setDate(x.getDate() - day + 1); return x.toISOString().slice(0, 10); };
+    const key = (product: string, unit: string) => `${(product || "Unknown").trim()}__${(unit || "").trim()}`;
+    const byProduct: Record<string, { product: string; category: string; unit: string; weeks: Record<string, { qty: number; amount: number }> }> = {};
+    all.forEach((r: any) => {
+      const k = key(r.product, r.unit);
+      if (!byProduct[k]) byProduct[k] = { product: r.product || "Unknown", category: r.category || "Uncategorised", unit: r.unit || "", weeks: {} };
+      const wk = weekOf(new Date(r.date));
+      if (!byProduct[k].weeks[wk]) byProduct[k].weeks[wk] = { qty: 0, amount: 0 };
+      byProduct[k].weeks[wk].qty += Number(r.qty) || 0;
+      byProduct[k].weeks[wk].amount += Number(r.amount) || 0;
+    });
+
+    const results = Object.values(byProduct).map((p) => {
+      const weekKeys = Object.keys(p.weeks).sort();
+      const recentWeeks = weekKeys.slice(-5, -1); // exclude current partial week, use the 4 before it
+      if (recentWeeks.length < 2) return null; // not enough purchase history for this item to forecast
+      const avgQty = recentWeeks.reduce((s, k) => s + p.weeks[k].qty, 0) / recentWeeks.length;
+      const avgAmount = recentWeeks.reduce((s, k) => s + p.weeks[k].amount, 0) / recentWeeks.length;
+      const last2 = recentWeeks.slice(-2).reduce((s, k) => s + p.weeks[k].qty, 0);
+      const prev2 = recentWeeks.slice(-4, -2).reduce((s, k) => s + p.weeks[k].qty, 0);
+      let trend = prev2 > 0 ? last2 / prev2 : 1;
+      trend = Math.max(0.7, Math.min(1.3, trend));
+      return { product: p.product, category: p.category, unit: p.unit, forecastQty: avgQty * trend, forecastAmount: avgAmount * trend, trendPct: (trend - 1) * 100 };
+    }).filter((x): x is NonNullable<typeof x> => !!x).sort((a, b) => b.forecastAmount - a.forecastAmount);
+
+    setPurchForecast(results);
+    setPurchLoading(false);
+  };
+  useEffect(() => { if (activeTab === "sales_forecast") fetchPurchaseForecast(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [activeTab]);
+
   // --- Purchase & Vendors (reads from the separate Production Stock database) ---
   const [pvFrom, setPvFrom] = useState<string>(() => { const d = new Date(); d.setDate(d.getDate() - 60); return d.toISOString().slice(0, 10); });
   const [pvTo, setPvTo] = useState<string>(() => new Date().toISOString().slice(0, 10));
@@ -4497,8 +4620,100 @@ else await fetchOutletReportsByDate(outletEntryDate);
                   ))}
                 </div>
 
-                <div className="bg-yellow-400/5 border border-yellow-400/30 p-4 mt-6 max-w-2xl">
-                  <p className="text-xs text-zinc-300 leading-relaxed">Sales are forecast by outlet, channel and day, from real history — the same day-of-week over the last ~10 weeks, nudged by whether that outlet has been trending up or down lately. The month-end P&amp;L applies the same real COGS % and commission % used everywhere else in the app, and each outlet's own fixed costs from Outlet P&amp;L's targets — so "no fixed cost set" means that outlet's fixed costs haven't been filled in yet, and its net profit here will read too high until they are. This does not yet forecast by category or product (the item-level data we get is a one-time snapshot each upload, not a dated daily series to project from), by hour (no hourly sales data exists in the system yet), or include staffing, ingredient/purchase requirements, or scenario planning — those are separate pieces still to come.</p>
+                <div className="bg-yellow-400/5 border border-yellow-400/30 p-4 mt-6 max-w-2xl mb-10">
+                  <p className="text-xs text-zinc-300 leading-relaxed">Sales are forecast by outlet, channel and day, from real history — the same day-of-week over the last ~10 weeks, nudged by whether that outlet has been trending up or down lately. The month-end P&amp;L applies the same real COGS % and commission % used everywhere else in the app, and each outlet's own fixed costs from Outlet P&amp;L's targets — so "no fixed cost set" means that outlet's fixed costs haven't been filled in yet, and its net profit here will read too high until they are. This does not yet forecast by category or product (the item-level data we get is a one-time snapshot each upload, not a dated daily series to project from), by hour (no hourly sales data exists in the system yet), or include staffing or scenario planning — those are separate pieces still to come.</p>
+                </div>
+
+                <div className="border-t border-zinc-800 pt-8 mb-8">
+                  <h2 className="text-2xl md:text-3xl font-black tracking-tight">Production Forecast</h2>
+                  <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mt-1">Next 7 days · units to bake, by product</p>
+                </div>
+                {pfLoading ? (
+                  <p className="text-sm text-zinc-500 mb-10">Loading…</p>
+                ) : pfProducts.length === 0 ? (
+                  <p className="text-sm text-zinc-500 mb-10">Not enough logged production history yet (Kitchen Production tab) to forecast — needs a few weeks of daily entries per product.</p>
+                ) : (
+                  <>
+                    <h3 className="text-lg font-bold mb-1">By category</h3>
+                    <div className="overflow-x-auto mb-6">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="text-left text-[10px] font-mono text-zinc-500 uppercase border-b border-zinc-800">
+                            <th className="py-2 pr-3">Category</th>
+                            <th className="py-2 text-right">Forecast units, next 7 days</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {pfCategories.map((c) => (
+                            <tr key={c.category} className="border-b border-zinc-900">
+                              <td className="py-2 pr-3">{c.category}</td>
+                              <td className="py-2 text-right font-mono font-bold">{Math.round(c.weekQty).toLocaleString("en-IN")}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                    <h3 className="text-lg font-bold mb-1">By product</h3>
+                    <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mb-3">Only products with enough production history to forecast are shown</p>
+                    <div className="overflow-x-auto mb-10">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="text-left text-[10px] font-mono text-zinc-500 uppercase border-b border-zinc-800">
+                            <th className="py-2 pr-3">Product</th>
+                            <th className="py-2 pr-3">Category</th>
+                            <th className="py-2 text-right">Forecast units, next 7 days</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {pfProducts.map((p: any) => (
+                            <tr key={p.id} className="border-b border-zinc-900">
+                              <td className="py-2 pr-3">{p.name}</td>
+                              <td className="py-2 pr-3 text-zinc-500 text-xs">{p.category}</td>
+                              <td className="py-2 text-right font-mono">{Math.round(p.weekQty).toLocaleString("en-IN")}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </>
+                )}
+
+                <div className="border-t border-zinc-800 pt-8 mb-8">
+                  <h2 className="text-2xl md:text-3xl font-black tracking-tight">Purchase Forecast</h2>
+                  <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mt-1">Next week · quantity and ₹ to buy, by raw material</p>
+                </div>
+                {purchLoading ? (
+                  <p className="text-sm text-zinc-500">Loading…</p>
+                ) : purchForecast.length === 0 ? (
+                  <p className="text-sm text-zinc-500">Not enough purchase history yet to forecast — needs a few weeks of logged purchases per item.</p>
+                ) : (
+                  <div className="overflow-x-auto mb-6">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="text-left text-[10px] font-mono text-zinc-500 uppercase border-b border-zinc-800">
+                          <th className="py-2 pr-3">Item</th>
+                          <th className="py-2 pr-3">Category</th>
+                          <th className="py-2 pr-3 text-right">Forecast qty, next week</th>
+                          <th className="py-2 pr-3 text-right">Forecast ₹, next week</th>
+                          <th className="py-2 text-right">Trend</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {purchForecast.map((p, i) => (
+                          <tr key={i} className="border-b border-zinc-900">
+                            <td className="py-2 pr-3">{p.product}</td>
+                            <td className="py-2 pr-3 text-zinc-500 text-xs">{p.category}</td>
+                            <td className="py-2 pr-3 text-right font-mono">{p.forecastQty.toLocaleString("en-IN", { maximumFractionDigits: 1 })} {p.unit}</td>
+                            <td className="py-2 pr-3 text-right font-mono text-zinc-400">₹{Math.round(p.forecastAmount).toLocaleString("en-IN")}</td>
+                            <td className={`py-2 text-right font-mono text-xs ${p.trendPct >= 0 ? "text-green-400" : "text-red-500"}`}>{p.trendPct >= 0 ? "+" : ""}{p.trendPct.toFixed(0)}%</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+                <div className="bg-yellow-400/5 border border-yellow-400/30 p-4 max-w-2xl">
+                  <p className="text-xs text-zinc-300 leading-relaxed">Production is forecast from real Kitchen Production log entries (same day-of-week average over the last ~10 weeks, trend-adjusted). Purchases are forecast from real Purchase Ledger entries, averaged over the last ~4 full weeks and trend-adjusted, at a weekly grain since purchases don't happen every day. Neither of these is a true ingredient/recipe forecast — that would need a bill-of-materials (how much flour, sugar etc. goes into one unit of each product), which doesn't exist in the system yet. What's shown here is the closest real-data equivalent: what's actually been produced and purchased, projected forward.</p>
                 </div>
               </>
             )}
