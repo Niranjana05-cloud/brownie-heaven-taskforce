@@ -438,7 +438,7 @@ const downloadPDF = async () => {
           <div style="height:14px;border-radius:8px;overflow:hidden;display:flex">
             <div style="width:${offPct}%;background:${C.gold}"></div><div style="width:${onPct}%;background:${C.ink}"></div>
           </div>
-          <div style="font-size:11px;color:${C.soft};margin-top:7px">For every ₹1 walk-in, ₹${offlineRatio > 0 ? (1 / offlineRatio).toFixed(1) : "—"} comes from online (${(commissionRate * 100).toFixed(0)}% app commission territory, real trailing ${REAL_COMMISSION_WINDOW_DAYS}d).</div>
+          <div style="font-size:11px;color:${C.soft};margin-top:7px">For every ₹1 walk-in, ₹${offlineRatio > 0 ? (1 / offlineRatio).toFixed(1) : "—"} comes from online (${(commissionRate * 100).toFixed(0)}% app commission territory, real, this + last calendar month).</div>
         </div>
 
         <div style="background:${C.card};border:1px solid ${C.line};border-radius:14px;padding:18px 20px;margin-top:14px;text-align:center">
@@ -613,7 +613,7 @@ const downloadPDF = async () => {
                 </tbody>
               </table>
             </div>
-            <p className="text-[10px] text-text-faint mt-3">Uses a real {(cogsRate * 100).toFixed(1)}% COGS (from actual purchase data, {fmtWin(foodCostWindow)}, company-wide — not yet per-outlet), 5% wastage, {(commissionRate * 100).toFixed(1)}% online commission (real, {fmtWin(commissionWindow)}). Both are rolling windows — they move every day and will shift as new purchases/payouts come in, that's expected, not an error. EBITDA = contribution minus fixed costs; this business has no separate interest/depreciation line to strip out.</p>
+            <p className="text-[10px] text-text-faint mt-3">Uses a real {(cogsRate * 100).toFixed(1)}% COGS (from actual purchase data, {fmtWin(foodCostWindow)}, company-wide — not yet per-outlet), 5% wastage, {(commissionRate * 100).toFixed(1)}% online commission (real, {fmtWin(commissionWindow)}). Both reset to the 1st of the month — COGS is this month to date; commission also includes last month since Swiggy/Zomato payouts settle slowly. EBITDA = contribution minus fixed costs; this business has no separate interest/depreciation line to strip out.</p>
           </Card>
 
           <Card title="Budget vs Actual — profit (month)">
