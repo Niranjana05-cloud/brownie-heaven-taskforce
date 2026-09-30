@@ -54,10 +54,19 @@ function istNow(): Date {
   return new Date(Date.now() + IST_OFFSET_MS);
 }
 
-export async function fetchRealFoodCostPct(): Promise<{ pct: number | null; windowFrom: string; windowTo: string }> {
+// Optional forMonth lets a caller ask for a SPECIFIC past calendar month
+// (e.g. Outlet P&L browsing to a date in August) instead of always the
+// current month to date. If that month is the real current month, this still
+// behaves as month-to-date (same as calling with no argument); if it's a
+// past month, the window is that whole month, 1st to last day — a closed
+// month doesn't have a "to date" to stop at.
+export async function fetchRealFoodCostPct(forMonth?: { year: number; month: number }): Promise<{ pct: number | null; windowFrom: string; windowTo: string }> {
   const nowIst = istNow();
-  const windowTo = istDateString(new Date());
-  const windowFrom = `${nowIst.getUTCFullYear()}-${String(nowIst.getUTCMonth() + 1).padStart(2, "0")}-01`;
+  const isCurrentMonth = !forMonth || (forMonth.year === nowIst.getUTCFullYear() && forMonth.month === nowIst.getUTCMonth() + 1);
+  const y = forMonth ? forMonth.year : nowIst.getUTCFullYear();
+  const m = forMonth ? forMonth.month : nowIst.getUTCMonth() + 1;
+  const windowFrom = `${y}-${String(m).padStart(2, "0")}-01`;
+  const windowTo = isCurrentMonth ? istDateString(new Date()) : `${y}-${String(m).padStart(2, "0")}-${String(new Date(Date.UTC(y, m, 0)).getUTCDate()).padStart(2, "0")}`;
 
   // .order() makes the pagination below stable — without it, Postgres doesn't
   // guarantee the same row order across separate paginated requests, which
