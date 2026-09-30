@@ -23,13 +23,21 @@ async function fetchAllBatched<T>(
   return all;
 }
 
-// Payouts land in cycles (weekly/monthly), not daily, so this needs a wider
-// window than food cost's 30 days to have a realistic chance of finding
-// enough settled payout data.
+// Kept only so any old import doesn't break the build — no longer a fixed
+// day count (see below).
 export const REAL_COMMISSION_WINDOW_DAYS = 60;
 
-// The real, payout-data-backed online commission % — trailing 60 days,
+// The real, payout-data-backed online commission % — CALENDAR-MONTH aligned,
 // company-wide (payouts aren't reliably outlet-tagged for every period yet).
+// Niranjana/Nishant asked for calendar-month windows instead of a rolling
+// trailing window that straddles two months in a confusing way (e.g. "31 Aug
+// to 30 Sep"). Unlike food cost (pure month-to-date), this uses the CURRENT
+// + PREVIOUS full calendar month (1st of last month -> today) rather than
+// just the current month alone — Swiggy/Zomato payouts settle in cycles, not
+// daily, so a pure current-month window would very often have zero settled
+// payouts in the first couple of weeks of any month and just fall back to
+// 50%. This still resets cleanly at a month boundary (no more orphan days
+// like "31 Aug"), just over two calendar months instead of one.
 // Replaces the flat 50% assumption used across Outlet P&L, Channel P&L and
 // Command Centre. Swiggy: real gross (customer_payable) vs real net
 // (amount_transferable) from outlet_payouts. Zomato: net_payout from
@@ -45,12 +53,16 @@ const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000;
 function istDateString(d: Date): string {
   return new Date(d.getTime() + IST_OFFSET_MS).toISOString().slice(0, 10);
 }
+function istNow(): Date {
+  return new Date(Date.now() + IST_OFFSET_MS);
+}
 
 export async function fetchRealCommissionPct(): Promise<{ pct: number | null; windowFrom: string; windowTo: string }> {
-  const to = new Date();
-  const from = new Date(to.getTime() - REAL_COMMISSION_WINDOW_DAYS * 24 * 60 * 60 * 1000);
-  const windowTo = istDateString(to);
-  const windowFrom = istDateString(from);
+  const nowIst = istNow();
+  const windowTo = istDateString(new Date());
+  // 1st of the PREVIOUS calendar month, in IST.
+  const prevMonthDate = new Date(Date.UTC(nowIst.getUTCFullYear(), nowIst.getUTCMonth() - 1, 1));
+  const windowFrom = `${prevMonthDate.getUTCFullYear()}-${String(prevMonthDate.getUTCMonth() + 1).padStart(2, "0")}-01`;
 
   // .order() keeps pagination stable — see realFoodCost.ts for why.
   const payoutRows = await fetchAllBatched<{
