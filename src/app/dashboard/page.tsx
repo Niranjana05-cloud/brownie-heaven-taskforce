@@ -1829,10 +1829,10 @@ export default function DashboardPage() {
     const inr = (n: number) => "₹" + Math.round(n).toLocaleString("en-IN");
     const top = stars[0], s0 = suspects[0], w0 = sweet[0], d0 = dead[0];
     const funny = {
-      headline: top ? `${top.name} at ${inr(top.price)} is your golden child — ${top.units.toLocaleString("en-IN")} sold. Don't you dare touch that price 😤🍫` : "",
-      suspect: s0 ? `${s0.name} at ${inr(s0.price)}? People peeked, gasped, and scrolled on — ${s0.lost} lost orders. Maybe ease off the price 💸` : "",
-      sweet: w0 ? `${w0.name} at ${inr(w0.price)} is quietly crushing it — ${w0.units.toLocaleString("en-IN")} sold. The people's champion 👏` : "",
-      dead: d0 ? `${d0.name}? ${d0.units} whole units this window. It's giving "forgotten leftover" 💀` : "",
+      headline: top ? `Top performer: ${top.name} at ${inr(top.price)} — ${top.units.toLocaleString("en-IN")} units sold this window. Highest-volume item; hold the current price.` : "",
+      suspect: s0 ? `Priced above category median with below-median demand: ${s0.name} at ${inr(s0.price)}${s0.lost ? `, ${s0.lost} lost order${s0.lost === 1 ? "" : "s"}` : ""}. Worth reviewing the price.` : "",
+      sweet: w0 ? `Strong performer: ${w0.name} at ${inr(w0.price)} — at/below median price with ${w0.units.toLocaleString("en-IN")} units sold. Pricing is working as intended here.` : "",
+      dead: d0 ? `Underperforming: ${d0.name} — only ${d0.units} units sold this window. Candidate for a price review, menu repositioning, or discontinuation.` : "",
     };
 
     // Revenue concentration (Pareto/ABC) — which items actually carry the menu.
