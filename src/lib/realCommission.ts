@@ -38,21 +38,30 @@ export const REAL_COMMISSION_WINDOW_DAYS = 60;
 // their own gross figure. Falls back to null (callers should fall back to
 // 50% themselves) if there isn't enough settled payout data in the window —
 // never silently returns a made-up number.
+// Same IST-vs-UTC fix as realFoodCost.ts — "today" must be India time, not
+// server/browser UTC, or the window boundary can silently shift by a day
+// depending on exactly when the page loads.
+const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000;
+function istDateString(d: Date): string {
+  return new Date(d.getTime() + IST_OFFSET_MS).toISOString().slice(0, 10);
+}
+
 export async function fetchRealCommissionPct(): Promise<{ pct: number | null; windowFrom: string; windowTo: string }> {
   const to = new Date();
   const from = new Date(to.getTime() - REAL_COMMISSION_WINDOW_DAYS * 24 * 60 * 60 * 1000);
-  const windowTo = to.toISOString().slice(0, 10);
-  const windowFrom = from.toISOString().slice(0, 10);
+  const windowTo = istDateString(to);
+  const windowFrom = istDateString(from);
 
+  // .order() keeps pagination stable — see realFoodCost.ts for why.
   const payoutRows = await fetchAllBatched<{
     outlet_id: string; platform: string; period_start: string; period_end: string;
     customer_payable: number; amount_transferable: number; net_payout: number;
   }>(
-    (client, o, t) => client.from("outlet_payouts").select("outlet_id,platform,period_start,period_end,customer_payable,amount_transferable,net_payout").gte("period_end", windowFrom).lte("period_end", windowTo).range(o, t),
+    (client, o, t) => client.from("outlet_payouts").select("outlet_id,platform,period_start,period_end,customer_payable,amount_transferable,net_payout").gte("period_end", windowFrom).lte("period_end", windowTo).order("period_end", { ascending: true }).range(o, t),
     supabase
   );
   const zomatoRevenueRows = await fetchAllBatched<{ outlet_id: string; report_date: string; zomato_sales_value: number }>(
-    (client, o, t) => client.from("outlet_reports").select("outlet_id,report_date,zomato_sales_value").gte("report_date", windowFrom).lte("report_date", windowTo).range(o, t),
+    (client, o, t) => client.from("outlet_reports").select("outlet_id,report_date,zomato_sales_value").gte("report_date", windowFrom).lte("report_date", windowTo).order("report_date", { ascending: true }).range(o, t),
     supabase
   );
 
