@@ -27,29 +27,37 @@ async function fetchAllBatched<T>(
   return all;
 }
 
+// Kept only so any old import doesn't break the build — no longer used to
+// compute the window (see below), since the window is now calendar-month,
+// not a fixed day count.
 export const REAL_FOOD_COST_WINDOW_DAYS = 30;
 
-// The real, purchase-data-backed food cost % — trailing 30 days, company-wide
-// (purchases aren't outlet-tagged yet). Used in place of the old flat 29.4%
-// assumption across Outlet P&L, Channel P&L, and Command Centre. Falls back to
-// null (callers should then fall back to 29.4% themselves) if there's no
-// purchase or revenue data in the window — never silently returns a made-up
-// number.
-// "Today" for this window is always taken in India time (IST, UTC+5:30), not
-// server/browser UTC — otherwise the window's boundary date can silently
-// shift depending on exactly when someone loads the page (e.g. between
-// 12:00am-5:30am IST, UTC's "today" is still yesterday), giving two people
-// slightly different 30-day windows and slightly different %.
+// The real, purchase-data-backed food cost % — CALENDAR MONTH TO DATE,
+// company-wide (purchases aren't outlet-tagged yet). Resets to the 1st of
+// each month rather than rolling — Niranjana/Nishant specifically asked for
+// this instead of a rolling trailing-30-day window, since a rolling window
+// straddling two calendar months (e.g. 31 Aug-30 Sep) was confusing to read.
+// Trade-off: early in a new month there's less data to average over, so the
+// % will be noisier for the first few days of the month and may fall back to
+// the flat 29.4% assumption if literally nothing has been purchased yet.
+// Used in place of the old flat 29.4% assumption across Outlet P&L, Channel
+// P&L, and Command Centre. Falls back to null (callers should then fall back
+// to 29.4% themselves) if there's no purchase or revenue data in the window —
+// never silently returns a made-up number.
+// "Today" is always taken in India time (IST, UTC+5:30), not server/browser
+// UTC — otherwise the month boundary could silently be off by a day.
 const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000;
 function istDateString(d: Date): string {
   return new Date(d.getTime() + IST_OFFSET_MS).toISOString().slice(0, 10);
 }
+function istNow(): Date {
+  return new Date(Date.now() + IST_OFFSET_MS);
+}
 
 export async function fetchRealFoodCostPct(): Promise<{ pct: number | null; windowFrom: string; windowTo: string }> {
-  const to = new Date();
-  const from = new Date(to.getTime() - REAL_FOOD_COST_WINDOW_DAYS * 24 * 60 * 60 * 1000);
-  const windowTo = istDateString(to);
-  const windowFrom = istDateString(from);
+  const nowIst = istNow();
+  const windowTo = istDateString(new Date());
+  const windowFrom = `${nowIst.getUTCFullYear()}-${String(nowIst.getUTCMonth() + 1).padStart(2, "0")}-01`;
 
   // .order() makes the pagination below stable — without it, Postgres doesn't
   // guarantee the same row order across separate paginated requests, which
