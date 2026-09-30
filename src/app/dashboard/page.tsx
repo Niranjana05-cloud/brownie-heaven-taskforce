@@ -1852,7 +1852,23 @@ export default function DashboardPage() {
     const marginRevCovered = margin.reduce((s, m) => { const row = rows.find((r) => r.name === m.name); return s + (row ? row.rev : 0); }, 0);
     const marginCoverage = { matched: margin.length, total: rows.length, revSharePct: totalRev > 0 ? (marginRevCovered / totalRev) * 100 : 0 };
 
-    return { rows, stars, moneyLeft, suspects, sweet, dead, funny, inr, tiered, abc, margin, marginCoverage };
+    // Classic menu-engineering quadrant: margin % (profitability) x units sold
+    // (popularity) — a different lens from the price-vs-demand one above. Only
+    // covers items that matched the costing sheet, since margin is real cost
+    // data here, never guessed. Split at the median of THIS matched set (not
+    // the whole menu) so the two axes are fairly compared against each other.
+    const mvRows = margin
+      .map((m) => { const row = rows.find((r) => r.name === m.name); return row ? { ...m, units: row.units, rev: row.rev } : null; })
+      .filter((x): x is NonNullable<typeof x> => !!x);
+    const mvMedianMargin = med(mvRows.map((r) => r.marginPct));
+    const mvMedianUnits = med(mvRows.map((r) => r.units));
+    const mvStars = mvRows.filter((r) => r.marginPct >= mvMedianMargin && r.units >= mvMedianUnits).sort((a, b) => b.rev - a.rev);
+    const mvWorkhorses = mvRows.filter((r) => r.marginPct < mvMedianMargin && r.units >= mvMedianUnits).sort((a, b) => b.units - a.units);
+    const mvPuzzles = mvRows.filter((r) => r.marginPct >= mvMedianMargin && r.units < mvMedianUnits).sort((a, b) => b.marginPct - a.marginPct);
+    const mvDogs = mvRows.filter((r) => r.marginPct < mvMedianMargin && r.units < mvMedianUnits).sort((a, b) => a.marginPct - b.marginPct);
+    const marginQuadrant = { rows: mvRows, medianMarginPct: mvMedianMargin, medianUnits: mvMedianUnits, stars: mvStars, workhorses: mvWorkhorses, puzzles: mvPuzzles, dogs: mvDogs };
+
+    return { rows, stars, moneyLeft, suspects, sweet, dead, funny, inr, tiered, abc, margin, marginCoverage, marginQuadrant };
   };
 
   // Price-vs-volume read between two uploads: if price rose and volume held or grew,
@@ -6041,6 +6057,51 @@ else await fetchOutletReportsByDate(outletEntryDate);
                         ) : thin.slice(0, 8).map((m: any, i: number) => (
                           <div key={i} className="border-l-2 border-red-500 bg-zinc-900/60 pl-3 py-2 mb-2 text-sm">
                             <span className="font-semibold">{m.name}</span> — sells at {ipStats!.inr(m.price)}, costs {ipStats!.inr(m.cost)} to make. That's {m.marginPct.toFixed(1)}% margin{m.marginPct < 0 ? " — currently sold at a loss" : ""}. If cocoa, Maida or butter has moved recently, this is one of the first prices worth revisiting.
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  })()}
+
+                  {(() => {
+                    const mq = ipStats.marginQuadrant;
+                    if (!mq.rows.length) {
+                      return (
+                        <div className="mb-8 max-w-3xl border border-dashed border-zinc-700 p-5 text-sm text-zinc-500">
+                          <p className="font-semibold text-zinc-300 mb-1">Menu engineering — margin × volume</p>
+                          <p>No items matched the costing sheet, so this classic profitability-vs-popularity view can't be built yet. See "Cost & margin" above.</p>
+                        </div>
+                      );
+                    }
+                    const quads = [
+                      { key: "stars", title: "🌟 Stars", sub: "High margin, high volume — protect & feature these", rows: mq.stars, border: "border-green-500/30", explain: (r: any) => `${r.marginPct.toFixed(0)}% margin, ${r.units.toLocaleString("en-IN")} sold. Your most profitable big-sellers — the menu's actual engine.` },
+                      { key: "workhorses", title: "🐴 Workhorses", sub: "Low margin, high volume — popular but thin", rows: mq.workhorses, border: "border-yellow-500/30", explain: (r: any) => `${r.units.toLocaleString("en-IN")} sold but only ${r.marginPct.toFixed(0)}% margin. People love it, but it barely pays — a small price nudge here does more than one on a slow item.` },
+                      { key: "puzzles", title: "🧩 Puzzles", sub: "High margin, low volume — underexposed", rows: mq.puzzles, border: "border-blue-500/30", explain: (r: any) => `${r.marginPct.toFixed(0)}% margin but only ${r.units.toLocaleString("en-IN")} sold. Profitable when it sells — the problem is visibility/positioning, not the recipe or price.` },
+                      { key: "dogs", title: "🐶 Dogs", sub: "Low margin, low volume — reconsider", rows: mq.dogs, border: "border-red-500/30", explain: (r: any) => `Only ${r.marginPct.toFixed(0)}% margin and ${r.units.toLocaleString("en-IN")} sold. Doing the least amount of work on the menu — rework the recipe/price, or retire it.` },
+                    ];
+                    return (
+                      <div className="mb-8">
+                        <p className="text-sm font-bold uppercase tracking-widest mb-1">Menu engineering — margin × volume</p>
+                        <p className="text-xs text-zinc-500 mb-4">A different lens from the price/demand view above — this one classifies by REAL profitability (landed cost vs price) against how much it actually sells, split at this upload's own median ({mq.medianMarginPct.toFixed(0)}% margin, {mq.medianUnits.toLocaleString("en-IN")} units). Only the {mq.rows.length} items matched to the costing sheet are included.</p>
+                        {quads.map((b) => (
+                          <div key={b.key} className={`mb-4 border ${b.border} p-4 max-w-3xl`}>
+                            <p className="text-sm font-semibold">{b.title}</p>
+                            <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mb-2">{b.sub}</p>
+                            {b.rows.length === 0 ? <p className="text-sm text-zinc-600">None.</p> : (
+                              <div className="space-y-3">
+                                {b.rows.slice(0, 6).map((r: any, i: number) => (
+                                  <div key={i} className="text-sm">
+                                    <div className="flex items-baseline gap-3">
+                                      <span className="flex-1 font-semibold">{r.name}</span>
+                                      <span className="font-mono text-zinc-400">{ipStats!.inr(r.price)}</span>
+                                      <span className="font-mono text-zinc-300 w-16 text-right">{r.units.toLocaleString("en-IN")}u</span>
+                                      <span className="font-mono text-zinc-500 w-14 text-right">{r.marginPct.toFixed(0)}%</span>
+                                    </div>
+                                    <p className="text-xs text-zinc-500 mt-0.5">{b.explain(r)}</p>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
                           </div>
                         ))}
                       </div>
