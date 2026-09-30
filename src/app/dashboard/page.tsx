@@ -972,24 +972,42 @@ export default function DashboardPage() {
       const monthly = ab(f.staff) + ab(f.rent) + ab(f.eb) + ab(f.transport) + 0.2 * ab(f.rent) + ab(f.pest) + ab(f.water) + ab(f.airtel);
       totalWeeklyFixed += monthly / 4.33;
     });
-    // bucket historical sales into weeks (Mon-Sun) for a trend
+    // bucket historical sales into weeks (Mon-Sun) for a trend — shop and
+    // online kept separate so commission (online-only) can be worked out
+    // per week, not just total sales.
     const weekOf = (d: Date) => { const x = new Date(d); const day = x.getDay() || 7; x.setDate(x.getDate() - day + 1); return x.toISOString().slice(0, 10); };
-    const byWeek: Record<string, number> = {};
+    const byWeek: Record<string, { shop: number; online: number }> = {};
     (salesRows || []).forEach((r: any) => {
       const wk = weekOf(new Date(r.report_date));
-      const total = (Number(r.shop_sales_value) || 0) + (Number(r.swiggy_sales_value) || 0) + (Number(r.zomato_sales_value) || 0);
-      byWeek[wk] = (byWeek[wk] || 0) + total;
+      const shop = Number(r.shop_sales_value) || 0;
+      const online = (Number(r.swiggy_sales_value) || 0) + (Number(r.zomato_sales_value) || 0);
+      if (!byWeek[wk]) byWeek[wk] = { shop: 0, online: 0 };
+      byWeek[wk].shop += shop;
+      byWeek[wk].online += online;
     });
     const weekKeys = Object.keys(byWeek).sort();
     const recentWeeks = weekKeys.slice(-5, -1); // exclude current partial week
-    const avgWeeklySales = recentWeeks.length ? recentWeeks.reduce((a, k) => a + byWeek[k], 0) / recentWeeks.length : 0;
-    // build history rows + 4 forecast weeks
-    const historyRows = weekKeys.slice(-5).map((k) => ({ week: k, sales: byWeek[k], fixed: totalWeeklyFixed, net: byWeek[k] - totalWeeklyFixed, isForecast: false }));
+    const avgWeeklyShop = recentWeeks.length ? recentWeeks.reduce((a, k) => a + byWeek[k].shop, 0) / recentWeeks.length : 0;
+    const avgWeeklyOnline = recentWeeks.length ? recentWeeks.reduce((a, k) => a + byWeek[k].online, 0) / recentWeeks.length : 0;
+    // Real profit/EBITDA math — same real COGS % and real commission % used
+    // everywhere else in the app (Outlet P&L, Command Centre), not a separate
+    // guess. Previously this only subtracted fixed costs from sales, which
+    // wasn't a real profit number at all.
+    const buildRow = (week: string, shop: number, online: number, isForecast: boolean) => {
+      const sales = shop + online;
+      const cogs = cogsRate * sales;
+      const wastage = 0.05 * sales;
+      const commission = commissionRate * online;
+      const contribution = sales - cogs - wastage - commission;
+      const netProfit = contribution - totalWeeklyFixed;
+      return { week, sales, cogs, wastage, commission, contribution, fixed: totalWeeklyFixed, netProfit, isForecast };
+    };
+    const historyRows = weekKeys.slice(-5).map((k) => buildRow(k, byWeek[k].shop, byWeek[k].online, false));
     const forecastRows: any[] = [];
     let lastMonday = new Date(weekOf(today));
     for (let i = 1; i <= 4; i++) {
       const wk = new Date(lastMonday); wk.setDate(wk.getDate() + i * 7);
-      forecastRows.push({ week: wk.toISOString().slice(0, 10), sales: avgWeeklySales, fixed: totalWeeklyFixed, net: avgWeeklySales - totalWeeklyFixed, isForecast: true });
+      forecastRows.push(buildRow(wk.toISOString().slice(0, 10), avgWeeklyShop, avgWeeklyOnline, true));
     }
     setCfWeeks([...historyRows, ...forecastRows]);
     setCfLoading(false);
@@ -3305,9 +3323,9 @@ else await fetchOutletReportsByDate(outletEntryDate);
               <span>📐</span> Contribution Margins
             </div>
           )}
-          {user?.role === "Financial Analyst" && (
+          {(user?.role === "Financial Analyst" || user?.role === "Owner" || user?.role === "Founder's Office") && (
             <div onClick={() => { fireBrownieTransition(); setActiveTab("cash_flow"); setSidebarOpen(false); fetchCashFlowForecast(); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "cash_flow" ? "text-text bg-surface-2 border-l-2 border-accent" : "text-text-muted hover:text-text"}`}>
-              <span>📉</span> Cash-Flow Forecast
+              <span>📉</span> Profit Forecast
             </div>
           )}
                 {user?.role === "Financial Analyst" && (
@@ -4146,11 +4164,11 @@ else await fetchOutletReportsByDate(outletEntryDate);
             )}
           </div>
         )}
-        {activeTab === "cash_flow" && user?.role === "Financial Analyst" && (
+        {activeTab === "cash_flow" && (user?.role === "Financial Analyst" || user?.role === "Owner" || user?.role === "Founder's Office") && (
           <div>
             <div className="mb-6 pb-5 border-b border-zinc-800">
-              <h2 className="text-2xl md:text-3xl font-black tracking-tight">Weekly Cash-Flow Forecast</h2>
-              <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mt-1">Sales trend in · fixed costs out</p>
+              <h2 className="text-2xl md:text-3xl font-black tracking-tight">Weekly Profit Forecast</h2>
+              <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mt-1">Real COGS/commission applied · not just sales in, fixed costs out</p>
             </div>
             {cfLoading ? (
               <p className="text-sm text-zinc-500">Loading…</p>
@@ -4158,14 +4176,26 @@ else await fetchOutletReportsByDate(outletEntryDate);
               <p className="text-sm text-zinc-500">Not enough sales history yet to build a forecast.</p>
             ) : (
               <>
+                {(() => {
+                  const forecastTotal = cfWeeks.filter((w) => w.isForecast).reduce((s, w) => s + w.netProfit, 0);
+                  return (
+                    <div className="bg-yellow-400/5 border border-yellow-400/30 p-4 max-w-2xl mb-6">
+                      <p className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-1">Projected profit, next 4 weeks</p>
+                      <p className={`text-2xl font-black ${forecastTotal >= 0 ? "text-green-400" : "text-red-500"}`}>₹{Math.round(forecastTotal).toLocaleString("en-IN")}</p>
+                    </div>
+                  );
+                })()}
                 <div className="overflow-x-auto mb-6">
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="text-left text-[10px] font-mono text-zinc-500 uppercase border-b border-zinc-800">
                         <th className="py-2 pr-3">Week of</th>
-                        <th className="py-2 pr-3 text-right">Sales In</th>
-                        <th className="py-2 pr-3 text-right">Fixed Costs Out</th>
-                        <th className="py-2 text-right">Net</th>
+                        <th className="py-2 pr-3 text-right">Sales</th>
+                        <th className="py-2 pr-3 text-right">COGS</th>
+                        <th className="py-2 pr-3 text-right">Wastage</th>
+                        <th className="py-2 pr-3 text-right">Commission</th>
+                        <th className="py-2 pr-3 text-right">Fixed Costs</th>
+                        <th className="py-2 text-right">Net Profit</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -4173,15 +4203,18 @@ else await fetchOutletReportsByDate(outletEntryDate);
                         <tr key={i} className={`border-b border-zinc-900 ${w.isForecast ? "bg-yellow-400/5" : ""}`}>
                           <td className="py-2 pr-3 font-mono text-xs">{w.week}{w.isForecast && <span className="ml-2 text-[9px] text-yellow-400 uppercase">Forecast</span>}</td>
                           <td className="py-2 pr-3 text-right font-mono">₹{Math.round(w.sales).toLocaleString("en-IN")}</td>
+                          <td className="py-2 pr-3 text-right font-mono text-zinc-400">₹{Math.round(w.cogs).toLocaleString("en-IN")}</td>
+                          <td className="py-2 pr-3 text-right font-mono text-zinc-400">₹{Math.round(w.wastage).toLocaleString("en-IN")}</td>
+                          <td className="py-2 pr-3 text-right font-mono text-zinc-400">₹{Math.round(w.commission).toLocaleString("en-IN")}</td>
                           <td className="py-2 pr-3 text-right font-mono text-zinc-400">₹{Math.round(w.fixed).toLocaleString("en-IN")}</td>
-                          <td className={`py-2 text-right font-mono font-bold ${w.net >= 0 ? "text-green-400" : "text-red-500"}`}>₹{Math.round(w.net).toLocaleString("en-IN")}</td>
+                          <td className={`py-2 text-right font-mono font-bold ${w.netProfit >= 0 ? "text-green-400" : "text-red-500"}`}>₹{Math.round(w.netProfit).toLocaleString("en-IN")}</td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
                 </div>
                 <div className="bg-yellow-400/5 border border-yellow-400/30 p-4 max-w-2xl">
-                  <p className="text-xs text-zinc-300 leading-relaxed">The 4 highlighted weeks are projected from your last month's actual sales trend — not guaranteed, just where things are headed if nothing changes. This doesn't yet include supplier cheque payments, since that data isn't live in the system — once the Cheque Ledger is built, those outflows will factor in here too and the forecast will get sharper.</p>
+                  <p className="text-xs text-zinc-300 leading-relaxed">The 4 highlighted weeks are projected from your last month's actual sales trend (shop and online kept separate, since commission only applies to online) — not guaranteed, just where things are headed if nothing changes. COGS and commission use the same real, trailing % as the rest of the app. This doesn't yet include supplier cheque payments, since that data isn't live in the system — once the Cheque Ledger is built, those outflows will factor in here too and the forecast will get sharper.</p>
                 </div>
               </>
             )}
