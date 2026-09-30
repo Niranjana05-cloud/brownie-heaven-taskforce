@@ -57,11 +57,21 @@ function istNow(): Date {
   return new Date(Date.now() + IST_OFFSET_MS);
 }
 
-export async function fetchRealCommissionPct(): Promise<{ pct: number | null; windowFrom: string; windowTo: string }> {
+// Optional forMonth lets a caller ask about a SPECIFIC past calendar month
+// (e.g. Outlet P&L browsing to a date in August) instead of always the real
+// current month. For a past month, the window becomes that month plus the
+// one before it, in full (both closed) — same "2 calendar months of real
+// payout data" idea as the current-month case, just anchored to whichever
+// month is being viewed instead of always today.
+export async function fetchRealCommissionPct(forMonth?: { year: number; month: number }): Promise<{ pct: number | null; windowFrom: string; windowTo: string }> {
   const nowIst = istNow();
-  const windowTo = istDateString(new Date());
-  // 1st of the PREVIOUS calendar month, in IST.
-  const prevMonthDate = new Date(Date.UTC(nowIst.getUTCFullYear(), nowIst.getUTCMonth() - 1, 1));
+  const isCurrentMonth = !forMonth || (forMonth.year === nowIst.getUTCFullYear() && forMonth.month === nowIst.getUTCMonth() + 1);
+  const y = forMonth ? forMonth.year : nowIst.getUTCFullYear();
+  const m = forMonth ? forMonth.month : nowIst.getUTCMonth() + 1;
+  const windowTo = isCurrentMonth ? istDateString(new Date()) : `${y}-${String(m).padStart(2, "0")}-${String(new Date(Date.UTC(y, m, 0)).getUTCDate()).padStart(2, "0")}`;
+  // 1st of the month BEFORE the one being viewed (or before the real current
+  // month, if none given), in IST.
+  const prevMonthDate = new Date(Date.UTC(y, m - 2, 1));
   const windowFrom = `${prevMonthDate.getUTCFullYear()}-${String(prevMonthDate.getUTCMonth() + 1).padStart(2, "0")}-01`;
 
   // .order() keeps pagination stable — see realFoodCost.ts for why.
