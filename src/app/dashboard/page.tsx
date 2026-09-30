@@ -1777,7 +1777,21 @@ export default function DashboardPage() {
     const json: any[] = XLSX.utils.sheet_to_json(ws, { defval: "" });
     const num = (v: any) => { const n = parseFloat(String(v).replace(/[^0-9.\-]/g, "")); return isNaN(n) ? null : n; };
     const pick = (r: any, keys: string[]) => { for (const k of Object.keys(r)) { const nk = k.replace(/^\ufeff/, "").trim().toLowerCase(); if (keys.some((x) => nk === x || nk.includes(x))) return r[k]; } return ""; };
-    return json.map((r) => ({ name: String(pick(r, ["name"])).trim(), category: String(pick(r, ["category"])).trim(), net_revenue: num(pick(r, ["net revenue", "revenue"])), units_sold: num(pick(r, ["units sold", "units"])), avg_price: num(pick(r, ["avg price", "average price"])), lost_orders: num(pick(r, ["lost orders"])), avg_orders_day: num(pick(r, ["avg orders", "orders / day", "orders/day"])) })).filter((r) => r.name);
+    // "units sold"/"revenue"/etc were the generic names originally guessed for
+    // this export. The real UrbanPiper "Items summary across all locations"
+    // report uses "Total Quantity" and "Total Amount" instead \u2014 added here so
+    // that exact file parses correctly (was previously reading these as blank,
+    // showing 0 for every item, e.g. Chocolate Truffle Cake, Milo Madness).
+    // "Total Amount" is treated as net revenue (pre-tax; Total Taxes and Total
+    // Charges are separate columns in that export) \u2014 flag if that's not right.
+    return json.map((r) => {
+      const name = String(pick(r, ["name"])).trim();
+      const units_sold = num(pick(r, ["units sold", "units", "total quantity", "quantity"]));
+      const net_revenue = num(pick(r, ["net revenue", "revenue", "total amount", "amount"]));
+      const avg_price_raw = num(pick(r, ["avg price", "average price"]));
+      const avg_price = avg_price_raw != null ? avg_price_raw : (units_sold && net_revenue != null && units_sold > 0 ? Math.round((net_revenue / units_sold) * 100) / 100 : null);
+      return { name, category: String(pick(r, ["category"])).trim(), net_revenue, units_sold, avg_price, lost_orders: num(pick(r, ["lost orders"])), avg_orders_day: num(pick(r, ["avg orders", "orders / day", "orders/day"])) };
+    }).filter((r) => r.name);
   };
   const onIpFile = async (e: any) => {
     const f = e.target.files?.[0]; if (!f) return;
