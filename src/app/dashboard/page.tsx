@@ -1134,14 +1134,45 @@ export default function DashboardPage() {
     const remainingDates: string[] = [];
     for (let dnum = todayIst.getUTCDate() + 1; dnum <= daysInMonth; dnum++) remainingDates.push(`${y}-${String(m + 1).padStart(2, "0")}-${String(dnum).padStart(2, "0")}`);
 
+    // Per-outlet monthly fixed costs — same source and math as the Outlet
+    // P&L tab (sales_target.line_items.fixed), so the numbers here line up
+    // with what's shown there. These figures are already monthly, so no
+    // /4.33 weekly conversion like the company-wide Profit Forecast does.
+    const { data: sfTargetRows } = await supabase.from("sales_target").select("outlet_id, line_items").eq("brand", "BH");
+    const sfFixedByOutlet: Record<string, number> = {};
+    (sfTargetRows || []).forEach((t: any) => {
+      const f = t.line_items?.fixed || {};
+      const ab = (v: any) => Math.abs(Number(v) || 0);
+      const staff = ab(f.staff), rent = ab(f.rent), eb = ab(f.eb), transport = ab(f.transport), rm = 0.2 * rent, pest = ab(f.pest), water = ab(f.water), airtel = ab(f.airtel);
+      sfFixedByOutlet[t.outlet_id] = staff + rent + eb + transport + rm + pest + water + airtel;
+    });
+
     const monthEnd = OUTLETS.map((o) => {
-      const mtd = mtdRows.filter((r) => r.outlet_id === o).reduce((s, r) => s + (Number(r.shop_sales_value) || 0) + (Number(r.swiggy_sales_value) || 0) + (Number(r.zomato_sales_value) || 0), 0);
-      const remaining = remainingDates.reduce((s, dateStr) => {
+      const mtdOutletRows = mtdRows.filter((r) => r.outlet_id === o);
+      const mtdShop = mtdOutletRows.reduce((s, r) => s + (Number(r.shop_sales_value) || 0), 0);
+      const mtdOnline = mtdOutletRows.reduce((s, r) => s + (Number(r.swiggy_sales_value) || 0) + (Number(r.zomato_sales_value) || 0), 0);
+      let remShop = 0, remOnline = 0;
+      remainingDates.forEach((dateStr) => {
         const dow = new Date(dateStr + "T00:00:00Z").getUTCDay();
-        const dayTotal = (avg(perOutlet[o].shop[dow]) + avg(perOutlet[o].swiggy[dow]) + avg(perOutlet[o].zomato[dow])) * trendFactor[o];
-        return s + dayTotal;
-      }, 0);
-      return { oid: o, name: OUTLET_NAMES[o] || o, mtd, remaining, projected: mtd + remaining };
+        remShop += avg(perOutlet[o].shop[dow]) * trendFactor[o];
+        remOnline += (avg(perOutlet[o].swiggy[dow]) + avg(perOutlet[o].zomato[dow])) * trendFactor[o];
+      });
+      const mtd = mtdShop + mtdOnline;
+      const remaining = remShop + remOnline;
+      const projShop = mtdShop + remShop;
+      const projOnline = mtdOnline + remOnline;
+      const projSales = projShop + projOnline;
+      // Real P&L math — same real COGS %/commission % used everywhere else
+      // in the app (Outlet P&L, Command Centre, Profit Forecast), applied
+      // to the projected month-end sales, then this outlet's own real
+      // monthly fixed costs subtracted to get a projected net profit.
+      const cogs = cogsRate * projSales;
+      const wastage = 0.05 * projSales;
+      const commission = commissionRate * projOnline;
+      const contribution = projSales - cogs - wastage - commission;
+      const fixed = sfFixedByOutlet[o] || 0;
+      const netProfit = contribution - fixed;
+      return { oid: o, name: OUTLET_NAMES[o] || o, mtd, remaining, projected: projSales, cogs, wastage, commission, contribution, fixed, netProfit, hasFixedData: !!sfFixedByOutlet[o] };
     });
 
     setSfOutlets(outletForecasts);
@@ -4375,31 +4406,50 @@ else await fetchOutletReportsByDate(outletEntryDate);
               <p className="text-sm text-zinc-500">Not enough sales history yet to build a forecast.</p>
             ) : (
               <>
-                <div className="bg-yellow-400/5 border border-yellow-400/30 p-4 mb-6">
-                  <p className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-1">{sfMonthLabel} — projected company sales</p>
-                  <p className="text-2xl font-black text-green-400">₹{Math.round(sfMonthEnd.reduce((s, r) => s + r.projected, 0)).toLocaleString("en-IN")}</p>
-                  <p className="text-[11px] text-zinc-500 mt-1">₹{Math.round(sfMonthEnd.reduce((s, r) => s + r.mtd, 0)).toLocaleString("en-IN")} actual so far + ₹{Math.round(sfMonthEnd.reduce((s, r) => s + r.remaining, 0)).toLocaleString("en-IN")} forecast for the remaining {sfDaysRemaining} day{sfDaysRemaining === 1 ? "" : "s"}</p>
-                </div>
+                {(() => {
+                  const totalProjSales = sfMonthEnd.reduce((s, r) => s + r.projected, 0);
+                  const totalNetProfit = sfMonthEnd.reduce((s, r) => s + r.netProfit, 0);
+                  return (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                      <div className="bg-yellow-400/5 border border-yellow-400/30 p-4">
+                        <p className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-1">{sfMonthLabel} — projected company sales</p>
+                        <p className="text-2xl font-black text-green-400">₹{Math.round(totalProjSales).toLocaleString("en-IN")}</p>
+                        <p className="text-[11px] text-zinc-500 mt-1">₹{Math.round(sfMonthEnd.reduce((s, r) => s + r.mtd, 0)).toLocaleString("en-IN")} actual so far + ₹{Math.round(sfMonthEnd.reduce((s, r) => s + r.remaining, 0)).toLocaleString("en-IN")} forecast for the remaining {sfDaysRemaining} day{sfDaysRemaining === 1 ? "" : "s"}</p>
+                      </div>
+                      <div className="bg-yellow-400/5 border border-yellow-400/30 p-4">
+                        <p className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-1">{sfMonthLabel} — projected company net profit</p>
+                        <p className={`text-2xl font-black ${totalNetProfit >= 0 ? "text-green-400" : "text-red-500"}`}>₹{Math.round(totalNetProfit).toLocaleString("en-IN")}</p>
+                        <p className="text-[11px] text-zinc-500 mt-1">After real COGS, wastage, commission and each outlet's own fixed costs</p>
+                      </div>
+                    </div>
+                  );
+                })()}
 
-                <h3 className="text-lg font-bold mb-1">Month-end projection, by outlet</h3>
-                <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mb-3">Actual month-to-date + forecast for the rest of {sfMonthLabel}</p>
+                <h3 className="text-lg font-bold mb-1">Month-end P&amp;L projection, by outlet</h3>
+                <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mb-3">Actual month-to-date + forecast for the rest of {sfMonthLabel} · real COGS/commission rates applied</p>
                 <div className="overflow-x-auto mb-8">
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="text-left text-[10px] font-mono text-zinc-500 uppercase border-b border-zinc-800">
                         <th className="py-2 pr-3">Outlet</th>
-                        <th className="py-2 pr-3 text-right">Actual so far</th>
-                        <th className="py-2 pr-3 text-right">Forecast, rest of month</th>
-                        <th className="py-2 text-right">Projected month total</th>
+                        <th className="py-2 pr-3 text-right">Projected sales</th>
+                        <th className="py-2 pr-3 text-right">COGS</th>
+                        <th className="py-2 pr-3 text-right">Wastage</th>
+                        <th className="py-2 pr-3 text-right">Commission</th>
+                        <th className="py-2 pr-3 text-right">Fixed Costs</th>
+                        <th className="py-2 text-right">Net Profit</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {[...sfMonthEnd].sort((a, b) => b.projected - a.projected).map((r) => (
+                      {[...sfMonthEnd].sort((a, b) => b.netProfit - a.netProfit).map((r) => (
                         <tr key={r.oid} className="border-b border-zinc-900">
-                          <td className="py-2 pr-3">{r.name}</td>
-                          <td className="py-2 pr-3 text-right font-mono text-zinc-400">₹{Math.round(r.mtd).toLocaleString("en-IN")}</td>
-                          <td className="py-2 pr-3 text-right font-mono text-zinc-400">₹{Math.round(r.remaining).toLocaleString("en-IN")}</td>
-                          <td className="py-2 text-right font-mono font-bold">₹{Math.round(r.projected).toLocaleString("en-IN")}</td>
+                          <td className="py-2 pr-3">{r.name}{!r.hasFixedData && <span className="ml-1.5 text-[9px] text-yellow-500 uppercase">no fixed cost set</span>}</td>
+                          <td className="py-2 pr-3 text-right font-mono">₹{Math.round(r.projected).toLocaleString("en-IN")}</td>
+                          <td className="py-2 pr-3 text-right font-mono text-zinc-400">₹{Math.round(r.cogs).toLocaleString("en-IN")}</td>
+                          <td className="py-2 pr-3 text-right font-mono text-zinc-400">₹{Math.round(r.wastage).toLocaleString("en-IN")}</td>
+                          <td className="py-2 pr-3 text-right font-mono text-zinc-400">₹{Math.round(r.commission).toLocaleString("en-IN")}</td>
+                          <td className="py-2 pr-3 text-right font-mono text-zinc-400">₹{Math.round(r.fixed).toLocaleString("en-IN")}</td>
+                          <td className={`py-2 text-right font-mono font-bold ${r.netProfit >= 0 ? "text-green-400" : "text-red-500"}`}>₹{Math.round(r.netProfit).toLocaleString("en-IN")}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -4448,7 +4498,7 @@ else await fetchOutletReportsByDate(outletEntryDate);
                 </div>
 
                 <div className="bg-yellow-400/5 border border-yellow-400/30 p-4 mt-6 max-w-2xl">
-                  <p className="text-xs text-zinc-300 leading-relaxed">This forecasts sales by outlet, channel and day, from real history — the same day-of-week over the last ~10 weeks, nudged by whether that outlet has been trending up or down lately. It does not yet forecast by category or product (the item-level data we get is a one-time snapshot each upload, not a dated daily series to project from) or by hour (no hourly sales data exists in the system yet).</p>
+                  <p className="text-xs text-zinc-300 leading-relaxed">Sales are forecast by outlet, channel and day, from real history — the same day-of-week over the last ~10 weeks, nudged by whether that outlet has been trending up or down lately. The month-end P&amp;L applies the same real COGS % and commission % used everywhere else in the app, and each outlet's own fixed costs from Outlet P&amp;L's targets — so "no fixed cost set" means that outlet's fixed costs haven't been filled in yet, and its net profit here will read too high until they are. This does not yet forecast by category or product (the item-level data we get is a one-time snapshot each upload, not a dated daily series to project from), by hour (no hourly sales data exists in the system yet), or include staffing, ingredient/purchase requirements, or scenario planning — those are separate pieces still to come.</p>
                 </div>
               </>
             )}
