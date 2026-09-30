@@ -59,12 +59,15 @@ const lakh = (n: number) => "₹" + (n / 100000).toFixed(2) + " L";
   const [monthReviews, setMonthReviews] = useState<any[]>([]);
   const [tableCounts, setTableCounts] = useState<{ name: string; count: number | null; source: string }[]>([]);
   const [realFoodCostPct, setRealFoodCostPct] = useState<number | null>(null);
+  const [foodCostWindow, setFoodCostWindow] = useState<{ from: string; to: string } | null>(null);
   const cogsRate = (realFoodCostPct ?? 29.4) / 100;
   // Real, payout-data-backed online commission % (trailing 60 days,
   // company-wide) — replaces the flat 50% assumption. Falls back to 50% if
   // there isn't enough settled Swiggy/Zomato payout data yet in the window.
   const [realCommissionPct, setRealCommissionPct] = useState<number | null>(null);
+  const [commissionWindow, setCommissionWindow] = useState<{ from: string; to: string } | null>(null);
   const commissionRate = (realCommissionPct ?? 50) / 100;
+  const fmtWin = (w: { from: string; to: string } | null) => w ? `${new Date(w.from + "T00:00:00").toLocaleDateString("en-IN", { day: "numeric", month: "short" })}–${new Date(w.to + "T00:00:00").toLocaleDateString("en-IN", { day: "numeric", month: "short" })}` : "";
   const [loading, setLoading] = useState(true);
 
   const d0 = new Date(date + "T00:00:00");
@@ -148,10 +151,10 @@ const lakh = (n: number) => "₹" + (n / 100000).toFixed(2) + " L";
   // 29.4% assumption previously used in the modules below. Same shared
   // calculation as Outlet P&L and Channel P&L, so all three stay consistent.
   useEffect(() => {
-    fetchRealFoodCostPct().then(({ pct }) => setRealFoodCostPct(pct)).catch((err) => console.error("real food cost fetch failed", err));
+    fetchRealFoodCostPct().then(({ pct, windowFrom, windowTo }) => { setRealFoodCostPct(pct); setFoodCostWindow({ from: windowFrom, to: windowTo }); }).catch((err) => console.error("real food cost fetch failed", err));
   }, []);
   useEffect(() => {
-    fetchRealCommissionPct().then(({ pct }) => setRealCommissionPct(pct)).catch((err) => console.error("real commission fetch failed", err));
+    fetchRealCommissionPct().then(({ pct, windowFrom, windowTo }) => { setRealCommissionPct(pct); setCommissionWindow({ from: windowFrom, to: windowTo }); }).catch((err) => console.error("real commission fetch failed", err));
   }, []);
 
   const n = (v: any) => Number(v) || 0;
@@ -610,7 +613,7 @@ const downloadPDF = async () => {
                 </tbody>
               </table>
             </div>
-            <p className="text-[10px] text-text-faint mt-3">Uses a real {(cogsRate * 100).toFixed(1)}% COGS (from actual purchase data, trailing {REAL_FOOD_COST_WINDOW_DAYS} days, company-wide — not yet per-outlet), 5% wastage, {(commissionRate * 100).toFixed(1)}% online commission (real, trailing {REAL_COMMISSION_WINDOW_DAYS} days). EBITDA = contribution minus fixed costs; this business has no separate interest/depreciation line to strip out.</p>
+            <p className="text-[10px] text-text-faint mt-3">Uses a real {(cogsRate * 100).toFixed(1)}% COGS (from actual purchase data, {fmtWin(foodCostWindow)}, company-wide — not yet per-outlet), 5% wastage, {(commissionRate * 100).toFixed(1)}% online commission (real, {fmtWin(commissionWindow)}). Both are rolling windows — they move every day and will shift as new purchases/payouts come in, that's expected, not an error. EBITDA = contribution minus fixed costs; this business has no separate interest/depreciation line to strip out.</p>
           </Card>
 
           <Card title="Budget vs Actual — profit (month)">
