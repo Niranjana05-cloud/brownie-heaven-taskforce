@@ -703,6 +703,30 @@ export default function DashboardPage() {
   const [salesTargets, setSalesTargets] = useState<Record<string, any>>({});
   const [stEditing, setStEditing] = useState<string | null>(null);
   const [stDate, setStDate] = useState<string>(() => new Date(Date.now() - 86400000).toISOString().split("T")[0]);
+  // Outlet P&L lets you browse to ANY past date via the date picker — the
+  // global cogsRate/commissionRate above always reflect the real current
+  // month, so browsing to e.g. 29 August was showing September's rate
+  // labeled "real, 1 Sept-30 Sept" next to August's numbers, which is wrong.
+  // These two track whichever month stDate is currently pointing at instead,
+  // and are what Outlet P&L's own calculations use.
+  const [stCogsPct, setStCogsPct] = useState<number | null>(null);
+  const [stCogsWindow, setStCogsWindow] = useState<{ from: string; to: string } | null>(null);
+  const [stCommissionPct, setStCommissionPct] = useState<number | null>(null);
+  const [stCommissionWindow, setStCommissionWindow] = useState<{ from: string; to: string } | null>(null);
+  const stDateYm = stDate.slice(0, 7); // "YYYY-MM" — only refetch when the month actually changes
+  useEffect(() => {
+    const [y, m] = stDateYm.split("-").map(Number);
+    fetchRealFoodCostPct({ year: y, month: m }).then(({ pct, windowFrom, windowTo }) => {
+      setStCogsPct(pct);
+      setStCogsWindow({ from: windowFrom, to: windowTo });
+    }).catch((err) => console.error("outlet P&L real food cost fetch failed", err));
+    fetchRealCommissionPct({ year: y, month: m }).then(({ pct, windowFrom, windowTo }) => {
+      setStCommissionPct(pct);
+      setStCommissionWindow({ from: windowFrom, to: windowTo });
+    }).catch((err) => console.error("outlet P&L real commission fetch failed", err));
+  }, [stDateYm]);
+  const stCogsRate = (stCogsPct ?? 29.4) / 100;
+  const stCommissionRate = (stCommissionPct ?? 50) / 100;
   const [stFiles, setStFiles] = useState<Record<string, { mis?: File; pnl?: File }>>({});
   const [stUpload, setStUpload] = useState<Record<string, any>>({});
   const [stUpBusy, setStUpBusy] = useState<string>("");
@@ -4531,7 +4555,7 @@ else await fetchOutletReportsByDate(outletEntryDate);
               const stYear = Number(stDate.slice(0, 4)), stMonthNum = Number(stDate.slice(5, 7));
               const daysInThisMonth = new Date(stYear, stMonthNum, 0).getDate();
               const todayTotalSales = dayNet + dayOnline;
-              const todayCogs = cogsRate * todayTotalSales, todayWastage = 0.05 * todayTotalSales, todayComm = commissionRate * dayOnline;
+              const todayCogs = stCogsRate * todayTotalSales, todayWastage = 0.05 * todayTotalSales, todayComm = stCommissionRate * dayOnline;
               const todayContrib = todayTotalSales - todayCogs - todayWastage - todayComm;
               const todayFixedShare = totalFixed / daysInThisMonth;
               const todayNetProfit = todayContrib - todayFixedShare;
@@ -4603,7 +4627,7 @@ else await fetchOutletReportsByDate(outletEntryDate);
                   const fEb = isSharedFixed ? 0 : _ab(f.eb);
                   const fTransport = isSharedFixed ? 0 : _ab(f.transport);
                  const totalSales = net + online;
-                  const cogs = cogsRate * totalSales, wastage = 0.05 * totalSales, comm = commissionRate * online;
+                  const cogs = stCogsRate * totalSales, wastage = 0.05 * totalSales, comm = stCommissionRate * online;
                   const contrib = totalSales - cogs - wastage - comm;
                   const rm = 0.2 * fRent;
                   const totalFixed = fStaff+fRent+fEb+fTransport+rm+_ab(f.pest)+_ab(f.water)+_ab(f.airtel);
@@ -4618,7 +4642,7 @@ else await fetchOutletReportsByDate(outletEntryDate);
                   const stYear = Number(stDate.slice(0, 4)), stMonthNum = Number(stDate.slice(5, 7));
                   const daysInThisMonth = new Date(stYear, stMonthNum, 0).getDate();
                   const todayTotalSales = dayNet + dayOnline;
-                  const todayCogs = cogsRate * todayTotalSales, todayWastage = 0.05 * todayTotalSales, todayComm = commissionRate * dayOnline;
+                  const todayCogs = stCogsRate * todayTotalSales, todayWastage = 0.05 * todayTotalSales, todayComm = stCommissionRate * dayOnline;
                   const todayContrib = todayTotalSales - todayCogs - todayWastage - todayComm;
                   const todayFixedShare = totalFixed / daysInThisMonth;
                   const todayNetProfit = todayContrib - todayFixedShare;
@@ -4656,9 +4680,9 @@ else await fetchOutletReportsByDate(outletEntryDate);
                           {row(`Online Sales (Swiggy+Zomato) · ${dayLbl}`, inp("online", dayOnline))}
                           <tr key="_tpldiv" className="border-t border-zinc-800"><td colSpan={2} className="px-4 pt-3 pb-1 text-[10px] font-mono text-yellow-400 uppercase tracking-widest">Today's P&amp;L · {dayLbl} (fixed cost ÷ {daysInThisMonth} days this month)</td></tr>
                           {row("Today's Total Sales", m(todayTotalSales), { bold: true })}
-                          {row(`Less: COGS @ ${(cogsRate * 100).toFixed(1)}% (real, ${fmtWin(realFoodCostWindow)})`, m(todayCogs), { neg: true })}
+                          {row(`Less: COGS @ ${(stCogsRate * 100).toFixed(1)}% (real, ${fmtWin(stCogsWindow)})`, m(todayCogs), { neg: true })}
                           {row("Less: Wastage @ 5%", m(todayWastage), { neg: true })}
-                          {row(`Less: Commission @ ${(commissionRate * 100).toFixed(1)}% (online, real ${fmtWin(realCommissionWindow)})`, m(todayComm), { neg: true })}
+                          {row(`Less: Commission @ ${(stCommissionRate * 100).toFixed(1)}% (online, real ${fmtWin(stCommissionWindow)})`, m(todayComm), { neg: true })}
                           {row("Today's Contribution", m(todayContrib), { bold: true })}
                           {row(`Less: Fixed cost share (monthly ÷ ${daysInThisMonth})`, m(todayFixedShare), { fixedCost: true })}
                           {row("TODAY'S NET PROFIT / (LOSS)", m(todayNetProfit), { bold: true })}
@@ -4667,9 +4691,9 @@ else await fetchOutletReportsByDate(outletEntryDate);
                           {row(`Net Sales — ${ml} total ${editing ? "✏️ (whole-month override)" : ""}`, editing ? inp("mnet", Number(_moNet) || 0) : m(net))}
                           {row(`Online Sales — ${ml} total ${editing ? "✏️ (whole-month override)" : ""}`, editing ? inp("monline", Number(_moOnline) || 0) : m(online))}
                           {row("Total Sales (shop + online)", m(totalSales), { bold: true })}
-                          {row(`Less: COGS (food cost) @ ${(cogsRate * 100).toFixed(1)}% of total (real, ${fmtWin(realFoodCostWindow)})`, m(cogs), { neg: true })}
+                          {row(`Less: COGS (food cost) @ ${(stCogsRate * 100).toFixed(1)}% of total (real, ${fmtWin(stCogsWindow)})`, m(cogs), { neg: true })}
                           {row("Less: Wastage @ 5% of total", m(wastage), { neg: true })}
-                          {row(`Less: Commission @ ${(commissionRate * 100).toFixed(1)}% (online, real ${fmtWin(realCommissionWindow)})`, m(comm), { neg: true })}
+                          {row(`Less: Commission @ ${(stCommissionRate * 100).toFixed(1)}% (online, real ${fmtWin(stCommissionWindow)})`, m(comm), { neg: true })}
                           {row("Contribution (before fixed)", m(contrib), { bold: true })}
                           {row("   Contribution margin %", (cMargin * 100).toFixed(1) + "%")}
                           {row("Less: Staff salaries", isSharedFixed ? <span className="text-zinc-600">0</span> : inp("staff", Number(f.staff) || 0), { fixedCost: !isSharedFixed })}
