@@ -399,7 +399,7 @@ export default function DashboardPage() {
   const [reports, setReports] = useState<Report[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
-  const [activeTab, setActiveTab] = useState<"tasks" | "my_report" | "all_reports" | "analytics" | "outlet_reports" | "owner_outlets" | "history" | "attendance" | "sales_target" | "payout" | "reconciliation" | "competition" | "item_perf" | "ceo_report" | "fines" | "niranjana_report" | "pnl" | "contribution_margins" | "net_realisation" | "cash_flow" | "cheques" | "auto_reviews" | "purchase_vendors" | "team_dashboards" | "notify" | "messages" | "active_status" | "help" | "production" | "ops_audits">("tasks");
+  const [activeTab, setActiveTab] = useState<"tasks" | "my_report" | "all_reports" | "analytics" | "outlet_reports" | "owner_outlets" | "history" | "attendance" | "sales_target" | "payout" | "reconciliation" | "competition" | "item_perf" | "ceo_report" | "fines" | "niranjana_report" | "pnl" | "contribution_margins" | "net_realisation" | "cash_flow" | "sales_forecast" | "cheques" | "auto_reviews" | "purchase_vendors" | "team_dashboards" | "notify" | "messages" | "active_status" | "help" | "production" | "ops_audits">("tasks");
   // Brownie mode's tab-switch loader — bumping this tick is what tells
   // BrownieLoader to play its whole->broken animation + crack sound. Only
   // does anything when the viewer has Brownie mode turned on (personal,
@@ -1037,6 +1037,120 @@ export default function DashboardPage() {
     setCfLoading(false);
   };
   useEffect(() => { if (activeTab === "cash_flow") fetchCashFlowForecast(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [activeTab]);
+
+  // ── Sales Forecast: outlet × channel × day ────────────────────────────
+  // Real-data-only, from Nishant's Forecasting spec point 1 ("sales
+  // forecasts by outlet, channel, category, product, day and hour").
+  // What's actually buildable from what's in the system today:
+  //   - outlet: yes — outlet_reports is per-outlet.
+  //   - channel: yes — shop/Swiggy/Zomato are separate columns.
+  //   - day: yes — daily rows going back months.
+  //   - category / product: NOT buildable yet — Item Performance data is a
+  //     single point-in-time upload each time, not a dated daily series, so
+  //     there's no history to project a trend from at that level.
+  //   - hour: NOT buildable — no hourly sales data exists anywhere.
+  // Method: for each outlet+channel, average the same day-of-week over the
+  // last ~10 weeks (day-of-week seasonality — Saturdays aren't like
+  // Tuesdays), then nudge that by a short-term trend (last 14 days vs the
+  // 14 before that, capped to ±30% so one unusual fortnight can't swing the
+  // forecast wildly). This is a straightforward, explainable projection —
+  // not a black-box model — so it's easy to sanity-check against what
+  // actually happens.
+  const [sfLoading, setSfLoading] = useState(false);
+  const [sfOutlets, setSfOutlets] = useState<any[]>([]);
+  const [sfMonthEnd, setSfMonthEnd] = useState<any[]>([]);
+  const [sfMonthLabel, setSfMonthLabel] = useState("");
+  const [sfDaysRemaining, setSfDaysRemaining] = useState(0);
+
+  const fetchSalesForecast = async () => {
+    setSfLoading(true);
+    const todayIst = new Date(Date.now() + 5.5 * 60 * 60 * 1000);
+    const todayStr = todayIst.toISOString().slice(0, 10);
+    const historyStart = new Date(todayIst); historyStart.setDate(historyStart.getDate() - 70); // 10 weeks of history
+    const historyStartStr = historyStart.toISOString().slice(0, 10);
+
+    const SFBATCH = 1000;
+    let all: any[] = [];
+    let offset = 0;
+    while (true) {
+      const { data, error } = await supabase.from("outlet_reports").select("outlet_id, report_date, shop_sales_value, swiggy_sales_value, zomato_sales_value").gte("report_date", historyStartStr).lte("report_date", todayStr).order("report_date", { ascending: true }).range(offset, offset + SFBATCH - 1);
+      if (error) { console.error("sales forecast fetch failed", error); break; }
+      all = all.concat(data || []);
+      if (!data || data.length < SFBATCH) break;
+      offset += SFBATCH;
+    }
+
+    type DowBuckets = { shop: number[][]; swiggy: number[][]; zomato: number[][] };
+    const perOutlet: Record<string, DowBuckets> = {};
+    OUTLETS.forEach((o) => { perOutlet[o] = { shop: [[], [], [], [], [], [], []], swiggy: [[], [], [], [], [], [], []], zomato: [[], [], [], [], [], [], []] }; });
+
+    // exclude today — it's a partial day and would drag the average down
+    all.forEach((r: any) => {
+      if (r.report_date === todayStr) return;
+      const b = perOutlet[r.outlet_id];
+      if (!b) return;
+      const dow = new Date(r.report_date + "T00:00:00Z").getUTCDay();
+      b.shop[dow].push(Number(r.shop_sales_value) || 0);
+      b.swiggy[dow].push(Number(r.swiggy_sales_value) || 0);
+      b.zomato[dow].push(Number(r.zomato_sales_value) || 0);
+    });
+
+    const avg = (arr: number[]) => (arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : 0);
+
+    const trendFactor: Record<string, number> = {};
+    OUTLETS.forEach((o) => {
+      const rows = all.filter((r) => r.outlet_id === o && r.report_date !== todayStr).sort((a, b) => a.report_date.localeCompare(b.report_date));
+      const totalOf = (rs: any[]) => rs.reduce((s, r) => s + (Number(r.shop_sales_value) || 0) + (Number(r.swiggy_sales_value) || 0) + (Number(r.zomato_sales_value) || 0), 0);
+      const last14 = totalOf(rows.slice(-14));
+      const prev14 = totalOf(rows.slice(-28, -14));
+      let f = prev14 > 0 ? last14 / prev14 : 1;
+      f = Math.max(0.7, Math.min(1.3, f));
+      trendFactor[o] = f;
+    });
+
+    const next7: string[] = [];
+    for (let i = 1; i <= 7; i++) { const d = new Date(todayIst); d.setDate(d.getDate() + i); next7.push(d.toISOString().slice(0, 10)); }
+
+    const outletForecasts = OUTLETS.map((o) => {
+      const hasHistory = perOutlet[o].shop.some((a) => a.length > 0) || perOutlet[o].swiggy.some((a) => a.length > 0) || perOutlet[o].zomato.some((a) => a.length > 0);
+      const days = next7.map((dateStr) => {
+        const dow = new Date(dateStr + "T00:00:00Z").getUTCDay();
+        const shop = avg(perOutlet[o].shop[dow]) * trendFactor[o];
+        const swiggy = avg(perOutlet[o].swiggy[dow]) * trendFactor[o];
+        const zomato = avg(perOutlet[o].zomato[dow]) * trendFactor[o];
+        return { date: dateStr, shop, swiggy, zomato, total: shop + swiggy + zomato };
+      });
+      const weekTotal = days.reduce((s, d) => s + d.total, 0);
+      return { oid: o, name: OUTLET_NAMES[o] || o, days, weekTotal, trendPct: (trendFactor[o] - 1) * 100, hasHistory };
+    });
+
+    // Month-end sales projection, per outlet: real month-to-date + forecast
+    // for the remaining days of the current calendar month (same
+    // day-of-week average × trend, run out past day 7 as needed).
+    const y = todayIst.getUTCFullYear(), m = todayIst.getUTCMonth();
+    const daysInMonth = new Date(Date.UTC(y, m + 1, 0)).getUTCDate();
+    const monthStartStr = `${y}-${String(m + 1).padStart(2, "0")}-01`;
+    const mtdRows = all.filter((r) => r.report_date >= monthStartStr && r.report_date <= todayStr);
+    const remainingDates: string[] = [];
+    for (let dnum = todayIst.getUTCDate() + 1; dnum <= daysInMonth; dnum++) remainingDates.push(`${y}-${String(m + 1).padStart(2, "0")}-${String(dnum).padStart(2, "0")}`);
+
+    const monthEnd = OUTLETS.map((o) => {
+      const mtd = mtdRows.filter((r) => r.outlet_id === o).reduce((s, r) => s + (Number(r.shop_sales_value) || 0) + (Number(r.swiggy_sales_value) || 0) + (Number(r.zomato_sales_value) || 0), 0);
+      const remaining = remainingDates.reduce((s, dateStr) => {
+        const dow = new Date(dateStr + "T00:00:00Z").getUTCDay();
+        const dayTotal = (avg(perOutlet[o].shop[dow]) + avg(perOutlet[o].swiggy[dow]) + avg(perOutlet[o].zomato[dow])) * trendFactor[o];
+        return s + dayTotal;
+      }, 0);
+      return { oid: o, name: OUTLET_NAMES[o] || o, mtd, remaining, projected: mtd + remaining };
+    });
+
+    setSfOutlets(outletForecasts);
+    setSfMonthEnd(monthEnd);
+    setSfMonthLabel(todayIst.toLocaleDateString("en-IN", { month: "long", year: "numeric" }));
+    setSfDaysRemaining(remainingDates.length);
+    setSfLoading(false);
+  };
+  useEffect(() => { if (activeTab === "sales_forecast") fetchSalesForecast(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [activeTab]);
   // --- Purchase & Vendors (reads from the separate Production Stock database) ---
   const [pvFrom, setPvFrom] = useState<string>(() => { const d = new Date(); d.setDate(d.getDate() - 60); return d.toISOString().slice(0, 10); });
   const [pvTo, setPvTo] = useState<string>(() => new Date().toISOString().slice(0, 10));
@@ -3352,6 +3466,11 @@ else await fetchOutletReportsByDate(outletEntryDate);
               <span>📉</span> Profit Forecast
             </div>
           )}
+          {(user?.role === "Financial Analyst" || user?.role === "Owner" || user?.role === "Founder's Office") && (
+            <div onClick={() => { fireBrownieTransition(); setActiveTab("sales_forecast"); setSidebarOpen(false); fetchSalesForecast(); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "sales_forecast" ? "text-text bg-surface-2 border-l-2 border-accent" : "text-text-muted hover:text-text"}`}>
+              <span>📈</span> Sales Forecast
+            </div>
+          )}
                 {user?.role === "Financial Analyst" && (
             <div onClick={() => { fireBrownieTransition(); setActiveTab("payout"); setSidebarOpen(false); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "payout" ? "text-text bg-surface-2 border-l-2 border-accent" : "text-text-muted hover:text-text"}`}>
               <span>💰</span> Payout
@@ -4239,6 +4358,97 @@ else await fetchOutletReportsByDate(outletEntryDate);
                 </div>
                 <div className="bg-yellow-400/5 border border-yellow-400/30 p-4 max-w-2xl">
                   <p className="text-xs text-zinc-300 leading-relaxed">The 4 highlighted weeks are projected from your last month's actual sales trend (shop and online kept separate, since commission only applies to online) — not guaranteed, just where things are headed if nothing changes. COGS and commission use the same real, trailing % as the rest of the app. This doesn't yet include supplier cheque payments, since that data isn't live in the system — once the Cheque Ledger is built, those outflows will factor in here too and the forecast will get sharper.</p>
+                </div>
+              </>
+            )}
+          </div>
+       )}
+       {activeTab === "sales_forecast" && (user?.role === "Financial Analyst" || user?.role === "Owner" || user?.role === "Founder's Office") && (
+          <div>
+            <div className="mb-6 pb-5 border-b border-zinc-800">
+              <h2 className="text-2xl md:text-3xl font-black tracking-tight">Sales Forecast</h2>
+              <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mt-1">Per outlet · shop / Swiggy / Zomato · next 7 days + month-end</p>
+            </div>
+            {sfLoading ? (
+              <p className="text-sm text-zinc-500">Loading…</p>
+            ) : sfOutlets.length === 0 ? (
+              <p className="text-sm text-zinc-500">Not enough sales history yet to build a forecast.</p>
+            ) : (
+              <>
+                <div className="bg-yellow-400/5 border border-yellow-400/30 p-4 mb-6">
+                  <p className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-1">{sfMonthLabel} — projected company sales</p>
+                  <p className="text-2xl font-black text-green-400">₹{Math.round(sfMonthEnd.reduce((s, r) => s + r.projected, 0)).toLocaleString("en-IN")}</p>
+                  <p className="text-[11px] text-zinc-500 mt-1">₹{Math.round(sfMonthEnd.reduce((s, r) => s + r.mtd, 0)).toLocaleString("en-IN")} actual so far + ₹{Math.round(sfMonthEnd.reduce((s, r) => s + r.remaining, 0)).toLocaleString("en-IN")} forecast for the remaining {sfDaysRemaining} day{sfDaysRemaining === 1 ? "" : "s"}</p>
+                </div>
+
+                <h3 className="text-lg font-bold mb-1">Month-end projection, by outlet</h3>
+                <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mb-3">Actual month-to-date + forecast for the rest of {sfMonthLabel}</p>
+                <div className="overflow-x-auto mb-8">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="text-left text-[10px] font-mono text-zinc-500 uppercase border-b border-zinc-800">
+                        <th className="py-2 pr-3">Outlet</th>
+                        <th className="py-2 pr-3 text-right">Actual so far</th>
+                        <th className="py-2 pr-3 text-right">Forecast, rest of month</th>
+                        <th className="py-2 text-right">Projected month total</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {[...sfMonthEnd].sort((a, b) => b.projected - a.projected).map((r) => (
+                        <tr key={r.oid} className="border-b border-zinc-900">
+                          <td className="py-2 pr-3">{r.name}</td>
+                          <td className="py-2 pr-3 text-right font-mono text-zinc-400">₹{Math.round(r.mtd).toLocaleString("en-IN")}</td>
+                          <td className="py-2 pr-3 text-right font-mono text-zinc-400">₹{Math.round(r.remaining).toLocaleString("en-IN")}</td>
+                          <td className="py-2 text-right font-mono font-bold">₹{Math.round(r.projected).toLocaleString("en-IN")}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                <h3 className="text-lg font-bold mb-1">Next 7 days, by outlet and channel</h3>
+                <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mb-3">Based on the same day-of-week over the last ~10 weeks, adjusted for the recent trend</p>
+                <div className="space-y-6">
+                  {[...sfOutlets].sort((a, b) => b.weekTotal - a.weekTotal).map((o) => (
+                    <div key={o.oid} className="border border-zinc-800 p-4">
+                      <div className="flex items-center justify-between mb-2">
+                        <p className="font-bold">{o.name}</p>
+                        <p className={`text-[11px] font-mono ${o.trendPct >= 0 ? "text-green-400" : "text-red-500"}`}>{o.trendPct >= 0 ? "+" : ""}{o.trendPct.toFixed(0)}% recent trend</p>
+                      </div>
+                      {!o.hasHistory ? (
+                        <p className="text-xs text-zinc-500">No sales history yet for this outlet.</p>
+                      ) : (
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-xs">
+                            <thead>
+                              <tr className="text-left text-[9px] font-mono text-zinc-500 uppercase border-b border-zinc-900">
+                                <th className="py-1.5 pr-3">Date</th>
+                                <th className="py-1.5 pr-3 text-right">Shop</th>
+                                <th className="py-1.5 pr-3 text-right">Swiggy</th>
+                                <th className="py-1.5 pr-3 text-right">Zomato</th>
+                                <th className="py-1.5 text-right">Total</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {o.days.map((d: any) => (
+                                <tr key={d.date} className="border-b border-zinc-900/60">
+                                  <td className="py-1.5 pr-3 font-mono text-zinc-400">{new Date(d.date + "T00:00:00Z").toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short" })}</td>
+                                  <td className="py-1.5 pr-3 text-right font-mono text-zinc-400">₹{Math.round(d.shop).toLocaleString("en-IN")}</td>
+                                  <td className="py-1.5 pr-3 text-right font-mono text-zinc-400">₹{Math.round(d.swiggy).toLocaleString("en-IN")}</td>
+                                  <td className="py-1.5 pr-3 text-right font-mono text-zinc-400">₹{Math.round(d.zomato).toLocaleString("en-IN")}</td>
+                                  <td className="py-1.5 text-right font-mono font-bold">₹{Math.round(d.total).toLocaleString("en-IN")}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+
+                <div className="bg-yellow-400/5 border border-yellow-400/30 p-4 mt-6 max-w-2xl">
+                  <p className="text-xs text-zinc-300 leading-relaxed">This forecasts sales by outlet, channel and day, from real history — the same day-of-week over the last ~10 weeks, nudged by whether that outlet has been trending up or down lately. It does not yet forecast by category or product (the item-level data we get is a one-time snapshot each upload, not a dated daily series to project from) or by hour (no hourly sales data exists in the system yet).</p>
                 </div>
               </>
             )}
