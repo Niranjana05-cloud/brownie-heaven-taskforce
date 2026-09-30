@@ -35,18 +35,31 @@ export const REAL_FOOD_COST_WINDOW_DAYS = 30;
 // null (callers should then fall back to 29.4% themselves) if there's no
 // purchase or revenue data in the window — never silently returns a made-up
 // number.
+// "Today" for this window is always taken in India time (IST, UTC+5:30), not
+// server/browser UTC — otherwise the window's boundary date can silently
+// shift depending on exactly when someone loads the page (e.g. between
+// 12:00am-5:30am IST, UTC's "today" is still yesterday), giving two people
+// slightly different 30-day windows and slightly different %.
+const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000;
+function istDateString(d: Date): string {
+  return new Date(d.getTime() + IST_OFFSET_MS).toISOString().slice(0, 10);
+}
+
 export async function fetchRealFoodCostPct(): Promise<{ pct: number | null; windowFrom: string; windowTo: string }> {
   const to = new Date();
   const from = new Date(to.getTime() - REAL_FOOD_COST_WINDOW_DAYS * 24 * 60 * 60 * 1000);
-  const windowTo = to.toISOString().slice(0, 10);
-  const windowFrom = from.toISOString().slice(0, 10);
+  const windowTo = istDateString(to);
+  const windowFrom = istDateString(from);
 
+  // .order() makes the pagination below stable — without it, Postgres doesn't
+  // guarantee the same row order across separate paginated requests, which
+  // can silently skip or double-count rows once a window crosses 1000 rows.
   const purchaseRows = await fetchAllBatched<{ amount: number }>(
-    (client, o, t) => client.from("purchase_ledger").select("amount").gte("date", windowFrom).lte("date", windowTo).range(o, t),
+    (client, o, t) => client.from("purchase_ledger").select("amount").gte("date", windowFrom).lte("date", windowTo).order("date", { ascending: true }).range(o, t),
     supabaseStock
   );
   const revenueRows = await fetchAllBatched<{ shop_sales_value: number; swiggy_sales_value: number; zomato_sales_value: number }>(
-    (client, o, t) => client.from("outlet_reports").select("shop_sales_value,swiggy_sales_value,zomato_sales_value").gte("report_date", windowFrom).lte("report_date", windowTo).range(o, t),
+    (client, o, t) => client.from("outlet_reports").select("shop_sales_value,swiggy_sales_value,zomato_sales_value").gte("report_date", windowFrom).lte("report_date", windowTo).order("report_date", { ascending: true }).range(o, t),
     supabase
   );
 
