@@ -3396,17 +3396,22 @@ else await fetchOutletReportsByDate(outletEntryDate);
   const [kChefs, setKChefs] = useState<any[]>([]);
   const [kRows, setKRows] = useState<any[]>([]);
   const [kDate, setKDate] = useState(new Date().toISOString().slice(0, 10));
-  const [kForm, setKForm] = useState({ chef_id: "", flavour: "", qty: "", station: "" });
   const [kNewChef, setKNewChef] = useState("");
-  const [kBusy, setKBusy] = useState(false);
+  // Simple daily submission, organised exactly the way Rafiq actually works:
+  // half kg cakes, 1kg cakes, pastries, corporate orders, hotel orders — each
+  // with its own flavour/description + count, so he just fills in whatever
+  // he made that day and submits once. No chef picking required here (that's
+  // a separate, optional roster below) — this is meant to be fast on a phone.
+  const K_CATEGORIES = ["Half kg Cake", "1 kg Cake", "Pastries", "Corporate Order", "Hotel Order"] as const;
+  type KCatRow = { flavour: string; qty: string };
+  const emptyKCatRows = (): Record<string, KCatRow[]> => Object.fromEntries(K_CATEGORIES.map((c) => [c, [{ flavour: "", qty: "" }]]));
+  const [kCatRows, setKCatRows] = useState<Record<string, KCatRow[]>>(emptyKCatRows());
+  const [kDailySubmitting, setKDailySubmitting] = useState(false);
+  const [kChefEditId, setKChefEditId] = useState<string | null>(null);
+  const [kChefEditName, setKChefEditName] = useState("");
   const [kProducts, setKProducts] = useState<any[]>([]);
   const [kTgtEdits, setKTgtEdits] = useState<Record<string, string>>({});
   const [kShowTargets, setKShowTargets] = useState(false);
-  const [kcType, setKcType] = useState<"Sangam" | "Hotel" | "Customised cake">("Sangam");
-  const [kcHotel, setKcHotel] = useState("");
-  const [kcItem, setKcItem] = useState("");
-  const [kcQty, setKcQty] = useState("");
-  const [kcChef, setKcChef] = useState("");
   const fetchKProducts = async () => { const { data } = await supabase.from("kitchen_products").select("*").eq("active", true).order("sort_order"); setKProducts(data || []); };
   const saveKTargets = async () => { for (const pr of kProducts) { const v = kTgtEdits[pr.id]; if (v !== undefined && v !== String(pr.target_qty ?? "")) { await supabase.from("kitchen_products").update({ target_qty: Number(v) || 0 }).eq("id", pr.id); } } setKTgtEdits({}); fetchKProducts(); };
   const kProdVsTarget = kProducts.map((pr) => { const made = kRows.filter((r) => (r.flavour || "").trim().toLowerCase() === (pr.name || "").trim().toLowerCase()).reduce((sm, r) => sm + (Number(r.qty) || 0), 0); return { name: pr.name as string, category: (pr.category || "Other") as string, made, target: (pr.target_qty || 0) as number }; });
@@ -3417,15 +3422,42 @@ else await fetchOutletReportsByDate(outletEntryDate);
   const fetchKProduction = async (d: string) => { const { data } = await supabase.from("kitchen_production").select("*").eq("prod_date", d).order("created_at"); setKRows(data || []); };
   useEffect(() => { if (user?.role === "Head Chef" || user?.role === "Owner") { fetchKChefs(); fetchKProduction(kDate); fetchKProducts(); } /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [user]);
   const addKChef = async () => { if (!kNewChef.trim()) return; const { error } = await supabase.from("kitchen_chefs").insert({ name: kNewChef.trim() }); if (error) { alert("Failed: " + error.message); return; } setKNewChef(""); fetchKChefs(); };
-  const addKProd = async () => { if (!kForm.chef_id || !kForm.qty) { alert("Pick a chef and enter a count."); return; } const chef = kChefs.find((c) => c.id === kForm.chef_id); setKBusy(true); const { error } = await supabase.from("kitchen_production").insert({ prod_date: kDate, chef_id: kForm.chef_id, chef_name: chef?.name || null, flavour: kForm.flavour.trim() || null, qty: Number(kForm.qty) || 0, station: kForm.station.trim() || null, entered_by: user?.id || null }); setKBusy(false); if (error) { alert("Save failed: " + error.message); return; } setKForm({ chef_id: "", flavour: "", qty: "", station: "" }); fetchKProduction(kDate); };
-  const addKCustom = async () => {
-    if (!kcQty) { alert("Enter a count."); return; }
-    if (kcType === "Hotel" && !kcHotel.trim()) { alert("Enter the hotel name."); return; }
-    const label = kcType === "Hotel" ? `Hotel: ${kcHotel.trim()}${kcItem.trim() ? " · " + kcItem.trim() : ""}` : `${kcType}${kcItem.trim() ? " · " + kcItem.trim() : ""}`;
-    const chef = kChefs.find((c) => c.id === kcChef);
-    const { error } = await supabase.from("kitchen_production").insert({ prod_date: kDate, flavour: label, qty: Number(kcQty) || 0, chef_id: kcChef || null, chef_name: chef?.name || null, station: "Customised", entered_by: user?.id || null });
+  const saveKChefEdit = async () => {
+    if (!kChefEditId || !kChefEditName.trim()) { setKChefEditId(null); return; }
+    const { error } = await supabase.from("kitchen_chefs").update({ name: kChefEditName.trim() }).eq("id", kChefEditId);
+    if (error) { alert("Failed: " + error.message); return; }
+    setKChefEditId(null); setKChefEditName(""); fetchKChefs();
+  };
+  // Soft delete (active = false) rather than removing the row — past
+  // production entries already carry the chef's name directly, so this
+  // doesn't touch history, it just takes the name off the list going
+  // forward (and out of new entries).
+  const deleteKChef = async (id: string, name: string) => {
+    if (!confirm(`Remove ${name} from the chef list?`)) return;
+    const { error } = await supabase.from("kitchen_chefs").update({ active: false }).eq("id", id);
+    if (error) { alert("Failed: " + error.message); return; }
+    fetchKChefs();
+  };
+  // One submit for the whole day, across all 5 categories — matches how
+  // Rafiq actually works: fill in whatever was made, submit once.
+  const addKCatRow = (cat: string) => setKCatRows((prev) => ({ ...prev, [cat]: [...prev[cat], { flavour: "", qty: "" }] }));
+  const removeKCatRow = (cat: string, idx: number) => setKCatRows((prev) => ({ ...prev, [cat]: prev[cat].length <= 1 ? prev[cat] : prev[cat].filter((_, i) => i !== idx) }));
+  const updateKCatRow = (cat: string, idx: number, field: "flavour" | "qty", value: string) => setKCatRows((prev) => ({ ...prev, [cat]: prev[cat].map((r, i) => (i === idx ? { ...r, [field]: value } : r)) }));
+  const submitKDailyProduction = async () => {
+    const toInsert: any[] = [];
+    K_CATEGORIES.forEach((cat) => {
+      kCatRows[cat].forEach((r) => {
+        const qty = Number(r.qty) || 0;
+        if (!r.flavour.trim() && qty <= 0) return; // skip genuinely empty rows
+        toInsert.push({ prod_date: kDate, chef_id: null, chef_name: null, flavour: r.flavour.trim() || null, qty, station: cat, entered_by: user?.id || null });
+      });
+    });
+    if (toInsert.length === 0) { alert("Fill in at least one item before submitting."); return; }
+    setKDailySubmitting(true);
+    const { error } = await supabase.from("kitchen_production").insert(toInsert);
+    setKDailySubmitting(false);
     if (error) { alert("Save failed: " + error.message); return; }
-    setKcHotel(""); setKcItem(""); setKcQty(""); setKcChef("");
+    setKCatRows(emptyKCatRows());
     fetchKProduction(kDate);
   };
   const delKProd = async (id: string) => { await supabase.from("kitchen_production").delete().eq("id", id); fetchKProduction(kDate); };
@@ -3738,32 +3770,41 @@ else await fetchOutletReportsByDate(outletEntryDate);
               <input type="date" value={kDate} onChange={(e) => { setKDate(e.target.value); fetchKProduction(e.target.value); }} className="bg-black border border-zinc-800 text-white px-4 py-2.5 focus:outline-none focus:border-yellow-400 transition-colors font-mono text-sm" />
             </div>
 
-            <div className="mb-8 border border-zinc-800 p-5 max-w-3xl">
-              <p className="text-sm font-semibold mb-4">Assign production</p>
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-                <div><label className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest">Chef</label><select value={kForm.chef_id} onChange={(e) => setKForm(pp => ({ ...pp, chef_id: e.target.value }))} className="w-full bg-black border border-zinc-800 text-white px-3 py-2 focus:outline-none focus:border-yellow-400 transition-colors text-sm mt-1"><option value="">— pick —</option>{kChefs.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></div>
-                <div><label className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest">Flavour / item</label><input type="text" value={kForm.flavour} onChange={(e) => setKForm(pp => ({ ...pp, flavour: e.target.value }))} className="w-full bg-black border border-zinc-800 text-white px-3 py-2 focus:outline-none focus:border-yellow-400 transition-colors text-sm mt-1" placeholder="Choco truffle" list="kproducts" /><datalist id="kproducts">{kProducts.map((pr) => <option key={pr.id} value={pr.name} />)}</datalist></div>
-                <div><label className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest">Count</label><input type="number" value={kForm.qty} onChange={(e) => setKForm(pp => ({ ...pp, qty: e.target.value }))} className="w-full bg-black border border-zinc-800 text-white px-3 py-2 focus:outline-none focus:border-yellow-400 transition-colors text-sm mt-1" placeholder="30" /></div>
-                <div><label className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest">Station</label><input list="kstations" value={kForm.station} onChange={(e) => setKForm(pp => ({ ...pp, station: e.target.value }))} className="w-full bg-black border border-zinc-800 text-white px-3 py-2 focus:outline-none focus:border-yellow-400 transition-colors text-sm mt-1" placeholder="Icing" /><datalist id="kstations"><option value="Icing" /><option value="Chocolate garnish" /><option value="Whipped cream" /><option value="Baking" /><option value="Decoration" /><option value="Packing" /></datalist></div>
-              </div>
-              <button onClick={addKProd} disabled={kBusy} className="mt-4 bg-yellow-400 text-black px-5 py-2 text-sm font-semibold hover:bg-yellow-300 disabled:opacity-50 transition-colors">{kBusy ? "Adding…" : "Add"}</button>
-            </div>
-
-            <div className="mb-8 border border-zinc-800 p-5 max-w-3xl">
-              <p className="text-sm font-semibold mb-1">Customised order</p>
-              <p className="text-xs text-zinc-500 mb-4">Hotel / Sangam / one-off custom cakes. These land under &quot;Customised&quot; in the production list.</p>
-              <div className="flex gap-2 mb-3">
-                {(["Sangam", "Hotel", "Customised cake"] as const).map((t) => (
-                  <button key={t} onClick={() => setKcType(t)} className={`px-3 py-1.5 text-sm font-semibold transition-colors ${kcType === t ? "bg-orange-500 text-black" : "bg-zinc-900 text-zinc-400 hover:text-white"}`}>{t}</button>
+            <div className="mb-8 border border-zinc-800 p-4 sm:p-5">
+              <p className="text-sm font-semibold mb-1">Today's Production</p>
+              <p className="text-xs text-zinc-500 mb-4">Fill in whatever was made today, then submit once at the bottom.</p>
+              <div className="space-y-5">
+                {K_CATEGORIES.map((cat) => (
+                  <div key={cat} className="border-t border-zinc-900 pt-4 first:border-t-0 first:pt-0">
+                    <p className="text-[11px] font-mono text-yellow-400 uppercase tracking-widest mb-2">{cat}</p>
+                    <div className="space-y-2">
+                      {kCatRows[cat].map((row, idx) => (
+                        <div key={idx} className="flex gap-2 items-center">
+                          <input
+                            type="text"
+                            value={row.flavour}
+                            onChange={(e) => updateKCatRow(cat, idx, "flavour", e.target.value)}
+                            placeholder={cat === "Corporate Order" || cat === "Hotel Order" ? "Description (e.g. Taj Hotel order)" : "Flavour (e.g. Choco truffle)"}
+                            list={cat === "Corporate Order" || cat === "Hotel Order" ? undefined : "kproducts"}
+                            className="flex-1 bg-black border border-zinc-800 text-white px-3 py-2.5 focus:outline-none focus:border-yellow-400 transition-colors text-sm"
+                          />
+                          <input
+                            type="number"
+                            value={row.qty}
+                            onChange={(e) => updateKCatRow(cat, idx, "qty", e.target.value)}
+                            placeholder="Count"
+                            className="w-24 bg-black border border-zinc-800 text-white px-3 py-2.5 focus:outline-none focus:border-yellow-400 transition-colors text-sm"
+                          />
+                          <button onClick={() => removeKCatRow(cat, idx)} className="text-zinc-500 hover:text-red-500 px-2 py-2.5 border border-zinc-800 hover:border-red-500 transition-colors shrink-0">✕</button>
+                        </div>
+                      ))}
+                    </div>
+                    <button onClick={() => addKCatRow(cat)} className="mt-2 text-[11px] font-mono uppercase text-zinc-400 hover:text-yellow-400 transition-colors">+ Add another {cat === "Corporate Order" || cat === "Hotel Order" ? "order" : "flavour"}</button>
+                  </div>
                 ))}
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-                {kcType === "Hotel" && <div><label className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest">Hotel name</label><input type="text" value={kcHotel} onChange={(e) => setKcHotel(e.target.value)} className="w-full bg-black border border-zinc-800 text-white px-3 py-2 focus:outline-none focus:border-yellow-400 transition-colors text-sm mt-1" placeholder="Taj" /></div>}
-                <div><label className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest">Item / description</label><input type="text" value={kcItem} onChange={(e) => setKcItem(e.target.value)} className="w-full bg-black border border-zinc-800 text-white px-3 py-2 focus:outline-none focus:border-yellow-400 transition-colors text-sm mt-1" placeholder="Choco truffle 1kg" /></div>
-                <div><label className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest">Count</label><input type="number" value={kcQty} onChange={(e) => setKcQty(e.target.value)} className="w-full bg-black border border-zinc-800 text-white px-3 py-2 focus:outline-none focus:border-yellow-400 transition-colors text-sm mt-1" placeholder="10" /></div>
-                <div><label className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest">Chef (optional)</label><select value={kcChef} onChange={(e) => setKcChef(e.target.value)} className="w-full bg-black border border-zinc-800 text-white px-3 py-2 focus:outline-none focus:border-yellow-400 transition-colors text-sm mt-1"><option value="">—</option>{kChefs.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></div>
-              </div>
-              <button onClick={addKCustom} className="mt-4 bg-yellow-400 text-black px-5 py-2 text-sm font-semibold hover:bg-yellow-300 transition-colors">Add order</button>
+              <datalist id="kproducts">{kProducts.map((pr) => <option key={pr.id} value={pr.name} />)}</datalist>
+              <button onClick={submitKDailyProduction} disabled={kDailySubmitting} className="mt-5 w-full sm:w-auto bg-yellow-400 text-black px-6 py-3 text-sm font-bold hover:bg-yellow-300 disabled:opacity-50 transition-colors">{kDailySubmitting ? "Submitting…" : "Submit Today's Production"}</button>
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 max-w-5xl">
@@ -3851,11 +3892,33 @@ else await fetchOutletReportsByDate(outletEntryDate);
             </div>
 
             <div className="mt-6 border border-zinc-800 p-4 max-w-md">
-              <p className="text-sm font-semibold mb-2">Chefs</p>
-              <p className="text-xs text-zinc-500 mb-3">{kChefs.map((c) => c.name).join(", ") || "None yet"}</p>
+              <p className="text-sm font-semibold mb-3">Chefs</p>
+              {kChefs.length === 0 ? (
+                <p className="text-xs text-zinc-500 mb-3">None yet.</p>
+              ) : (
+                <div className="space-y-1.5 mb-4">
+                  {kChefs.map((c) => (
+                    <div key={c.id} className="flex items-center gap-2">
+                      {kChefEditId === c.id ? (
+                        <>
+                          <input type="text" value={kChefEditName} onChange={(e) => setKChefEditName(e.target.value)} onKeyDown={(e) => e.key === "Enter" && saveKChefEdit()} className="flex-1 bg-black border border-yellow-400 text-white px-2 py-1.5 focus:outline-none text-sm" autoFocus />
+                          <button onClick={saveKChefEdit} className="text-[11px] font-mono uppercase text-green-400 hover:text-green-300 px-2">Save</button>
+                          <button onClick={() => { setKChefEditId(null); setKChefEditName(""); }} className="text-[11px] font-mono uppercase text-zinc-500 hover:text-white px-2">Cancel</button>
+                        </>
+                      ) : (
+                        <>
+                          <span className="flex-1 text-sm">{c.name}</span>
+                          <button onClick={() => { setKChefEditId(c.id); setKChefEditName(c.name); }} className="text-[11px] font-mono uppercase text-zinc-400 hover:text-yellow-400 px-2">Edit</button>
+                          <button onClick={() => deleteKChef(c.id, c.name)} className="text-[11px] font-mono uppercase text-zinc-400 hover:text-red-500 px-2">Delete</button>
+                        </>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
               <div className="flex gap-2">
-                <input type="text" value={kNewChef} onChange={(e) => setKNewChef(e.target.value)} className="w-full bg-black border border-zinc-800 text-white px-3 py-2 focus:outline-none focus:border-yellow-400 transition-colors text-sm mt-1 flex-1" placeholder="Add a chef (e.g. Riyas)" />
-                <button onClick={addKChef} className="bg-zinc-800 text-white px-4 py-2 text-sm font-semibold hover:bg-zinc-700 transition-colors self-end">Add</button>
+                <input type="text" value={kNewChef} onChange={(e) => setKNewChef(e.target.value)} onKeyDown={(e) => e.key === "Enter" && addKChef()} className="w-full bg-black border border-zinc-800 text-white px-3 py-2 focus:outline-none focus:border-yellow-400 transition-colors text-sm flex-1" placeholder="Add a chef (e.g. Riyas)" />
+                <button onClick={addKChef} className="bg-zinc-800 text-white px-4 py-2 text-sm font-semibold hover:bg-zinc-700 transition-colors shrink-0">Add</button>
               </div>
             </div>
           </div>
