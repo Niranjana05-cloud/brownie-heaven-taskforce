@@ -35,7 +35,7 @@ export default function NudgeButton() {
     setTimeout(() => { setSent(false); setOpen(false); }, 1500);
   };
   return (
-    <div className="fixed bottom-4 left-4 z-50">
+    <div className="fixed bottom-4 right-4 z-50">
       {open && (
         <div className="mb-3 w-72 bg-neutral-900 border border-yellow-400/40 rounded-xl shadow-2xl p-4">
           <p className="text-[10px] font-mono text-yellow-400 uppercase tracking-widest mb-1">📌 Temporary reminder tool</p>
