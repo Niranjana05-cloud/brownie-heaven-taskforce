@@ -700,6 +700,36 @@ export default function DashboardPage() {
   const [todayAttendance, setTodayAttendance] = useState<any>(null);
   const [attendanceDate, setAttendanceDate] = useState<string>(() => { const d = new Date(); d.setDate(d.getDate() - 1); return d.toISOString().split("T")[0]; });
   const [attendanceWeekOvertime, setAttendanceWeekOvertime] = useState<number | null>(null);
+  // Staff registry for People & Labour — Nilani registers names under one of
+  // three departments (Production / Sales & Outlet Staff / Housekeeping),
+  // same soft-delete pattern as kitchen_chefs (active:false keeps history).
+  const LABOUR_DEPARTMENTS = ["Production", "Sales & Outlet Staff", "Housekeeping"] as const;
+  const [kLaborStaff, setKLaborStaff] = useState<any[]>([]);
+  const [kLaborNewName, setKLaborNewName] = useState<Record<string, string>>({});
+  const [kLaborEditId, setKLaborEditId] = useState<string | null>(null);
+  const [kLaborEditName, setKLaborEditName] = useState("");
+  const fetchLaborStaff = async () => { const { data } = await supabase.from("labour_staff").select("*").eq("active", true).order("name"); setKLaborStaff(data || []); };
+  const addLaborStaff = async (dept: string) => {
+    const name = (kLaborNewName[dept] || "").trim();
+    if (!name) return;
+    const { error } = await supabase.from("labour_staff").insert({ name, department: dept });
+    if (error) { alert("Failed: " + error.message); return; }
+    setKLaborNewName((prev) => ({ ...prev, [dept]: "" }));
+    fetchLaborStaff();
+  };
+  const saveLaborStaffEdit = async () => {
+    if (!kLaborEditId || !kLaborEditName.trim()) { setKLaborEditId(null); return; }
+    const { error } = await supabase.from("labour_staff").update({ name: kLaborEditName.trim() }).eq("id", kLaborEditId);
+    if (error) { alert("Failed: " + error.message); return; }
+    setKLaborEditId(null); setKLaborEditName(""); fetchLaborStaff();
+  };
+  const deleteLaborStaff = async (id: string, name: string) => {
+    if (!confirm(`Remove ${name} from the staff list?`)) return;
+    const { error } = await supabase.from("labour_staff").update({ active: false }).eq("id", id);
+    if (error) { alert("Failed: " + error.message); return; }
+    fetchLaborStaff();
+  };
+  useEffect(() => { if (user?.role === "HR" || user?.role === "Owner") fetchLaborStaff(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [user]);
   const [salesTargets, setSalesTargets] = useState<Record<string, any>>({});
   const [stEditing, setStEditing] = useState<string | null>(null);
   const [stDate, setStDate] = useState<string>(() => new Date(Date.now() - 86400000).toISOString().split("T")[0]);
@@ -4926,6 +4956,7 @@ else await fetchOutletReportsByDate(outletEntryDate);
                 </div>
               )}
             </div>
+
           </div>
        )}
        {activeTab === "tasks" && user?.role !== "Founder's Office" && user?.role !== "Owner" && user?.role !== "Head Chef" && user?.role !== "Financial Analyst" && (
@@ -5446,6 +5477,54 @@ else await fetchOutletReportsByDate(outletEntryDate);
                   </button>
                 </div>
               )}
+            </div>
+
+            <div className="mt-6 border border-zinc-800 p-4 sm:p-5 max-w-2xl">
+              <p className="text-sm font-semibold mb-1">Staff Registry</p>
+              <p className="text-[11px] text-zinc-500 mb-4">{user?.role === "Owner" ? "Everyone Nilani has registered, by department." : "Register everyone by department — Production, Sales & Outlet Staff, Housekeeping."}</p>
+              <div className="space-y-5">
+                {LABOUR_DEPARTMENTS.map((dept) => {
+                  const people = kLaborStaff.filter((s) => s.department === dept);
+                  return (
+                    <div key={dept} className="border-t border-zinc-900 pt-4 first:border-t-0 first:pt-0">
+                      <p className="text-[11px] font-mono text-yellow-400 uppercase tracking-widest mb-2">{dept} <span className="text-zinc-600">· {people.length}</span></p>
+                      {people.length === 0 ? (
+                        <p className="text-xs text-zinc-600 mb-2">None registered yet.</p>
+                      ) : (
+                        <div className="space-y-1.5 mb-3">
+                          {people.map((p) => (
+                            <div key={p.id} className="flex items-center gap-2">
+                              {kLaborEditId === p.id ? (
+                                <>
+                                  <input type="text" value={kLaborEditName} onChange={(e) => setKLaborEditName(e.target.value)} onKeyDown={(e) => e.key === "Enter" && saveLaborStaffEdit()} className="flex-1 bg-black border border-yellow-400 text-white px-2 py-1.5 focus:outline-none text-sm" autoFocus />
+                                  <button onClick={saveLaborStaffEdit} className="text-[11px] font-mono uppercase text-green-400 hover:text-green-300 px-2">Save</button>
+                                  <button onClick={() => { setKLaborEditId(null); setKLaborEditName(""); }} className="text-[11px] font-mono uppercase text-zinc-500 hover:text-white px-2">Cancel</button>
+                                </>
+                              ) : (
+                                <>
+                                  <span className="flex-1 text-sm">{p.name}</span>
+                                  {user?.role !== "Owner" && (
+                                    <>
+                                      <button onClick={() => { setKLaborEditId(p.id); setKLaborEditName(p.name); }} className="text-[11px] font-mono uppercase text-zinc-400 hover:text-yellow-400 px-2">Edit</button>
+                                      <button onClick={() => deleteLaborStaff(p.id, p.name)} className="text-[11px] font-mono uppercase text-zinc-400 hover:text-red-500 px-2">Delete</button>
+                                    </>
+                                  )}
+                                </>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      {user?.role !== "Owner" && (
+                        <div className="flex gap-2">
+                          <input type="text" value={kLaborNewName[dept] || ""} onChange={(e) => setKLaborNewName((prev) => ({ ...prev, [dept]: e.target.value }))} onKeyDown={(e) => e.key === "Enter" && addLaborStaff(dept)} className="w-full bg-black border border-zinc-800 text-white px-3 py-2 focus:outline-none focus:border-yellow-400 transition-colors text-sm flex-1" placeholder={`Add a name (e.g. ${dept === "Production" ? "Suresh" : dept === "Housekeeping" ? "Mala" : "Priya"})`} />
+                          <button onClick={() => addLaborStaff(dept)} className="bg-zinc-800 text-white px-4 py-2 text-sm font-semibold hover:bg-zinc-700 transition-colors shrink-0">Add</button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           </div>
         )}
