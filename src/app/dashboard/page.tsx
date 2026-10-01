@@ -26,7 +26,6 @@ import { FOOD_COST_MAP } from "@/lib/foodCosts";
 import { matchItemCost } from "@/lib/itemPerfCosts";
 import { useActivityHeartbeat } from "@/lib/useActivityHeartbeat";
 import ActivityToastStack from "@/components/ActivityToastStack";
-import NudgeButton from "@/components/NudgeButton";
 import PushRegister from "@/components/PushRegister";
 import NudgeToast from "@/components/NudgeToast";
 import { parseSwiggyPayoutEmail } from "@/lib/swiggyPayoutParser";
@@ -3486,10 +3485,18 @@ else await fetchOutletReportsByDate(outletEntryDate);
   return (
     <div className="min-h-screen bg-canvas text-text flex">
       <ThemePicker />
+      {/* Account bar — always visible top-right, no need to open/scroll the
+          sidebar just to see who's logged in or to change PIN / exit. */}
+      <div className="fixed top-20 right-4 z-50 flex items-center gap-1.5 bg-surface border border-line rounded-full pl-1 pr-2 py-1 shadow-lg">
+        <div className="w-7 h-7 bg-accent text-accent-ink flex items-center justify-center font-bold text-[11px] rounded-full shrink-0">
+          {user.name.split(" ").map((n: string) => n[0]).join("").slice(0, 2)}
+        </div>
+        <button onClick={() => setShowPinModal(true)} className="text-[10px] font-mono text-text-faint uppercase hover:text-accent transition-colors px-1.5">PIN</button>
+        <button onClick={() => { localStorage.removeItem("currentUser"); router.push("/"); }} className="text-[10px] font-mono text-text-faint uppercase hover:text-red-500 transition-colors px-1.5">Exit</button>
+      </div>
       <BrownieLoader tick={brownieTick} />
        {(user?.role === "Owner" || (user as any)?.isFO) && <ActivityToastStack />}
       {user && <PushRegister staffId={user.id} />}
-      {isOwner && <NudgeButton />}
       {isFO && <NudgeToast />}
       {sidebarOpen && <div className="fixed inset-0 bg-black/50 z-30 md:hidden" onClick={() => setSidebarOpen(false)} />}
       {targetCheck && targetCheck.length > 0 && !targetReaction && (() => {
@@ -3542,7 +3549,7 @@ else await fetchOutletReportsByDate(outletEntryDate);
           <h1 className="text-xl font-black tracking-tight">TASK<span className="text-accent">FORCE IQ</span></h1>
           <p className="text-[10px] font-mono text-text-faint uppercase tracking-widest mt-1">Brownie Heaven</p>
         </div>
-        <nav className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-3 py-4">
+        <nav className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-3 py-4" style={{ WebkitOverflowScrolling: "touch", touchAction: "pan-y" }}>
           <p className="text-[10px] font-mono text-text-faint uppercase tracking-widest px-3 pb-2">Workspace</p>
           <div onClick={() => { fireBrownieTransition(); setActiveTab("tasks"); setSidebarOpen(false); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "tasks" ? "text-text bg-surface-2 border-l-2 border-accent" : "text-text-muted hover:text-text"}`}>
             <span>▣</span> Dashboard
@@ -3702,17 +3709,6 @@ else await fetchOutletReportsByDate(outletEntryDate);
             <span>🛟</span> Help
           </div>
         </nav>
-        <div className="px-4 py-4 border-t border-line flex items-center gap-2">
-          <div className="w-9 h-9 bg-accent text-accent-ink flex items-center justify-center font-bold text-sm shrink-0">
-            {user.name.split(" ").map((n: string) => n[0]).join("").slice(0, 2)}
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-semibold truncate">{user.name}</p>
-            <p className="text-[10px] font-mono text-text-faint uppercase tracking-wide">{user.role}</p>
-          </div>
-          <button onClick={() => setShowPinModal(true)} className="text-[10px] font-mono text-text-faint uppercase hover:text-accent transition-colors shrink-0">PIN</button>
-          <button onClick={() => { localStorage.removeItem("currentUser"); router.push("/"); }} className="text-[10px] font-mono text-text-faint uppercase hover:text-red-500 transition-colors shrink-0">Exit</button>
-        </div>
       </aside>
 
       <main className="flex-1 px-4 py-4 md:px-8 md:py-8 overflow-auto">
