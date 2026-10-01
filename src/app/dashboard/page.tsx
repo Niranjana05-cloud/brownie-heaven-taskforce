@@ -3730,8 +3730,8 @@ else await fetchOutletReportsByDate(outletEntryDate);
              {!todayReport && <span className="ml-auto w-2 h-2 bg-accent rounded-full"></span>}
             </div>
           )}
-          {user.role === "HR" && (
-                <div onClick={() => { fireBrownieTransition(); setActiveTab("attendance"); setSidebarOpen(false); if (user) fetchAttendanceWeekOvertime(user); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "attendance" ? "text-text bg-surface-2 border-l-2 border-accent" : "text-text-muted hover:text-text"}`}>
+          {(user.role === "HR" || user?.role === "Owner") && (
+                <div onClick={() => { fireBrownieTransition(); setActiveTab("attendance"); setSidebarOpen(false); const staffRef = (user?.role === "Owner" ? { id: "nilani" } : user) as Staff; fetchAttendance(staffRef, attendanceDate); fetchAttendanceWeekOvertime(staffRef); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "attendance" ? "text-text bg-surface-2 border-l-2 border-accent" : "text-text-muted hover:text-text"}`}>
               <span>👥</span> People &amp; Labour
             </div>
           )}
@@ -5377,7 +5377,7 @@ else await fetchOutletReportsByDate(outletEntryDate);
             <div className="flex justify-between items-start mb-6 pb-5 border-b border-zinc-800">
               <div>
                 <h2 className="text-2xl md:text-3xl font-black tracking-tight">People &amp; Labour</h2>
-                <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mt-1">Today's staff count & overtime</p>
+                <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mt-1">{user?.role === "Owner" ? "Filed by Nilani · staff count & overtime" : "Today's staff count & overtime"}</p>
               </div>
               {attendanceWeekOvertime !== null && (
                 <div className="text-right">
@@ -5389,7 +5389,7 @@ else await fetchOutletReportsByDate(outletEntryDate);
            <div className="bg-[#131316] border border-zinc-800 p-6 max-w-md">
               <div className="mb-5">
                 <label className="block text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-1">Date</label>
-               <input type="date" value={attendanceDate} onChange={(e) => { setAttendanceDate(e.target.value); if (user) fetchAttendance(user, e.target.value); }} className="w-full bg-black border border-zinc-800 text-white px-3 py-2 focus:outline-none focus:border-yellow-400 transition-colors text-sm" />
+               <input type="date" value={attendanceDate} onChange={(e) => { setAttendanceDate(e.target.value); const staffRef = (user?.role === "Owner" ? { id: "nilani" } : user) as Staff; if (user) fetchAttendance(staffRef, e.target.value); }} className="w-full bg-black border border-zinc-800 text-white px-3 py-2 focus:outline-none focus:border-yellow-400 transition-colors text-sm" />
                 <p className="text-[11px] font-mono text-yellow-400/80 uppercase tracking-widest mt-1.5">
                   {(() => {
                     const today = new Date().toISOString().split("T")[0];
@@ -5415,8 +5415,12 @@ else await fetchOutletReportsByDate(outletEntryDate);
                       {todayAttendance.late_names && <p><span className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest">Late:</span> {todayAttendance.late_names}</p>}
                     </div>
                   )}
-                  <button onClick={() => { setAttendanceData({ present: String(todayAttendance.present), absent: String(todayAttendance.absent), late: String(todayAttendance.late), absent_names: todayAttendance.absent_names || "", late_names: todayAttendance.late_names || "", overtime_hours: String(todayAttendance.overtime_hours || "") }); setTodayAttendance(null); }} className="mt-5 text-[10px] font-mono text-zinc-500 uppercase tracking-widest hover:text-yellow-400">Edit</button>
+                  {user?.role !== "Owner" && (
+                    <button onClick={() => { setAttendanceData({ present: String(todayAttendance.present), absent: String(todayAttendance.absent), late: String(todayAttendance.late), absent_names: todayAttendance.absent_names || "", late_names: todayAttendance.late_names || "", overtime_hours: String(todayAttendance.overtime_hours || "") }); setTodayAttendance(null); }} className="mt-5 text-[10px] font-mono text-zinc-500 uppercase tracking-widest hover:text-yellow-400">Edit</button>
+                  )}
                 </div>
+              ) : user?.role === "Owner" ? (
+                <p className="text-sm text-zinc-500">Nilani hasn't filed this date yet.</p>
               ) : (
                 <div className="space-y-4">
                   {[{ k: "present", l: "Total Staff Present" }, { k: "absent", l: "Total Absent" }, { k: "late", l: "Total Late" }].map(f => (
