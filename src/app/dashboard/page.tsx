@@ -695,10 +695,11 @@ export default function DashboardPage() {
   const [reportSubmitting, setReportSubmitting] = useState(false);
   const [reportOffDay, setReportOffDay] = useState(false);
   const [offToday, setOffToday] = useState<string[]>([]);
-  const [attendanceData, setAttendanceData] = useState({ present: "", absent: "", late: "", absent_names: "", late_names: "" });
+  const [attendanceData, setAttendanceData] = useState({ present: "", absent: "", late: "", absent_names: "", late_names: "", overtime_hours: "" });
   const [attendanceSubmitting, setAttendanceSubmitting] = useState(false);
   const [todayAttendance, setTodayAttendance] = useState<any>(null);
   const [attendanceDate, setAttendanceDate] = useState<string>(() => { const d = new Date(); d.setDate(d.getDate() - 1); return d.toISOString().split("T")[0]; });
+  const [attendanceWeekOvertime, setAttendanceWeekOvertime] = useState<number | null>(null);
   const [salesTargets, setSalesTargets] = useState<Record<string, any>>({});
   const [stEditing, setStEditing] = useState<string | null>(null);
   const [stDate, setStDate] = useState<string>(() => new Date(Date.now() - 86400000).toISOString().split("T")[0]);
@@ -2722,6 +2723,7 @@ export default function DashboardPage() {
     fetchTasks(parsed);
     fetchReports(parsed);
    fetchAttendance(parsed, new Date(Date.now() - 86400000).toISOString().split("T")[0]);
+   fetchAttendanceWeekOvertime(parsed);
    fetchSalesTargets(parsed);
   fetchOutletReports(parsed);
         fetchLastOutletRatings(parsed);
@@ -3020,7 +3022,16 @@ const runTargetCheck = async (u: Staff) => {
   const fetchAttendance = async (u: Staff, date: string) => {
     const { data } = await supabase.from("attendance").select("*").eq("staff_id", u.id).eq("attendance_date", date).maybeSingle();
     setTodayAttendance(data || null);
-    if (!data) setAttendanceData({ present: "", absent: "", late: "", absent_names: "", late_names: "" });
+    if (!data) setAttendanceData({ present: "", absent: "", late: "", absent_names: "", late_names: "", overtime_hours: "" });
+  };
+
+  // Rolling 7-day overtime total (People & Labour ask #1: overtime monitoring).
+  // Company-wide, since attendance is logged as one daily company-wide count,
+  // not per-employee — matches the grain the rest of this form already uses.
+  const fetchAttendanceWeekOvertime = async (u: Staff) => {
+    const since = new Date(); since.setDate(since.getDate() - 6);
+    const { data } = await supabase.from("attendance").select("overtime_hours").eq("staff_id", u.id).gte("attendance_date", since.toISOString().slice(0, 10));
+    setAttendanceWeekOvertime((data || []).reduce((s: number, r: any) => s + (Number(r.overtime_hours) || 0), 0));
   };
 
   const submitAttendance = async () => {
@@ -3034,12 +3045,14 @@ const runTargetCheck = async (u: Staff) => {
       late: parseInt(attendanceData.late) || 0,
       absent_names: attendanceData.absent_names.trim() || null,
       late_names: attendanceData.late_names.trim() || null,
+      overtime_hours: parseFloat(attendanceData.overtime_hours) || 0,
       submitted_at: new Date().toISOString(),
     }, { onConflict: "staff_id,attendance_date" }).select().single();
     setAttendanceSubmitting(false);
     if (error) { alert("Error: " + error.message); return; }
     setTodayAttendance(data);
-    setAttendanceData({ present: "", absent: "", late: "", absent_names: "", late_names: "" });
+    setAttendanceData({ present: "", absent: "", late: "", absent_names: "", late_names: "", overtime_hours: "" });
+    fetchAttendanceWeekOvertime(user);
   };
 
   const assignTask = async () => {
@@ -3419,7 +3432,44 @@ else await fetchOutletReportsByDate(outletEntryDate);
   const kCustom = kRows.filter((r) => !kMasterNames.has((r.flavour || "").trim().toLowerCase()));
   const fetchKChefs = async () => { const { data } = await supabase.from("kitchen_chefs").select("*").eq("active", true).order("name"); setKChefs(data || []); };
   const fetchKProduction = async (d: string) => { const { data } = await supabase.from("kitchen_production").select("*").eq("prod_date", d).order("created_at"); setKRows(data || []); };
-  useEffect(() => { if (user?.role === "Head Chef" || user?.role === "Owner") { fetchKChefs(); fetchKProduction(kDate); fetchKProducts(); } /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [user]);
+  // Daily Production Plan (Production ask #1/#2: a forecast-driven plan per
+  // category, compared against what's actually logged that day). Forecasts
+  // at the CATEGORY level (the "station" field Rafiq's form already saves —
+  // Half kg Cake / 1kg Cake / Pastries / Corporate / Hotel), not per flavour,
+  // because flavours are free-typed text and won't match day to day. Same
+  // day-of-week-average + trend method used everywhere else in Forecasting.
+  const [kPlanLoading, setKPlanLoading] = useState(false);
+  const [kPlan, setKPlan] = useState<Record<string, { planned: number; hasHistory: boolean }>>({});
+  const fetchKPlan = async (dateStr: string) => {
+    setKPlanLoading(true);
+    const target = new Date(dateStr + "T00:00:00Z");
+    const dow = target.getUTCDay();
+    const historyStart = new Date(target); historyStart.setUTCDate(historyStart.getUTCDate() - 70);
+    const { data: rows } = await supabase.from("kitchen_production").select("prod_date, station, qty").gte("prod_date", historyStart.toISOString().slice(0, 10)).lt("prod_date", dateStr).in("station", K_CATEGORIES as unknown as string[]);
+    const dailyTotals: Record<string, Record<string, number>> = {};
+    K_CATEGORIES.forEach((c) => { dailyTotals[c] = {}; });
+    (rows || []).forEach((r: any) => {
+      const cat = r.station as string;
+      if (!dailyTotals[cat]) return;
+      dailyTotals[cat][r.prod_date] = (dailyTotals[cat][r.prod_date] || 0) + (Number(r.qty) || 0);
+    });
+    const result: Record<string, { planned: number; hasHistory: boolean }> = {};
+    K_CATEGORIES.forEach((cat) => {
+      const dates = Object.keys(dailyTotals[cat]).sort();
+      const sameDow = dates.filter((d) => new Date(d + "T00:00:00Z").getUTCDay() === dow);
+      const hasHistory = sameDow.length >= 2;
+      const avg = sameDow.length ? sameDow.reduce((s, d) => s + dailyTotals[cat][d], 0) / sameDow.length : 0;
+      const last14 = dates.slice(-14).reduce((s, d) => s + dailyTotals[cat][d], 0);
+      const prev14 = dates.slice(-28, -14).reduce((s, d) => s + dailyTotals[cat][d], 0);
+      let trend = prev14 > 0 ? last14 / prev14 : 1;
+      trend = Math.max(0.7, Math.min(1.3, trend));
+      result[cat] = { planned: Math.round(avg * trend), hasHistory };
+    });
+    setKPlan(result);
+    setKPlanLoading(false);
+  };
+  const kActualByCat: Record<string, number> = Object.fromEntries(K_CATEGORIES.map((c) => [c, kRows.filter((r) => r.station === c).reduce((s, r) => s + (Number(r.qty) || 0), 0)]));
+  useEffect(() => { if (user?.role === "Head Chef" || user?.role === "Owner" || isFO) { fetchKChefs(); fetchKProduction(kDate); fetchKProducts(); fetchKPlan(kDate); } /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [user]);
   const addKChef = async () => { if (!kNewChef.trim()) return; const { error } = await supabase.from("kitchen_chefs").insert({ name: kNewChef.trim() }); if (error) { alert("Failed: " + error.message); return; } setKNewChef(""); fetchKChefs(); };
   const saveKChefEdit = async () => {
     if (!kChefEditId || !kChefEditName.trim()) { setKChefEditId(null); return; }
@@ -3681,12 +3731,12 @@ else await fetchOutletReportsByDate(outletEntryDate);
             </div>
           )}
           {user.role === "HR" && (
-                <div onClick={() => { fireBrownieTransition(); setActiveTab("attendance"); setSidebarOpen(false); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "attendance" ? "text-text bg-surface-2 border-l-2 border-accent" : "text-text-muted hover:text-text"}`}>
+                <div onClick={() => { fireBrownieTransition(); setActiveTab("attendance"); setSidebarOpen(false); if (user) fetchAttendanceWeekOvertime(user); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "attendance" ? "text-text bg-surface-2 border-l-2 border-accent" : "text-text-muted hover:text-text"}`}>
               <span>👥</span> People &amp; Labour
             </div>
           )}
-          {user?.role === "Head Chef" && (
-            <div onClick={() => { fireBrownieTransition(); setActiveTab("production"); setSidebarOpen(false); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "production" ? "text-text bg-surface-2 border-l-2 border-accent" : "text-text-muted hover:text-text"}`}>
+          {(user?.role === "Head Chef" || user?.role === "Owner" || isFO) && (
+            <div onClick={() => { fireBrownieTransition(); setActiveTab("production"); setSidebarOpen(false); fetchKChefs(); fetchKProduction(kDate); fetchKProducts(); fetchKPlan(kDate); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "production" ? "text-text bg-surface-2 border-l-2 border-accent" : "text-text-muted hover:text-text"}`}>
               <span>🏭</span> Production
             </div>
           )}
@@ -3756,16 +3806,17 @@ else await fetchOutletReportsByDate(outletEntryDate);
        {activeTab === "tasks" && user && user.role === "Founder's Office" && <FounderDashboard user={user} />}
        {activeTab === "tasks" && user && user.role === "Owner" && <CommandCentre user={user} />}
        {activeTab === "tasks" && user && (user.role === "Asst. Ops Manager" || user.role === "Custom Cakes & Asst Ops") && <div className="mb-8"><MyOutletsDashboard user={user} /></div>}
-        {(activeTab === "tasks" || activeTab === "production") && user?.role === "Head Chef" && (
+        {((activeTab === "tasks" && user?.role === "Head Chef") || (activeTab === "production" && (user?.role === "Head Chef" || user?.role === "Owner" || isFO))) && (
           <div>
             <div className="flex justify-between items-end mb-6 pb-5 border-b border-zinc-800">
               <div>
                 <h2 className="text-2xl font-black tracking-tight">Kitchen Operations</h2>
                 <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mt-1">Daily production & workload · {user.name.split(" ")[0]}</p>
               </div>
-              <input type="date" value={kDate} onChange={(e) => { setKDate(e.target.value); fetchKProduction(e.target.value); }} className="bg-black border border-zinc-800 text-white px-4 py-2.5 focus:outline-none focus:border-yellow-400 transition-colors font-mono text-sm" />
+              <input type="date" value={kDate} onChange={(e) => { setKDate(e.target.value); fetchKProduction(e.target.value); fetchKPlan(e.target.value); }} className="bg-black border border-zinc-800 text-white px-4 py-2.5 focus:outline-none focus:border-yellow-400 transition-colors font-mono text-sm" />
             </div>
 
+            {user?.role === "Head Chef" && (
             <div className="mb-8 border border-zinc-800 p-4 sm:p-5">
               <p className="text-sm font-semibold mb-1">Today's Production</p>
               <p className="text-xs text-zinc-500 mb-4">Fill in whatever was made today, then submit once at the bottom.</p>
@@ -3801,6 +3852,39 @@ else await fetchOutletReportsByDate(outletEntryDate);
               </div>
               <datalist id="kproducts">{kProducts.map((pr) => <option key={pr.id} value={pr.name} />)}</datalist>
               <button onClick={submitKDailyProduction} disabled={kDailySubmitting} className="mt-5 w-full sm:w-auto bg-yellow-400 text-black px-6 py-3 text-sm font-bold hover:bg-yellow-300 disabled:opacity-50 transition-colors">{kDailySubmitting ? "Submitting…" : "Submit Today's Production"}</button>
+            </div>
+            )}
+
+            <div className="mb-8 border border-zinc-800 p-4 sm:p-5 max-w-3xl">
+              <p className="text-sm font-semibold mb-1">Daily Production Plan · {kDate}</p>
+              <p className="text-[11px] text-zinc-500 mb-4">Planned = the typical amount made on this day of the week, adjusted for the recent trend. Needs about 2 weeks of logged history per category before it can show a number — until then it just shows what's been made so far.</p>
+              {kPlanLoading ? <p className="text-sm text-zinc-500">Loading…</p> : (
+                <div className="space-y-3">
+                  {K_CATEGORIES.map((cat) => {
+                    const plan = kPlan[cat];
+                    const actual = kActualByCat[cat] || 0;
+                    if (!plan || !plan.hasHistory) {
+                      return (
+                        <div key={cat} className="flex justify-between text-sm text-zinc-500">
+                          <span>{cat}</span>
+                          <span className="font-mono text-xs">Not enough history yet · made so far: {actual}</span>
+                        </div>
+                      );
+                    }
+                    const pct = plan.planned > 0 ? Math.round((actual / plan.planned) * 100) : 0;
+                    const col = pct >= 90 ? "bg-green-500" : pct >= 50 ? "bg-yellow-400" : "bg-red-500";
+                    return (
+                      <div key={cat}>
+                        <div className="flex justify-between text-sm mb-0.5">
+                          <span>{cat}</span>
+                          <span className="font-mono text-zinc-300">{actual} / ~{plan.planned} planned{plan.planned > 0 ? ` · ${pct}%` : ""}</span>
+                        </div>
+                        <div className="h-2 bg-zinc-800"><div className={`h-full ${col}`} style={{ width: `${Math.min(100, pct)}%` }} /></div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 max-w-5xl">
@@ -5292,9 +5376,15 @@ else await fetchOutletReportsByDate(outletEntryDate);
           <div>
             <div className="flex justify-between items-start mb-6 pb-5 border-b border-zinc-800">
               <div>
-                <h2 className="text-2xl md:text-3xl font-black tracking-tight">Attendance</h2>
-                <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mt-1">Today's staff count</p>
+                <h2 className="text-2xl md:text-3xl font-black tracking-tight">People &amp; Labour</h2>
+                <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mt-1">Today's staff count & overtime</p>
               </div>
+              {attendanceWeekOvertime !== null && (
+                <div className="text-right">
+                  <p className="text-2xl font-black">{attendanceWeekOvertime.toFixed(1)}<span className="text-sm font-normal text-zinc-500"> hrs</span></p>
+                  <p className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest">Overtime · last 7 days</p>
+                </div>
+              )}
             </div>
            <div className="bg-[#131316] border border-zinc-800 p-6 max-w-md">
               <div className="mb-5">
@@ -5313,10 +5403,11 @@ else await fetchOutletReportsByDate(outletEntryDate);
               {todayAttendance ? (
                 <div>
                   <p className="text-green-400 font-mono text-sm uppercase tracking-widest mb-4">✓ Submitted for today</p>
-                  <div className="grid grid-cols-3 gap-4 text-center">
+                  <div className="grid grid-cols-4 gap-3 text-center">
                     <div><p className="text-3xl font-black">{todayAttendance.present}</p><p className="text-[10px] font-mono text-zinc-500 uppercase mt-1">Present</p></div>
                     <div><p className="text-3xl font-black">{todayAttendance.absent}</p><p className="text-[10px] font-mono text-zinc-500 uppercase mt-1">Absent</p></div>
                     <div><p className="text-3xl font-black">{todayAttendance.late}</p><p className="text-[10px] font-mono text-zinc-500 uppercase mt-1">Late</p></div>
+                    <div><p className="text-3xl font-black">{Number(todayAttendance.overtime_hours || 0).toFixed(1)}</p><p className="text-[10px] font-mono text-zinc-500 uppercase mt-1">OT hrs</p></div>
                   </div>
                   {(todayAttendance.absent_names || todayAttendance.late_names) && (
                     <div className="mt-4 space-y-2 text-sm">
@@ -5324,7 +5415,7 @@ else await fetchOutletReportsByDate(outletEntryDate);
                       {todayAttendance.late_names && <p><span className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest">Late:</span> {todayAttendance.late_names}</p>}
                     </div>
                   )}
-                  <button onClick={() => { setAttendanceData({ present: String(todayAttendance.present), absent: String(todayAttendance.absent), late: String(todayAttendance.late), absent_names: todayAttendance.absent_names || "", late_names: todayAttendance.late_names || "" }); setTodayAttendance(null); }} className="mt-5 text-[10px] font-mono text-zinc-500 uppercase tracking-widest hover:text-yellow-400">Edit</button>
+                  <button onClick={() => { setAttendanceData({ present: String(todayAttendance.present), absent: String(todayAttendance.absent), late: String(todayAttendance.late), absent_names: todayAttendance.absent_names || "", late_names: todayAttendance.late_names || "", overtime_hours: String(todayAttendance.overtime_hours || "") }); setTodayAttendance(null); }} className="mt-5 text-[10px] font-mono text-zinc-500 uppercase tracking-widest hover:text-yellow-400">Edit</button>
                 </div>
               ) : (
                 <div className="space-y-4">
@@ -5341,6 +5432,10 @@ else await fetchOutletReportsByDate(outletEntryDate);
                   <div>
                     <label className="block text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-1">Late — Names</label>
                     <textarea value={attendanceData.late_names} onChange={(e) => setAttendanceData(prev => ({ ...prev, late_names: e.target.value }))} rows={2} className="w-full bg-black border border-zinc-800 text-white px-3 py-2 focus:outline-none focus:border-yellow-400 transition-colors text-sm" placeholder="e.g. Kumar" />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-1">Total Overtime Hours (all staff, today)</label>
+                    <input type="number" step="0.5" value={attendanceData.overtime_hours} onChange={(e) => setAttendanceData(prev => ({ ...prev, overtime_hours: e.target.value }))} className="w-full bg-black border border-zinc-800 text-white px-3 py-2 focus:outline-none focus:border-yellow-400 transition-colors text-sm" placeholder="0" />
                   </div>
                   <button onClick={submitAttendance} disabled={attendanceSubmitting} className="bg-yellow-400 text-black font-bold tracking-widest text-xs px-6 py-3 hover:opacity-90 transition-opacity uppercase disabled:opacity-50">
                     {attendanceSubmitting ? "Submitting..." : "Submit Attendance →"}
