@@ -3510,7 +3510,7 @@ else await fetchOutletReportsByDate(outletEntryDate);
           <h1 className="text-xl font-black tracking-tight">TASK<span className="text-accent">FORCE IQ</span></h1>
           <p className="text-[10px] font-mono text-text-faint uppercase tracking-widest mt-1">Brownie Heaven</p>
         </div>
-        <nav className="flex-1 px-3 py-4">
+        <nav className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-3 py-4">
           <p className="text-[10px] font-mono text-text-faint uppercase tracking-widest px-3 pb-2">Workspace</p>
           <div onClick={() => { fireBrownieTransition(); setActiveTab("tasks"); setSidebarOpen(false); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "tasks" ? "text-text bg-surface-2 border-l-2 border-accent" : "text-text-muted hover:text-text"}`}>
             <span>▣</span> Dashboard
