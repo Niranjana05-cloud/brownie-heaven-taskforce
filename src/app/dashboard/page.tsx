@@ -3486,18 +3486,16 @@ else await fetchOutletReportsByDate(outletEntryDate);
   // he made that day and submits once. No chef picking required here (that's
   // a separate, optional roster below) — this is meant to be fast on a phone.
   const K_CATEGORIES = ["Half kg Cake", "1 kg Cake", "Pastries", "Corporate Order", "Hotel Order"] as const;
-  // One flat, fast-moving list instead of 5 separate boxes to scroll between.
-  // Each row carries its own category (defaults to whatever the row above it
-  // was, since Rafiq is usually adding several of the same kind in a row —
-  // half kg, half kg, 1kg, half kg... — and only needs to touch the dropdown
-  // when the category actually changes). "Other" reveals a free-text field
-  // for anything outside the 5 usual categories.
-  type KFlatRow = { category: string; customCategory: string; flavour: string; qty: string };
-  const newKFlatRow = (category: string = K_CATEGORIES[0]): KFlatRow => ({ category, customCategory: "", flavour: "", qty: "" });
-  const [kFlatRows, setKFlatRows] = useState<KFlatRow[]>([newKFlatRow()]);
-  const addKFlatRow = () => setKFlatRows((prev) => [...prev, newKFlatRow(prev[prev.length - 1]?.category || K_CATEGORIES[0])]);
-  const removeKFlatRow = (idx: number) => setKFlatRows((prev) => (prev.length <= 1 ? prev : prev.filter((_, i) => i !== idx)));
-  const updateKFlatRow = (idx: number, field: keyof KFlatRow, value: string) => setKFlatRows((prev) => prev.map((r, i) => (i === idx ? { ...r, [field]: value } : r)));
+  // 5 separate boxes, one per fixed category — all "Half kg Cake" rows live
+  // together, all "1 kg Cake" rows live together, etc. Each box has its own
+  // "+ Add another" button so Rafiq can quickly add several of the same
+  // category without re-picking it each time.
+  type KCatRow = { flavour: string; qty: string };
+  const emptyKCatRows = (): Record<string, KCatRow[]> => Object.fromEntries(K_CATEGORIES.map((c) => [c, [{ flavour: "", qty: "" }]]));
+  const [kCatRows, setKCatRows] = useState<Record<string, KCatRow[]>>(emptyKCatRows());
+  const addKCatRow = (cat: string) => setKCatRows((prev) => ({ ...prev, [cat]: [...prev[cat], { flavour: "", qty: "" }] }));
+  const removeKCatRow = (cat: string, idx: number) => setKCatRows((prev) => ({ ...prev, [cat]: prev[cat].length <= 1 ? prev[cat] : prev[cat].filter((_, i) => i !== idx) }));
+  const updateKCatRow = (cat: string, idx: number, field: keyof KCatRow, value: string) => setKCatRows((prev) => ({ ...prev, [cat]: prev[cat].map((r, i) => (i === idx ? { ...r, [field]: value } : r)) }));
   const [kDailySubmitting, setKDailySubmitting] = useState(false);
   const [kChefEditId, setKChefEditId] = useState<string | null>(null);
   const [kChefEditName, setKChefEditName] = useState("");
@@ -3571,19 +3569,19 @@ else await fetchOutletReportsByDate(outletEntryDate);
   // Rafiq actually works: fill in whatever was made, submit once.
   const submitKDailyProduction = async () => {
     const toInsert: any[] = [];
-    kFlatRows.forEach((r) => {
-      const qty = Number(r.qty) || 0;
-      const cat = r.category === "Other" ? r.customCategory.trim() : r.category;
-      if (!r.flavour.trim() && qty <= 0) return; // skip genuinely empty rows
-      if (!cat) return; // "Other" picked but no category typed in — skip rather than save a blank category
-      toInsert.push({ prod_date: kDate, chef_id: null, chef_name: null, flavour: r.flavour.trim() || null, qty, station: cat, entered_by: user?.id || null });
+    K_CATEGORIES.forEach((cat) => {
+      (kCatRows[cat] || []).forEach((r) => {
+        const qty = Number(r.qty) || 0;
+        if (!r.flavour.trim() && qty <= 0) return; // skip genuinely empty rows
+        toInsert.push({ prod_date: kDate, chef_id: null, chef_name: null, flavour: r.flavour.trim() || null, qty, station: cat, entered_by: user?.id || null });
+      });
     });
     if (toInsert.length === 0) { alert("Fill in at least one item before submitting."); return; }
     setKDailySubmitting(true);
     const { error } = await supabase.from("kitchen_production").insert(toInsert);
     setKDailySubmitting(false);
     if (error) { alert("Save failed: " + error.message); return; }
-    setKFlatRows([newKFlatRow()]);
+    setKCatRows(emptyKCatRows());
     fetchKProduction(kDate);
   };
   const delKProd = async (id: string) => { await supabase.from("kitchen_production").delete().eq("id", id); fetchKProduction(kDate); };
@@ -3901,52 +3899,41 @@ else await fetchOutletReportsByDate(outletEntryDate);
             {user?.role === "Head Chef" && (
             <div className="mb-8 border border-zinc-800 p-4 sm:p-5">
               <p className="text-sm font-semibold mb-1">Today's Production</p>
-              <p className="text-xs text-zinc-500 mb-4">Pick the category, type what was made and how many, then hit + to add the next one. Submit once at the bottom when done.</p>
-              <div className="space-y-2">
-                {kFlatRows.map((row, idx) => {
-                  const isOther = row.category === "Other";
-                  const isOrder = row.category === "Corporate Order" || row.category === "Hotel Order";
+              <p className="text-xs text-zinc-500 mb-4">Fill in whatever was made under each category, add more rows if needed, then submit once at the bottom.</p>
+              <div className="space-y-5">
+                {K_CATEGORIES.map((cat) => {
+                  const isOrder = cat === "Corporate Order" || cat === "Hotel Order";
                   return (
-                    <div key={idx} className="flex flex-wrap gap-2 items-center">
-                      <select
-                        value={row.category}
-                        onChange={(e) => updateKFlatRow(idx, "category", e.target.value)}
-                        className="bg-black border border-zinc-800 text-yellow-400 px-2 py-2.5 focus:outline-none focus:border-yellow-400 transition-colors text-sm font-mono shrink-0"
-                      >
-                        {K_CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
-                        <option value="Other">Other…</option>
-                      </select>
-                      {isOther && (
-                        <input
-                          type="text"
-                          value={row.customCategory}
-                          onChange={(e) => updateKFlatRow(idx, "customCategory", e.target.value)}
-                          placeholder="Category name"
-                          className="w-32 bg-black border border-yellow-400 text-white px-2 py-2.5 focus:outline-none transition-colors text-sm shrink-0"
-                        />
-                      )}
-                      <input
-                        type="text"
-                        value={row.flavour}
-                        onChange={(e) => updateKFlatRow(idx, "flavour", e.target.value)}
-                        placeholder={isOrder ? "Description (e.g. Taj Hotel order)" : "Flavour (e.g. Choco truffle)"}
-                        list={isOrder ? undefined : "kproducts"}
-                        className="flex-1 min-w-[140px] bg-black border border-zinc-800 text-white px-3 py-2.5 focus:outline-none focus:border-yellow-400 transition-colors text-sm"
-                      />
-                      <input
-                        type="number"
-                        value={row.qty}
-                        onChange={(e) => updateKFlatRow(idx, "qty", e.target.value)}
-                        placeholder="Count"
-                        className="w-20 bg-black border border-zinc-800 text-white px-3 py-2.5 focus:outline-none focus:border-yellow-400 transition-colors text-sm shrink-0"
-                      />
-                      <button onClick={() => removeKFlatRow(idx)} className="text-zinc-500 hover:text-red-500 px-2 py-2.5 border border-zinc-800 hover:border-red-500 transition-colors shrink-0">✕</button>
+                    <div key={cat}>
+                      <p className="text-[11px] font-mono uppercase tracking-widest text-yellow-400 mb-2">{cat}</p>
+                      <div className="space-y-2">
+                        {kCatRows[cat].map((row, idx) => (
+                          <div key={idx} className="flex flex-wrap gap-2 items-center">
+                            <input
+                              type="text"
+                              value={row.flavour}
+                              onChange={(e) => updateKCatRow(cat, idx, "flavour", e.target.value)}
+                              placeholder={isOrder ? "Description (e.g. Taj Hotel order)" : "Flavour (e.g. Choco truffle)"}
+                              list={isOrder ? undefined : "kproducts"}
+                              className="flex-1 min-w-[140px] bg-black border border-zinc-800 text-white px-3 py-2.5 focus:outline-none focus:border-yellow-400 transition-colors text-sm"
+                            />
+                            <input
+                              type="number"
+                              value={row.qty}
+                              onChange={(e) => updateKCatRow(cat, idx, "qty", e.target.value)}
+                              placeholder="Count"
+                              className="w-20 bg-black border border-zinc-800 text-white px-3 py-2.5 focus:outline-none focus:border-yellow-400 transition-colors text-sm shrink-0"
+                            />
+                            <button onClick={() => removeKCatRow(cat, idx)} className="text-zinc-500 hover:text-red-500 px-2 py-2.5 border border-zinc-800 hover:border-red-500 transition-colors shrink-0">✕</button>
+                          </div>
+                        ))}
+                      </div>
+                      <button onClick={() => addKCatRow(cat)} className="mt-2 text-[11px] font-mono uppercase text-zinc-400 hover:text-yellow-400 transition-colors">+ Add another {isOrder ? "order" : "flavour"}</button>
                     </div>
                   );
                 })}
               </div>
               <datalist id="kproducts">{kProducts.map((pr) => <option key={pr.id} value={pr.name} />)}</datalist>
-              <button onClick={addKFlatRow} className="mt-3 text-[11px] font-mono uppercase text-zinc-400 hover:text-yellow-400 transition-colors">+ Add item</button>
               <button onClick={submitKDailyProduction} disabled={kDailySubmitting} className="mt-5 block w-full sm:w-auto bg-yellow-400 text-black px-6 py-3 text-sm font-bold hover:bg-yellow-300 disabled:opacity-50 transition-colors">{kDailySubmitting ? "Submitting…" : "Submit Today's Production"}</button>
             </div>
             )}
