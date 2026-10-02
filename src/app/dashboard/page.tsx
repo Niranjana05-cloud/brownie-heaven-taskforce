@@ -3506,6 +3506,16 @@ else await fetchOutletReportsByDate(outletEntryDate);
   const saveKTargets = async () => { for (const pr of kProducts) { const v = kTgtEdits[pr.id]; if (v !== undefined && v !== String(pr.target_qty ?? "")) { await supabase.from("kitchen_products").update({ target_qty: Number(v) || 0 }).eq("id", pr.id); } } setKTgtEdits({}); fetchKProducts(); };
   const kProdVsTarget = kProducts.map((pr) => { const made = kRows.filter((r) => (r.flavour || "").trim().toLowerCase() === (pr.name || "").trim().toLowerCase()).reduce((sm, r) => sm + (Number(r.qty) || 0), 0); return { name: pr.name as string, category: (pr.category || "Other") as string, made, target: (pr.target_qty || 0) as number }; });
   const kCats = Array.from(new Set(kProducts.map((pr) => pr.category || "Other")));
+  // Flavour suggestions for the entry form, scoped to each box's own
+  // category — so the "Half kg Cake" box only suggests half-kg flavours
+  // (in the same order as the master product list), not every product
+  // mixed together. Falls back to showing everything if a category has
+  // no matching products yet, so the field never ends up empty.
+  const kProductsForCat = (cat: string) => {
+    const norm = (s: string) => (s || "").trim().toLowerCase();
+    const matched = kProducts.filter((pr) => norm(pr.category) === norm(cat));
+    return matched.length > 0 ? matched : kProducts;
+  };
   const kMasterNames = new Set(kProducts.map((pr) => (pr.name || "").trim().toLowerCase()));
   const kCustom = kRows.filter((r) => !kMasterNames.has((r.flavour || "").trim().toLowerCase()));
   const fetchKChefs = async () => { const { data } = await supabase.from("kitchen_chefs").select("*").eq("active", true).order("name"); setKChefs(data || []); };
@@ -3903,9 +3913,15 @@ else await fetchOutletReportsByDate(outletEntryDate);
               <div className="space-y-5">
                 {K_CATEGORIES.map((cat) => {
                   const isOrder = cat === "Corporate Order" || cat === "Hotel Order";
+                  const catListId = `kproducts-${cat.replace(/\s+/g, "-").toLowerCase()}`;
                   return (
                     <div key={cat}>
                       <p className="text-[11px] font-mono uppercase tracking-widest text-yellow-400 mb-2">{cat}</p>
+                      {!isOrder && (
+                        <datalist id={catListId}>
+                          {kProductsForCat(cat).map((pr) => <option key={pr.id} value={pr.name} />)}
+                        </datalist>
+                      )}
                       <div className="space-y-2">
                         {kCatRows[cat].map((row, idx) => (
                           <div key={idx} className="flex flex-wrap gap-2 items-center">
@@ -3914,7 +3930,7 @@ else await fetchOutletReportsByDate(outletEntryDate);
                               value={row.flavour}
                               onChange={(e) => updateKCatRow(cat, idx, "flavour", e.target.value)}
                               placeholder={isOrder ? "Description (e.g. Taj Hotel order)" : "Flavour (e.g. Choco truffle)"}
-                              list={isOrder ? undefined : "kproducts"}
+                              list={isOrder ? undefined : catListId}
                               className="flex-1 min-w-[140px] bg-black border border-zinc-800 text-white px-3 py-2.5 focus:outline-none focus:border-yellow-400 transition-colors text-sm"
                             />
                             <input
@@ -3933,7 +3949,6 @@ else await fetchOutletReportsByDate(outletEntryDate);
                   );
                 })}
               </div>
-              <datalist id="kproducts">{kProducts.map((pr) => <option key={pr.id} value={pr.name} />)}</datalist>
               <button onClick={submitKDailyProduction} disabled={kDailySubmitting} className="mt-5 block w-full sm:w-auto bg-yellow-400 text-black px-6 py-3 text-sm font-bold hover:bg-yellow-300 disabled:opacity-50 transition-colors">{kDailySubmitting ? "Submitting…" : "Submit Today's Production"}</button>
             </div>
             )}
