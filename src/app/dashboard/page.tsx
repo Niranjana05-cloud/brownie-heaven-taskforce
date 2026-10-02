@@ -47,7 +47,7 @@ type OutletReport = {
   target: number; swiggy_live: boolean; zomato_live: boolean;
   discount_running: string; discount_rate_good: boolean; discount_given?: number;
   unavailable_items: string; expiry_count: number; expiry_items: string;
-  complimentary_count: number; complimentary_reason: string;
+  complimentary_count: number; complimentary_items: string; complimentary_reason: string;
 issues: string; action_taken: string; submitted_at: string; is_late: boolean; is_edited: boolean;
 bh_google_rating: number; bh_swiggy_rating: number; bh_zomato_rating: number;
 cbh_google_rating: number; cbh_swiggy_rating: number; cbh_zomato_rating: number;
@@ -2812,7 +2812,7 @@ export default function DashboardPage() {
   };
   const exportCSV = () => {
   if (historyOutletReports.length === 0) { alert("No outlet reports for this date."); return; }
-  const headers = ["Outlet", "Manager", "Date", "Shop Sales Value", "Shop Sales Count", "Swiggy Value", "Swiggy Count", "Zomato Value", "Zomato Count", "Total Sales", "Target", "Swiggy Live", "Zomato Live", "Discount Running", "Discount Rate Good", "Unavailable Items", "Expiry Count", "Expiry Items", "Complimentary Count", "Complimentary Reason", "Issues", "Action Taken", "Submitted At", "Late"];
+  const headers = ["Outlet", "Manager", "Date", "Shop Sales Value", "Shop Sales Count", "Swiggy Value", "Swiggy Count", "Zomato Value", "Zomato Count", "Total Sales", "Target", "Swiggy Live", "Zomato Live", "Discount Running", "Discount Rate Good", "Unavailable Items", "Expiry Count", "Expiry Items", "Complimentary Count", "Complimentary Product Name", "Complimentary Reason", "Issues", "Action Taken", "Submitted At", "Late"];
   const rows = historyOutletReports.map(r => {
     const manager = ALL_STAFF.find(s => (s.outlets as string[]).includes(r.outlet_id))?.name || "—";
     const total = Number(r.shop_sales_value) + Number(r.swiggy_sales_value) + Number(r.zomato_sales_value);
@@ -2836,6 +2836,7 @@ export default function DashboardPage() {
       r.expiry_count,
       r.expiry_items || "",
       r.complimentary_count,
+      r.complimentary_items || "",
       r.complimentary_reason || "",
       r.issues || "",
       r.action_taken || "",
@@ -3155,6 +3156,7 @@ const runTargetCheck = async (u: Staff) => {
     expiry_count: String(r.expiry_count),
     expiry_items: r.expiry_items || "",
     complimentary_count: String(r.complimentary_count),
+    complimentary_items: r.complimentary_items || "",
     complimentary_reason: r.complimentary_reason || "",
    bh_google_rating: String(r.bh_google_rating || ""),
   bh_swiggy_rating: String(r.bh_swiggy_rating || ""),
@@ -3316,8 +3318,20 @@ const submitOutletReport = async () => {
     { k: "zomato_sales_count", label: "Zomato Sales Count" },
     { k: "zomato_sales_value", label: "Zomato Sales Value" },
   ];
+  // Expiry/complimentary tracking becomes compulsory starting 3 Oct 2026 —
+  // gated on the date the report is FOR (not the date it's being filed),
+  // so reports being backfilled for earlier dates aren't blocked by a rule
+  // that didn't exist yet when that day happened.
+  const EXPIRY_FIELDS_REQUIRED_FROM = "2026-10-03";
+  if (outletEntryDate >= EXPIRY_FIELDS_REQUIRED_FROM) {
+    _req.push(
+      { k: "expiry_items", label: "Expired Product Name (type 'None' if nothing expired)" },
+      { k: "complimentary_items", label: "Complimentary Product Name (type 'None' if none given)" },
+      { k: "complimentary_reason", label: "Reason (type 'None' if not applicable)" },
+    );
+  }
   const _miss = _req.filter((f) => !(outletReportData as any)[f.k] || !String((outletReportData as any)[f.k]).trim());
-  if (_miss.length) { alert("Please fill all sales fields before submitting.\n\nMissing: " + _miss.map((f) => f.label).join(", ")); return; }
+  if (_miss.length) { alert("Please fill all required fields before submitting.\n\nMissing: " + _miss.map((f) => f.label).join(", ")); return; }
   setOutletSubmitting(true);
  const deadline = new Date();
   deadline.setHours(12, 0, 0, 0);
@@ -3350,6 +3364,7 @@ const _clean = (v: any) => String(v ?? "").replace(/[^0-9.]/g, "");
     expiry_count: parseInt(d.expiry_count) || 0,
     expiry_items: d.expiry_items || "",
     complimentary_count: parseInt(d.complimentary_count) || 0,
+    complimentary_items: d.complimentary_items || "",
     complimentary_reason: d.complimentary_reason || "",
     issues: d.issues || "",
     action_taken: d.action_taken || "",
@@ -3486,16 +3501,24 @@ else await fetchOutletReportsByDate(outletEntryDate);
   // he made that day and submits once. No chef picking required here (that's
   // a separate, optional roster below) — this is meant to be fast on a phone.
   const K_CATEGORIES = ["Half kg Cake", "1 kg Cake", "Pastries", "Corporate Order", "Hotel Order"] as const;
-  // 5 separate boxes, one per fixed category — all "Half kg Cake" rows live
-  // together, all "1 kg Cake" rows live together, etc. Each box has its own
-  // "+ Add another" button so Rafiq can quickly add several of the same
-  // category without re-picking it each time.
+  // 5 separate boxes, one per fixed category. Inside each non-order box,
+  // every product already on the master list (kitchen_products) is printed
+  // as its own row with just a count field — exactly like Rafiq's paper
+  // sheet — so there's nothing to pick, only numbers to fill in. "+ Add
+  // another flavour" below that is only for something NOT already printed
+  // (a one-off, not yet on the master list); "+ Add new product" actually
+  // adds it to the master list so it's pre-printed here from then on.
+  const [kMasterQty, setKMasterQty] = useState<Record<string, string>>({}); // productId -> qty
   type KCatRow = { flavour: string; qty: string };
-  const emptyKCatRows = (): Record<string, KCatRow[]> => Object.fromEntries(K_CATEGORIES.map((c) => [c, [{ flavour: "", qty: "" }]]));
+  const emptyKCatRows = (): Record<string, KCatRow[]> => Object.fromEntries(K_CATEGORIES.map((c) => [c, [] as KCatRow[]]));
   const [kCatRows, setKCatRows] = useState<Record<string, KCatRow[]>>(emptyKCatRows());
-  const addKCatRow = (cat: string) => setKCatRows((prev) => ({ ...prev, [cat]: [...prev[cat], { flavour: "", qty: "" }] }));
-  const removeKCatRow = (cat: string, idx: number) => setKCatRows((prev) => ({ ...prev, [cat]: prev[cat].length <= 1 ? prev[cat] : prev[cat].filter((_, i) => i !== idx) }));
-  const updateKCatRow = (cat: string, idx: number, field: keyof KCatRow, value: string) => setKCatRows((prev) => ({ ...prev, [cat]: prev[cat].map((r, i) => (i === idx ? { ...r, [field]: value } : r)) }));
+  const addKCatRow = (cat: string) => setKCatRows((prev) => ({ ...prev, [cat]: [...(prev[cat] || []), { flavour: "", qty: "" }] }));
+  const removeKCatRow = (cat: string, idx: number) => setKCatRows((prev) => ({ ...prev, [cat]: (prev[cat] || []).filter((_, i) => i !== idx) }));
+  const updateKCatRow = (cat: string, idx: number, field: keyof KCatRow, value: string) => setKCatRows((prev) => ({ ...prev, [cat]: (prev[cat] || []).map((r, i) => (i === idx ? { ...r, [field]: value } : r)) }));
+  // Inline "add a new product to the master list" form, one open at a time.
+  const [kAddProductCat, setKAddProductCat] = useState<string | null>(null);
+  const [kNewProductName, setKNewProductName] = useState("");
+  const [kAddingProduct, setKAddingProduct] = useState(false);
   const [kDailySubmitting, setKDailySubmitting] = useState(false);
   const [kChefEditId, setKChefEditId] = useState<string | null>(null);
   const [kChefEditName, setKChefEditName] = useState("");
@@ -3503,6 +3526,21 @@ else await fetchOutletReportsByDate(outletEntryDate);
   const [kTgtEdits, setKTgtEdits] = useState<Record<string, string>>({});
   const [kShowTargets, setKShowTargets] = useState(false);
   const fetchKProducts = async () => { const { data } = await supabase.from("kitchen_products").select("*").eq("active", true).order("sort_order"); setKProducts(data || []); };
+  // Adds a brand-new flavour to the master list, permanently, under the
+  // given category — from then on it's pre-printed in that category's box
+  // instead of needing "+ Add another flavour" every single day.
+  const addKProduct = async (cat: string) => {
+    const name = kNewProductName.trim();
+    if (!name) return;
+    setKAddingProduct(true);
+    const maxSort = kProducts.reduce((m, pr) => Math.max(m, Number(pr.sort_order) || 0), 0);
+    const { error } = await supabase.from("kitchen_products").insert({ name, category: cat, active: true, sort_order: maxSort + 1, target_qty: 0 });
+    setKAddingProduct(false);
+    if (error) { alert("Failed: " + error.message); return; }
+    setKNewProductName("");
+    setKAddProductCat(null);
+    fetchKProducts();
+  };
   const saveKTargets = async () => { for (const pr of kProducts) { const v = kTgtEdits[pr.id]; if (v !== undefined && v !== String(pr.target_qty ?? "")) { await supabase.from("kitchen_products").update({ target_qty: Number(v) || 0 }).eq("id", pr.id); } } setKTgtEdits({}); fetchKProducts(); };
   const kProdVsTarget = kProducts.map((pr) => { const made = kRows.filter((r) => (r.flavour || "").trim().toLowerCase() === (pr.name || "").trim().toLowerCase()).reduce((sm, r) => sm + (Number(r.qty) || 0), 0); return { name: pr.name as string, category: (pr.category || "Other") as string, made, target: (pr.target_qty || 0) as number }; });
   const kCats = Array.from(new Set(kProducts.map((pr) => pr.category || "Other")));
@@ -3579,11 +3617,19 @@ else await fetchOutletReportsByDate(outletEntryDate);
   // Rafiq actually works: fill in whatever was made, submit once.
   const submitKDailyProduction = async () => {
     const toInsert: any[] = [];
+    // Pre-printed master-list rows — one per product with a count typed in.
+    kProducts.forEach((pr) => {
+      const qty = Number(kMasterQty[pr.id]) || 0;
+      if (qty <= 0) return;
+      toInsert.push({ prod_date: kDate, chef_id: null, chef_name: null, flavour: pr.name, qty, station: pr.category || "Other", entered_by: user?.id || null });
+    });
+    // Extra ad-hoc rows (not on the master list yet) + order-category rows.
     K_CATEGORIES.forEach((cat) => {
       (kCatRows[cat] || []).forEach((r) => {
         const qty = Number(r.qty) || 0;
-        if (!r.flavour.trim() && qty <= 0) return; // skip genuinely empty rows
-        toInsert.push({ prod_date: kDate, chef_id: null, chef_name: null, flavour: r.flavour.trim() || null, qty, station: cat, entered_by: user?.id || null });
+        const flavour = r.flavour.trim();
+        if (!flavour && qty <= 0) return; // skip genuinely empty rows
+        toInsert.push({ prod_date: kDate, chef_id: null, chef_name: null, flavour: flavour || null, qty, station: cat, entered_by: user?.id || null });
       });
     });
     if (toInsert.length === 0) { alert("Fill in at least one item before submitting."); return; }
@@ -3591,6 +3637,7 @@ else await fetchOutletReportsByDate(outletEntryDate);
     const { error } = await supabase.from("kitchen_production").insert(toInsert);
     setKDailySubmitting(false);
     if (error) { alert("Save failed: " + error.message); return; }
+    setKMasterQty({});
     setKCatRows(emptyKCatRows());
     fetchKProduction(kDate);
   };
@@ -3909,42 +3956,81 @@ else await fetchOutletReportsByDate(outletEntryDate);
             {user?.role === "Head Chef" && (
             <div className="mb-8 border border-zinc-800 p-4 sm:p-5">
               <p className="text-sm font-semibold mb-1">Today's Production</p>
-              <p className="text-xs text-zinc-500 mb-4">Fill in whatever was made under each category, add more rows if needed, then submit once at the bottom.</p>
-              <div className="space-y-5">
+              <p className="text-xs text-zinc-500 mb-4">Every known flavour is already listed under its category — just type the count next to whatever was made. Use "+ Add another flavour" only for something not listed yet, or "+ Add new product" to put it on the list permanently.</p>
+              <div className="space-y-6">
                 {K_CATEGORIES.map((cat) => {
                   const isOrder = cat === "Corporate Order" || cat === "Hotel Order";
-                  const catListId = `kproducts-${cat.replace(/\s+/g, "-").toLowerCase()}`;
+                  const catProducts = kProductsForCat(cat);
                   return (
                     <div key={cat}>
                       <p className="text-[11px] font-mono uppercase tracking-widest text-yellow-400 mb-2">{cat}</p>
+
+                      {/* Pre-printed master-list rows — just a count field each, no picking. */}
                       {!isOrder && (
-                        <datalist id={catListId}>
-                          {kProductsForCat(cat).map((pr) => <option key={pr.id} value={pr.name} />)}
-                        </datalist>
+                        <div className="space-y-1.5 mb-2">
+                          {catProducts.length === 0 && <p className="text-xs text-zinc-600">No products on the list yet — add one below.</p>}
+                          {catProducts.map((pr) => (
+                            <div key={pr.id} className="flex items-center gap-2">
+                              <span className="flex-1 text-sm text-zinc-200">{pr.name}</span>
+                              <input
+                                type="number"
+                                value={kMasterQty[pr.id] || ""}
+                                onChange={(e) => setKMasterQty((prev) => ({ ...prev, [pr.id]: e.target.value }))}
+                                placeholder="0"
+                                className="w-20 bg-black border border-zinc-800 text-white px-3 py-2 focus:outline-none focus:border-yellow-400 transition-colors text-sm shrink-0"
+                              />
+                            </div>
+                          ))}
+                        </div>
                       )}
-                      <div className="space-y-2">
-                        {kCatRows[cat].map((row, idx) => (
-                          <div key={idx} className="flex flex-wrap gap-2 items-center">
-                            <input
-                              type="text"
-                              value={row.flavour}
-                              onChange={(e) => updateKCatRow(cat, idx, "flavour", e.target.value)}
-                              placeholder={isOrder ? "Description (e.g. Taj Hotel order)" : "Flavour (e.g. Choco truffle)"}
-                              list={isOrder ? undefined : catListId}
-                              className="flex-1 min-w-[140px] bg-black border border-zinc-800 text-white px-3 py-2.5 focus:outline-none focus:border-yellow-400 transition-colors text-sm"
-                            />
-                            <input
-                              type="number"
-                              value={row.qty}
-                              onChange={(e) => updateKCatRow(cat, idx, "qty", e.target.value)}
-                              placeholder="Count"
-                              className="w-20 bg-black border border-zinc-800 text-white px-3 py-2.5 focus:outline-none focus:border-yellow-400 transition-colors text-sm shrink-0"
-                            />
-                            <button onClick={() => removeKCatRow(cat, idx)} className="text-zinc-500 hover:text-red-500 px-2 py-2.5 border border-zinc-800 hover:border-red-500 transition-colors shrink-0">✕</button>
-                          </div>
-                        ))}
+
+                      {/* Extra rows — ad-hoc flavours (non-order) or free-text orders. */}
+                      {(kCatRows[cat] || []).length > 0 && (
+                        <div className="space-y-2 mb-2">
+                          {(kCatRows[cat] || []).map((row, idx) => (
+                            <div key={idx} className="flex flex-wrap gap-2 items-center">
+                              <input
+                                type="text"
+                                value={row.flavour}
+                                onChange={(e) => updateKCatRow(cat, idx, "flavour", e.target.value)}
+                                placeholder={isOrder ? "Description (e.g. Taj Hotel order)" : "Flavour name"}
+                                className="flex-1 min-w-[140px] bg-black border border-yellow-400 text-white px-3 py-2.5 focus:outline-none transition-colors text-sm"
+                              />
+                              <input
+                                type="number"
+                                value={row.qty}
+                                onChange={(e) => updateKCatRow(cat, idx, "qty", e.target.value)}
+                                placeholder="Count"
+                                className="w-20 bg-black border border-zinc-800 text-white px-3 py-2.5 focus:outline-none focus:border-yellow-400 transition-colors text-sm shrink-0"
+                              />
+                              <button onClick={() => removeKCatRow(cat, idx)} className="text-zinc-500 hover:text-red-500 px-2 py-2.5 border border-zinc-800 hover:border-red-500 transition-colors shrink-0">✕</button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Inline "add new product" form. */}
+                      {kAddProductCat === cat && !isOrder && (
+                        <div className="flex flex-wrap gap-2 items-center mb-2 bg-black/40 p-2 border border-yellow-400/40">
+                          <input
+                            type="text"
+                            value={kNewProductName}
+                            onChange={(e) => setKNewProductName(e.target.value)}
+                            placeholder="New product name"
+                            autoFocus
+                            className="flex-1 min-w-[140px] bg-black border border-zinc-800 text-white px-3 py-2 focus:outline-none focus:border-yellow-400 transition-colors text-sm"
+                          />
+                          <button onClick={() => addKProduct(cat)} disabled={kAddingProduct || !kNewProductName.trim()} className="text-[11px] font-mono uppercase bg-yellow-400 text-black px-3 py-2 hover:bg-yellow-300 disabled:opacity-50 transition-colors shrink-0">{kAddingProduct ? "Adding…" : "Add to list"}</button>
+                          <button onClick={() => { setKAddProductCat(null); setKNewProductName(""); }} className="text-[11px] font-mono uppercase text-zinc-500 hover:text-white px-2 shrink-0">Cancel</button>
+                        </div>
+                      )}
+
+                      <div className="flex gap-4">
+                        <button onClick={() => addKCatRow(cat)} className="text-[11px] font-mono uppercase text-zinc-400 hover:text-yellow-400 transition-colors">+ Add another {isOrder ? "order" : "flavour"}</button>
+                        {!isOrder && kAddProductCat !== cat && (
+                          <button onClick={() => { setKAddProductCat(cat); setKNewProductName(""); }} className="text-[11px] font-mono uppercase text-zinc-400 hover:text-yellow-400 transition-colors">+ Add new product</button>
+                        )}
                       </div>
-                      <button onClick={() => addKCatRow(cat)} className="mt-2 text-[11px] font-mono uppercase text-zinc-400 hover:text-yellow-400 transition-colors">+ Add another {isOrder ? "order" : "flavour"}</button>
                     </div>
                   );
                 })}
@@ -4005,17 +4091,28 @@ else await fetchOutletReportsByDate(outletEntryDate);
               </div>
 
               <div className="border border-zinc-800 p-4">
-                <p className="text-sm font-semibold mb-3">Assignments · {kDate}</p>
-                {kRows.length === 0 ? <p className="text-sm text-zinc-600">Nothing assigned yet.</p> : (
-                  <div className="space-y-1.5">
-                    {kRows.map((r) => (
-                      <div key={r.id} className="flex items-baseline gap-2 text-sm border-b border-zinc-900 pb-1.5">
-                        <span className="font-medium w-28">{r.chef_name}</span>
-                        <span className="flex-1 text-zinc-400">{r.flavour || "—"}{r.station ? ` · ${r.station}` : ""}</span>
-                        <span className="font-mono text-yellow-400">{r.qty}</span>
-                        <button onClick={() => delKProd(r.id)} className="text-[10px] font-mono uppercase px-2 py-0.5 border border-zinc-700 hover:border-red-500 hover:text-red-500 transition-colors">✕</button>
-                      </div>
-                    ))}
+                <p className="text-sm font-semibold mb-3">Today's log · {kDate}</p>
+                {kRows.length === 0 ? <p className="text-sm text-zinc-600">Nothing logged yet.</p> : (
+                  <div className="space-y-3">
+                    {[...K_CATEGORIES, ...Array.from(new Set(kRows.map((r) => r.station).filter((s) => s && !(K_CATEGORIES as readonly string[]).includes(s))))].map((cat) => {
+                      const rows = kRows.filter((r) => r.station === cat);
+                      if (rows.length === 0) return null;
+                      const catTotal = rows.reduce((s, r) => s + (Number(r.qty) || 0), 0);
+                      return (
+                        <div key={cat}>
+                          <div className="flex justify-between items-baseline mb-1"><p className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest">{cat}</p><span className="text-[10px] font-mono text-zinc-500">{catTotal}</span></div>
+                          <div className="space-y-1">
+                            {rows.map((r) => (
+                              <div key={r.id} className="flex items-baseline gap-2 text-sm border-b border-zinc-900 pb-1">
+                                <span className="flex-1 text-zinc-300">{r.flavour || "—"}{r.chef_name ? ` · ${r.chef_name}` : ""}</span>
+                                <span className="font-mono text-yellow-400">{r.qty}</span>
+                                <button onClick={() => delKProd(r.id)} className="text-[10px] font-mono uppercase px-2 py-0.5 border border-zinc-700 hover:border-red-500 hover:text-red-500 transition-colors">✕</button>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </div>
@@ -6053,7 +6150,7 @@ else await fetchOutletReportsByDate(outletEntryDate);
         { label: "Zomato Live", value: outletReports[activeOutlet].zomato_live ? "✓ Yes" : "✗ No", color: outletReports[activeOutlet].zomato_live ? "text-green-400" : "text-red-500" },
         { label: "Discount Running", value: outletReports[activeOutlet].discount_running || "—" },
         { label: "Expiry Items", value: `${outletReports[activeOutlet].expiry_count} — ${outletReports[activeOutlet].expiry_items || "—"}` },
-        { label: "Complimentary", value: `${outletReports[activeOutlet].complimentary_count} — ${outletReports[activeOutlet].complimentary_reason || "—"}` },
+        { label: "Complimentary", value: `${outletReports[activeOutlet].complimentary_count} — ${outletReports[activeOutlet].complimentary_items || "—"} (${outletReports[activeOutlet].complimentary_reason || "—"})` },
         { label: "BH Google", value: outletReports[activeOutlet].bh_google_rating ? `⭐ ${outletReports[activeOutlet].bh_google_rating}` : "—" },
         { label: "BH Swiggy", value: outletReports[activeOutlet].bh_swiggy_rating ? `⭐ ${outletReports[activeOutlet].bh_swiggy_rating}` : "—" },
         { label: "BH Zomato", value: outletReports[activeOutlet].bh_zomato_rating ? `⭐ ${outletReports[activeOutlet].bh_zomato_rating}` : "—" },
@@ -6093,9 +6190,10 @@ else await fetchOutletReportsByDate(outletEntryDate);
   { label: "Discount Given (Rs)", key: "discount_given" },
   { label: "Unavailable Items", key: "unavailable_items" },
   { label: "Expiry Items Count", key: "expiry_count" },
-  { label: "Expiry Items (list)", key: "expiry_items" },
+  { label: `Expired Product Name${outletEntryDate >= "2026-10-03" ? " *" : ""}`, key: "expiry_items", hint: "Type 'None' if nothing expired" },
   { label: "Complimentary Given (count)", key: "complimentary_count" },
-  { label: "Complimentary Reason", key: "complimentary_reason" },
+  { label: `Complimentary Product Name${outletEntryDate >= "2026-10-03" ? " *" : ""}`, key: "complimentary_items", hint: "Type 'None' if none given" },
+  { label: `Reason${outletEntryDate >= "2026-10-03" ? " *" : ""}`, key: "complimentary_reason", hint: "Reason for the expiry / complimentary item — type 'None' if not applicable" },
   { label: "BH — Google Rating", key: "bh_google_rating" },
   { label: "BH — Swiggy Rating", key: "bh_swiggy_rating" },
   { label: "BH — Zomato Rating", key: "bh_zomato_rating" },
@@ -6105,7 +6203,7 @@ else await fetchOutletReportsByDate(outletEntryDate);
   { label: "ICBH — Zomato Rating", key: "icbh_zomato_rating" },
   { label: "Issues Today", key: "issues" },
   { label: "Action Taken", key: "action_taken" },
-].map(f => (
+].map((f: { label: string; key: string; hint?: string }) => (
   <div key={f.key}>
     <label className="block text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-1">{f.label}</label>
     <input
@@ -6113,7 +6211,7 @@ else await fetchOutletReportsByDate(outletEntryDate);
       value={outletReportData[f.key] || ""}
       onChange={(e) => setOutletReportData(prev => ({ ...prev, [f.key]: e.target.value }))}
       className="w-full bg-black border border-zinc-800 text-white px-3 py-2 focus:outline-none focus:border-yellow-400 transition-colors text-sm"
-      placeholder="—"
+      placeholder={f.hint || "—"}
     />
   </div>
 ))}
