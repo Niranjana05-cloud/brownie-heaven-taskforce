@@ -123,9 +123,17 @@ const TARGET_UPDATES: { from: string; monthly: Record<string, number> }[] = [
  { from: "2026-08", monthly: { royapettah: 2400000, adayar: 600000, bsr_mall: 1050000, velachery: 700000, ra_puram: 650000, anna_nagar: 1800000, pallavaram: 700000, vadapalani: 700000, besant_nagar: 500000, perumbakkam: 550000, tambaram: 650000, porur: 1600000 } },
  { from: "2026-09", monthly: { royapettah: 2600000, adayar: 650000, bsr_mall: 1050000, velachery: 700000, ra_puram: 650000, anna_nagar: 1800000, pallavaram: 700000, vadapalani: 1050000, besant_nagar: 500000, perumbakkam: 550000, tambaram: 650000, porur: 1600000 } },
 ];
+// Target changes Arun makes from the Outlet Targets screen land in the
+// outlet_target_updates table instead of here — this array stays as the
+// historical seed, and RUNTIME_TARGET_UPDATES (populated from that table on
+// load) is merged on top of it below. Each entry works exactly like the
+// hardcoded ones above: "from this month (YYYY-MM) onward, use this value" —
+// so a change made effective November never touches October or earlier.
+let RUNTIME_TARGET_UPDATES: { from: string; monthly: Record<string, number> }[] = [];
 function monthlyTargetFor(oid: string, ym: string): number {
   let v = MONTHLY_BASE[oid] || 0;
-  for (const u of TARGET_UPDATES) { if (ym >= u.from && u.monthly[oid] != null) v = u.monthly[oid]; }
+  const all = [...TARGET_UPDATES, ...RUNTIME_TARGET_UPDATES].sort((a, b) => a.from.localeCompare(b.from));
+  for (const u of all) { if (ym >= u.from && u.monthly[oid] != null) v = u.monthly[oid]; }
   return v;
 }
 function dailyTargetFor(oid: string, ym: string): number {
@@ -398,7 +406,7 @@ export default function DashboardPage() {
   const [reports, setReports] = useState<Report[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
-  const [activeTab, setActiveTab] = useState<"tasks" | "my_report" | "all_reports" | "analytics" | "outlet_reports" | "owner_outlets" | "history" | "attendance" | "sales_target" | "payout" | "reconciliation" | "competition" | "item_perf" | "ceo_report" | "fines" | "niranjana_report" | "pnl" | "contribution_margins" | "net_realisation" | "cash_flow" | "sales_forecast" | "cheques" | "auto_reviews" | "purchase_vendors" | "team_dashboards" | "notify" | "messages" | "active_status" | "help" | "production" | "ops_audits">("tasks");
+  const [activeTab, setActiveTab] = useState<"tasks" | "my_report" | "all_reports" | "analytics" | "outlet_reports" | "owner_outlets" | "history" | "attendance" | "sales_target" | "payout" | "reconciliation" | "competition" | "item_perf" | "ceo_report" | "fines" | "niranjana_report" | "pnl" | "contribution_margins" | "net_realisation" | "cash_flow" | "sales_forecast" | "cheques" | "auto_reviews" | "purchase_vendors" | "team_dashboards" | "notify" | "messages" | "active_status" | "help" | "production" | "ops_audits" | "outlet_targets">("tasks");
   // Brownie mode's tab-switch loader — bumping this tick is what tells
   // BrownieLoader to play its whole->broken animation + crack sound. Only
   // does anything when the viewer has Brownie mode turned on (personal,
@@ -3432,6 +3440,39 @@ else await fetchOutletReportsByDate(outletEntryDate);
   const hasOutlets = (user?.outlets?.length || 0) > 0;
   const isFO = user?.role === "Founder's Office";
   const isOwner = user?.role === "Owner";
+  const isArun = user?.id === "arun";
+  // Outlet Targets — Arun-only screen to change an outlet's monthly target
+  // from a chosen month onward, without rewriting past months. Each change
+  // is INSERTED as a new row (never updated/overwritten), so the full
+  // history stays intact; monthlyTargetFor/dailyTargetFor above pick
+  // whichever change is the latest one that applies to the month being
+  // looked at. this is the same mechanism that already correctly separates
+  // August (24L) from September (26L) for Royapettah — just made editable
+  // from the app instead of a code change.
+  const [otRows, setOtRows] = useState<any[]>([]);
+  const [otOutlet, setOtOutlet] = useState(OUTLETS[0]);
+  const [otMonth, setOtMonth] = useState(() => new Date().toISOString().slice(0, 7));
+  const [otValue, setOtValue] = useState("");
+  const [otSaving, setOtSaving] = useState(false);
+  const fetchOutletTargetUpdates = async () => {
+    const { data } = await supabase.from("outlet_target_updates").select("*").order("effective_from", { ascending: true });
+    const rows = data || [];
+    setOtRows(rows);
+    RUNTIME_TARGET_UPDATES = rows.map((r: any) => ({ from: r.effective_from, monthly: { [r.outlet_id]: Number(r.monthly_target) } }));
+  };
+  useEffect(() => { fetchOutletTargetUpdates(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, []);
+  const saveOutletTargetUpdate = async () => {
+    const val = Number(String(otValue).replace(/,/g, "")) || 0;
+    const curYm = new Date().toISOString().slice(0, 7);
+    if (!val) { alert("Enter the new monthly target."); return; }
+    if (otMonth < curYm) { alert("Can't backdate a target change to a month that's already closed — pick the current month or a future one."); return; }
+    setOtSaving(true);
+    const { error } = await supabase.from("outlet_target_updates").insert({ outlet_id: otOutlet, effective_from: otMonth, monthly_target: val, created_by: user?.id || null });
+    setOtSaving(false);
+    if (error) { alert("Failed: " + error.message); return; }
+    setOtValue("");
+    fetchOutletTargetUpdates();
+  };
   const canUploadItemPerf = true;
   const canViewItemPerf = canAssign || canUploadItemPerf;
   const hasReportDuty = user?.role !== "Owner" && user?.role !== "Founder's Office" && user?.role !== "Head Chef" && user?.role !== "Financial Analyst";
@@ -3773,6 +3814,11 @@ else await fetchOutletReportsByDate(outletEntryDate);
           {(canAssign || isFO) && (
             <div onClick={() => { fireBrownieTransition(); setActiveTab("ops_audits"); setSidebarOpen(false); fetchAuditReports(); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "ops_audits" ? "text-text bg-surface-2 border-l-2 border-accent" : "text-text-muted hover:text-text"}`}>
               <span>🔍</span> Operations &amp; Audits
+            </div>
+          )}
+          {isArun && (
+            <div onClick={() => { fireBrownieTransition(); setActiveTab("outlet_targets"); setSidebarOpen(false); fetchOutletTargetUpdates(); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "outlet_targets" ? "text-text bg-surface-2 border-l-2 border-accent" : "text-text-muted hover:text-text"}`}>
+              <span>🎯</span> Outlet Targets
             </div>
           )}
                             {(canAssign || isFO) && (
@@ -4640,6 +4686,19 @@ else await fetchOutletReportsByDate(outletEntryDate);
               <h2 className="text-2xl md:text-3xl font-black tracking-tight">Weekly Profit Forecast</h2>
               <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mt-1">Real COGS/commission applied · not just sales in, fixed costs out</p>
             </div>
+            {(realCommissionPct === null || new Date().getDate() <= 5) && (
+              <div className="mb-6 border border-yellow-500/40 bg-yellow-500/5 p-4">
+                <p className="text-[11px] font-mono text-yellow-400 uppercase tracking-widest mb-1.5">⚠ Not reliable yet — data gap, not a real prediction</p>
+                <ul className="text-xs text-zinc-300 space-y-1 list-disc list-inside">
+                  {realCommissionPct === null && (
+                    <li>No real Swiggy/Zomato payout records found for this period — commission is showing a 50% placeholder guess, not your actual rate.</li>
+                  )}
+                  {new Date().getDate() <= 5 && (
+                    <li>We're only a few days into this month, so the ingredient-cost % is based on very little purchase data so far and will settle down as the month fills in.</li>
+                  )}
+                </ul>
+              </div>
+            )}
             {cfLoading ? (
               <p className="text-sm text-zinc-500">Loading…</p>
             ) : cfWeeks.length === 0 ? (
@@ -6658,6 +6717,53 @@ else await fetchOutletReportsByDate(outletEntryDate);
                 })}
               </div>
             )}
+          </div>
+        )}
+
+        {activeTab === "outlet_targets" && isArun && (
+          <div>
+            <div className="mb-6 pb-5 border-b border-zinc-800">
+              <h2 className="text-2xl md:text-3xl font-black tracking-tight">Outlet Targets</h2>
+              <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mt-1">Change an outlet's monthly target from a chosen month onward — earlier months are never touched</p>
+            </div>
+
+            <div className="bg-[#131316] border border-zinc-800 p-5 max-w-lg mb-8">
+              <p className="text-sm font-semibold mb-4">New target change</p>
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-1">Outlet</label>
+                  <select value={otOutlet} onChange={(e) => setOtOutlet(e.target.value)} className="w-full bg-black border border-zinc-800 text-white px-3 py-2 focus:outline-none focus:border-yellow-400 text-sm">
+                    {OUTLETS.map((o) => <option key={o} value={o}>{OUTLET_NAMES[o] || o}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-1">Apply from (month)</label>
+                  <input type="month" min={new Date().toISOString().slice(0, 7)} value={otMonth} onChange={(e) => setOtMonth(e.target.value)} className="w-full bg-black border border-zinc-800 text-white px-3 py-2 focus:outline-none focus:border-yellow-400 text-sm font-mono" />
+                  <p className="text-[10px] text-zinc-600 mt-1">Current now: ₹{monthlyTargetFor(otOutlet, new Date().toISOString().slice(0, 7)).toLocaleString("en-IN")}/month. Only this month or a future month can be picked — past months stay exactly as they were.</p>
+                </div>
+                <div>
+                  <label className="block text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-1">New monthly target (₹)</label>
+                  <input type="text" value={otValue} onChange={(e) => setOtValue(e.target.value)} placeholder="e.g. 2800000" className="w-full bg-black border border-zinc-800 text-white px-3 py-2 focus:outline-none focus:border-yellow-400 text-sm font-mono" />
+                </div>
+                <button onClick={saveOutletTargetUpdate} disabled={otSaving} className="bg-yellow-400 text-black font-bold text-xs px-6 py-3 uppercase tracking-widest hover:opacity-90 disabled:opacity-50 transition-opacity">{otSaving ? "Saving…" : "Apply from this month →"}</button>
+              </div>
+            </div>
+
+            <div className="max-w-2xl">
+              <p className="text-sm font-semibold mb-3">History of changes</p>
+              {otRows.length === 0 ? (
+                <p className="text-xs text-zinc-600">No changes made from this screen yet — outlets are still on their original targets.</p>
+              ) : (
+                <div className="space-y-1.5">
+                  {[...otRows].reverse().map((r: any) => (
+                    <div key={r.id} className="flex justify-between text-sm border-b border-zinc-900 pb-1.5">
+                      <span>{OUTLET_NAMES[r.outlet_id] || r.outlet_id} <span className="text-zinc-600">· from {r.effective_from}</span></span>
+                      <span className="font-mono text-yellow-400">₹{Number(r.monthly_target).toLocaleString("en-IN")}/mo</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         )}
 
