@@ -406,7 +406,7 @@ export default function DashboardPage() {
   const [reports, setReports] = useState<Report[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
-  const [activeTab, setActiveTab] = useState<"tasks" | "my_report" | "all_reports" | "analytics" | "outlet_reports" | "owner_outlets" | "history" | "attendance" | "sales_target" | "payout" | "reconciliation" | "competition" | "item_perf" | "ceo_report" | "fines" | "niranjana_report" | "pnl" | "contribution_margins" | "net_realisation" | "cash_flow" | "sales_forecast" | "cheques" | "auto_reviews" | "purchase_vendors" | "team_dashboards" | "notify" | "messages" | "active_status" | "help" | "production" | "ops_audits" | "outlet_targets">("tasks");
+  const [activeTab, setActiveTab] = useState<"tasks" | "my_report" | "all_reports" | "analytics" | "outlet_reports" | "owner_outlets" | "history" | "attendance" | "sales_target" | "payout" | "reconciliation" | "competition" | "item_perf" | "ceo_report" | "fines" | "niranjana_report" | "pnl" | "contribution_margins" | "net_realisation" | "cash_flow" | "sales_forecast" | "cheques" | "auto_reviews" | "purchase_vendors" | "team_dashboards" | "notify" | "messages" | "active_status" | "help" | "production" | "ops_audits" | "outlet_targets" | "wastage">("tasks");
   // Brownie mode's tab-switch loader — bumping this tick is what tells
   // BrownieLoader to play its whole->broken animation + crack sound. Only
   // does anything when the viewer has Brownie mode turned on (personal,
@@ -940,6 +940,35 @@ export default function DashboardPage() {
     const { data } = await supabase.from("reports").select("report_date, report_data, submitted_at").eq("staff_id", "bharani").order("report_date", { ascending: false }).limit(60);
     setAuditReports(data || []);
     setAuditReportsLoading(false);
+  };
+  // Wastage & Complimentary — rolls up what Ahila/Vishnu log in the Outlet
+  // Report's expiry/complimentary boxes into one place, so the pattern (which
+  // product keeps expiring, why complimentary items are being given) is
+  // visible instead of buried inside each day's report. Reads the same
+  // outlet_reports rows the daily report already writes — nothing new to log.
+  const [wastageRows, setWastageRows] = useState<any[]>([]);
+  const [wastageLoading, setWastageLoading] = useState(false);
+  const [wastageFrom, setWastageFrom] = useState(() => { const d = new Date(); d.setDate(d.getDate() - 30); return d.toISOString().slice(0, 10); });
+  const [wastageTo, setWastageTo] = useState(() => new Date().toISOString().slice(0, 10));
+  const [wastageOutlet, setWastageOutlet] = useState("");
+  const fetchWastage = async () => {
+    setWastageLoading(true);
+    let q = supabase.from("outlet_reports")
+      .select("outlet_id, report_date, expiry_count, expiry_items, complimentary_count, complimentary_items, complimentary_reason")
+      .gte("report_date", wastageFrom).lte("report_date", wastageTo)
+      .order("report_date", { ascending: false });
+    if (wastageOutlet) q = q.eq("outlet_id", wastageOutlet);
+    const { data } = await q;
+    setWastageRows(data || []);
+    setWastageLoading(false);
+  };
+  const _isBlank = (v: any) => { const s = String(v ?? "").trim().toLowerCase(); return s === "" || s === "none" || s === "nil" || s === "na" || s === "n/a" || s === "-"; };
+  const wastageExpiryEntries = wastageRows.filter((r) => (Number(r.expiry_count) || 0) > 0 || !_isBlank(r.expiry_items));
+  const wastageComplimentaryEntries = wastageRows.filter((r) => (Number(r.complimentary_count) || 0) > 0 || !_isBlank(r.complimentary_items) || !_isBlank(r.complimentary_reason));
+  const wastageTally = (entries: any[], field: string) => {
+    const counts: Record<string, number> = {};
+    entries.forEach((r) => { const name = String(r[field] || "").trim(); if (!name || _isBlank(name)) return; const key = name.toLowerCase(); counts[key] = (counts[key] || 0) + 1; });
+    return Object.entries(counts).map(([key, n]) => ({ name: key, count: n })).sort((a, b) => b.count - a.count).slice(0, 8);
   };
   const saveFine = async () => {
     if (fineStaff.length === 0) { alert("Pick at least one person to fine."); return; }
@@ -3880,6 +3909,11 @@ else await fetchOutletReportsByDate(outletEntryDate);
           {isArun && (
             <div onClick={() => { fireBrownieTransition(); setActiveTab("outlet_targets"); setSidebarOpen(false); fetchOutletTargetUpdates(); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "outlet_targets" ? "text-text bg-surface-2 border-l-2 border-accent" : "text-text-muted hover:text-text"}`}>
               <span>🎯</span> Outlet Targets
+            </div>
+          )}
+          {(canAssign || isFO) && (
+            <div onClick={() => { fireBrownieTransition(); setActiveTab("wastage"); setSidebarOpen(false); fetchWastage(); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "wastage" ? "text-text bg-surface-2 border-l-2 border-accent" : "text-text-muted hover:text-text"}`}>
+              <span>🗑️</span> Wastage &amp; Complimentary
             </div>
           )}
                             {(canAssign || isFO) && (
@@ -6884,6 +6918,103 @@ else await fetchOutletReportsByDate(outletEntryDate);
                 </div>
               )}
             </div>
+          </div>
+        )}
+
+        {activeTab === "wastage" && (canAssign || isFO) && (
+          <div>
+            <div className="mb-6 pb-5 border-b border-zinc-800">
+              <h2 className="text-2xl md:text-3xl font-black tracking-tight">Wastage &amp; Complimentary</h2>
+              <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mt-1">Rolled up from everyone's daily Outlet Report — expired items, complimentary given, and why</p>
+            </div>
+
+            <div className="flex flex-wrap gap-3 items-end mb-6">
+              <div>
+                <label className="block text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-1">From</label>
+                <input type="date" value={wastageFrom} onChange={(e) => setWastageFrom(e.target.value)} className="bg-black border border-zinc-800 text-white px-3 py-2 focus:outline-none focus:border-yellow-400 transition-colors text-sm font-mono" />
+              </div>
+              <div>
+                <label className="block text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-1">To</label>
+                <input type="date" value={wastageTo} onChange={(e) => setWastageTo(e.target.value)} className="bg-black border border-zinc-800 text-white px-3 py-2 focus:outline-none focus:border-yellow-400 transition-colors text-sm font-mono" />
+              </div>
+              <div>
+                <label className="block text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-1">Outlet</label>
+                <select value={wastageOutlet} onChange={(e) => setWastageOutlet(e.target.value)} className="bg-black border border-zinc-800 text-white px-3 py-2 focus:outline-none focus:border-yellow-400 transition-colors text-sm">
+                  <option value="">All outlets</option>
+                  {OUTLETS.map((o) => <option key={o} value={o}>{OUTLET_NAMES[o] || o}</option>)}
+                </select>
+              </div>
+              <button onClick={fetchWastage} disabled={wastageLoading} className="bg-yellow-400 text-black font-bold text-xs px-5 py-2.5 uppercase tracking-widest hover:opacity-90 disabled:opacity-50 transition-opacity">{wastageLoading ? "Loading…" : "Apply"}</button>
+            </div>
+
+            {wastageLoading ? (
+              <p className="text-sm text-zinc-500">Loading…</p>
+            ) : wastageRows.length === 0 ? (
+              <p className="text-sm text-zinc-500">No outlet reports in this range yet.</p>
+            ) : (
+              <>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-8 max-w-3xl">
+                  <div className="border border-zinc-800 p-3"><p className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-1">Expiry entries</p><p className="text-xl font-bold text-red-400">{wastageExpiryEntries.length}</p></div>
+                  <div className="border border-zinc-800 p-3"><p className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-1">Expired units</p><p className="text-xl font-bold text-red-400">{wastageExpiryEntries.reduce((s, r) => s + (Number(r.expiry_count) || 0), 0)}</p></div>
+                  <div className="border border-zinc-800 p-3"><p className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-1">Complimentary entries</p><p className="text-xl font-bold text-yellow-400">{wastageComplimentaryEntries.length}</p></div>
+                  <div className="border border-zinc-800 p-3"><p className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-1">Complimentary units</p><p className="text-xl font-bold text-yellow-400">{wastageComplimentaryEntries.reduce((s, r) => s + (Number(r.complimentary_count) || 0), 0)}</p></div>
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8 max-w-4xl">
+                  <div className="border border-zinc-800 p-4">
+                    <p className="text-sm font-semibold mb-3">Most-reported expired products</p>
+                    {wastageTally(wastageExpiryEntries, "expiry_items").length === 0 ? <p className="text-xs text-zinc-600">Nothing repeating yet.</p> : (
+                      <div className="space-y-1.5">
+                        {wastageTally(wastageExpiryEntries, "expiry_items").map((t) => (
+                          <div key={t.name} className="flex justify-between text-sm"><span className="capitalize text-zinc-300">{t.name}</span><span className="font-mono text-red-400">{t.count}×</span></div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  <div className="border border-zinc-800 p-4">
+                    <p className="text-sm font-semibold mb-3">Most-reported complimentary products</p>
+                    {wastageTally(wastageComplimentaryEntries, "complimentary_items").length === 0 ? <p className="text-xs text-zinc-600">Nothing repeating yet.</p> : (
+                      <div className="space-y-1.5">
+                        {wastageTally(wastageComplimentaryEntries, "complimentary_items").map((t) => (
+                          <div key={t.name} className="flex justify-between text-sm"><span className="capitalize text-zinc-300">{t.name}</span><span className="font-mono text-yellow-400">{t.count}×</span></div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 max-w-4xl">
+                  <div>
+                    <p className="text-sm font-semibold mb-3">Expiry log</p>
+                    {wastageExpiryEntries.length === 0 ? <p className="text-xs text-zinc-600">None in this range.</p> : (
+                      <div className="space-y-2">
+                        {wastageExpiryEntries.map((r, i) => (
+                          <div key={i} className="border border-zinc-800 p-3">
+                            <div className="flex justify-between text-xs text-zinc-500 font-mono mb-1"><span>{OUTLET_NAMES[r.outlet_id] || r.outlet_id}</span><span>{r.report_date}</span></div>
+                            <p className="text-sm text-zinc-200">{r.expiry_items || "—"} {(Number(r.expiry_count) || 0) > 0 ? `(${r.expiry_count})` : ""}</p>
+                            {!_isBlank(r.complimentary_reason) && <p className="text-xs text-zinc-500 mt-1">Reason: {r.complimentary_reason}</p>}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold mb-3">Complimentary log</p>
+                    {wastageComplimentaryEntries.length === 0 ? <p className="text-xs text-zinc-600">None in this range.</p> : (
+                      <div className="space-y-2">
+                        {wastageComplimentaryEntries.map((r, i) => (
+                          <div key={i} className="border border-zinc-800 p-3">
+                            <div className="flex justify-between text-xs text-zinc-500 font-mono mb-1"><span>{OUTLET_NAMES[r.outlet_id] || r.outlet_id}</span><span>{r.report_date}</span></div>
+                            <p className="text-sm text-zinc-200">{r.complimentary_items || "—"} {(Number(r.complimentary_count) || 0) > 0 ? `(${r.complimentary_count})` : ""}</p>
+                            {!_isBlank(r.complimentary_reason) && <p className="text-xs text-zinc-500 mt-1">Reason: {r.complimentary_reason}</p>}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </>
+            )}
           </div>
         )}
 
