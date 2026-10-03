@@ -962,30 +962,38 @@ export default function DashboardPage() {
     setWastageRows(data || []);
     setWastageLoading(false);
   };
-  const _isBlank = (v: any) => { const s = String(v ?? "").trim().toLowerCase(); return s === "" || s === "none" || s === "nil" || s === "na" || s === "n/a" || s === "-"; };
+  const _isBlank = (v: any) => { const s = String(v ?? "").trim().toLowerCase(); return ["", "none", "nil", "na", "n/a", "-", "no", "nope", "0"].includes(s); };
   const wastageExpiryEntries = wastageRows.filter((r) => (Number(r.expiry_count) || 0) > 0 || !_isBlank(r.expiry_items));
   const wastageComplimentaryEntries = wastageRows.filter((r) => (Number(r.complimentary_count) || 0) > 0 || !_isBlank(r.complimentary_items) || !_isBlank(r.complimentary_reason));
-  // Per-product month-end read: counts the number of DIFFERENT DAYS a
-  // product name was logged (not units, so one big batch on one bad day
-  // doesn't outweigh a product that's genuinely recurring trouble). The
-  // verdict word is a plain bucket off that real count — nothing guessed.
-  const wastageProductVerdicts = (entries: any[], field: string) => {
-    const days: Record<string, Set<string>> = {};
+  // Per-product month-end read. Splits the free-typed field on commas (staff
+  // often list several items in one box, e.g. "Tiramisu -1, Butterscotch -2")
+  // and strips trailing "-1"/"x2" quantity markers so the same product
+  // mentioned on different days groups together. Counts DIFFERENT DAYS a
+  // product showed up (not units, so one big batch on one day doesn't
+  // outweigh a product that's genuinely recurring trouble) — the verdict
+  // word is a plain bucket off that real count, and the outlet breakdown
+  // underneath is the same real rows, just grouped by outlet instead of date.
+  const wastageProductBreakdown = (entries: any[], field: string) => {
+    const data: Record<string, { label: string; days: Set<string>; outlets: Record<string, Set<string>> }> = {};
     entries.forEach((r) => {
-      const name = String(r[field] || "").trim();
-      if (!name || _isBlank(name)) return;
-      const key = name.toLowerCase();
-      if (!days[key]) days[key] = new Set();
-      days[key].add(r.report_date);
+      const outletName = OUTLET_NAMES[r.outlet_id] || r.outlet_id;
+      String(r[field] || "").split(",").map((s) => s.trim()).filter((s) => s && !_isBlank(s)).forEach((piece) => {
+        const label = piece.replace(/[\s-]*[x-]\s*\d+\s*$/i, "").trim() || piece;
+        const key = label.toLowerCase();
+        if (!data[key]) data[key] = { label, days: new Set(), outlets: {} };
+        data[key].days.add(r.report_date);
+        if (!data[key].outlets[outletName]) data[key].outlets[outletName] = new Set();
+        data[key].outlets[outletName].add(r.report_date);
+      });
     });
-    return Object.entries(days)
-      .map(([name, dateSet]) => {
-        const n = dateSet.size;
-        const verdict = n >= 4 ? { label: "Recurring — worth checking", color: "text-red-400" } : n >= 2 ? { label: "Happened more than once", color: "text-yellow-400" } : { label: "One-off so far", color: "text-zinc-400" };
-        return { name, days: n, ...verdict };
-      })
-      .sort((a, b) => b.days - a.days);
+    return Object.values(data).map((d) => {
+      const n = d.days.size;
+      const verdict = n >= 4 ? { label: "Recurring — worth checking", color: "text-red-400" } : n >= 2 ? { label: "Happened again", color: "text-yellow-400" } : { label: "One-off so far", color: "text-zinc-400" };
+      const outlets = Object.entries(d.outlets).map(([o, dates]) => ({ outlet: o, days: dates.size })).sort((a, b) => b.days - a.days);
+      return { name: d.label, days: n, outlets, ...verdict };
+    }).sort((a, b) => b.days - a.days);
   };
+  const [wastageExpanded, setWastageExpanded] = useState<string | null>(null);
   const saveFine = async () => {
     if (fineStaff.length === 0) { alert("Pick at least one person to fine."); return; }
     const amt = Number(fineAmount) || 0;
@@ -6939,56 +6947,56 @@ else await fetchOutletReportsByDate(outletEntryDate);
               <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mt-1">UrbanPiper item export · price vs demand</p>
             </div>
 
-            {/* Wastage & Complimentary — this month, from the daily Outlet Report */}
-            <div className="mb-8 border border-zinc-800 p-5 max-w-3xl">
-              <p className="text-sm font-semibold mb-1">Wastage &amp; Complimentary — {new Date().toLocaleDateString("en-IN", { month: "long", year: "numeric" })}</p>
-              <p className="text-xs text-zinc-500 mb-4">From everyone's daily Outlet Report. Started 3 Oct, so early days will look thin — it fills in as the month goes.</p>
+            {/* Wastage & Complimentary — this month, from the daily Outlet Report.
+                Compact by design: a ranked list per product, click one to see
+                which outlets it's actually happening at. */}
+            <div className="mb-8 border border-zinc-800 p-4 max-w-xl">
+              <div className="flex justify-between items-baseline mb-3">
+                <p className="text-sm font-semibold">Wastage &amp; Complimentary</p>
+                <p className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest">{new Date().toLocaleDateString("en-IN", { month: "short", year: "numeric" })}</p>
+              </div>
               {wastageLoading ? (
-                <p className="text-sm text-zinc-500">Loading…</p>
+                <p className="text-xs text-zinc-500">Loading…</p>
               ) : wastageRows.length === 0 ? (
-                <p className="text-sm text-zinc-500">Nothing logged yet this month.</p>
+                <p className="text-xs text-zinc-500">Nothing logged yet this month.</p>
               ) : (
-                <>
-                  <div className="space-y-2 mb-5">
-                    {Array.from(new Set(wastageRows.map((r) => r.report_date))).sort().reverse().map((date) => {
-                      const dayRows = wastageRows.filter((r) => r.report_date === date);
-                      const expiry = dayRows.filter((r) => (Number(r.expiry_count) || 0) > 0 || !_isBlank(r.expiry_items)).map((r) => `${OUTLET_NAMES[r.outlet_id] || r.outlet_id}: ${r.expiry_items || "—"}`);
-                      const comp = dayRows.filter((r) => (Number(r.complimentary_count) || 0) > 0 || !_isBlank(r.complimentary_items)).map((r) => `${OUTLET_NAMES[r.outlet_id] || r.outlet_id}: ${r.complimentary_items || "—"}`);
-                      if (expiry.length === 0 && comp.length === 0) return null;
-                      return (
-                        <div key={date} className="text-sm border-b border-zinc-900 pb-2">
-                          <p className="font-mono text-xs text-zinc-500 mb-1">{new Date(date + "T00:00:00").toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short" })}</p>
-                          {expiry.length > 0 && <p className="text-zinc-300"><span className="text-red-400">Expiry:</span> {expiry.join(" · ")}</p>}
-                          {comp.length > 0 && <p className="text-zinc-300"><span className="text-yellow-400">Complimentary:</span> {comp.join(" · ")}</p>}
-                        </div>
-                      );
-                    })}
-                  </div>
-
-                  <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mb-2">This month's read, by product</p>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3">
-                    <div>
-                      <p className="text-xs text-zinc-500 mb-1.5">Expiry</p>
-                      {wastageProductVerdicts(wastageExpiryEntries, "expiry_items").length === 0 ? <p className="text-xs text-zinc-600">None yet.</p> : (
-                        <div className="space-y-1">
-                          {wastageProductVerdicts(wastageExpiryEntries, "expiry_items").map((v) => (
-                            <div key={v.name} className="flex justify-between text-sm"><span className="capitalize text-zinc-300">{v.name}</span><span className={`text-xs font-mono ${v.color}`}>{v.label} ({v.days}d)</span></div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                    <div>
-                      <p className="text-xs text-zinc-500 mb-1.5">Complimentary</p>
-                      {wastageProductVerdicts(wastageComplimentaryEntries, "complimentary_items").length === 0 ? <p className="text-xs text-zinc-600">None yet.</p> : (
-                        <div className="space-y-1">
-                          {wastageProductVerdicts(wastageComplimentaryEntries, "complimentary_items").map((v) => (
-                            <div key={v.name} className="flex justify-between text-sm"><span className="capitalize text-zinc-300">{v.name}</span><span className={`text-xs font-mono ${v.color}`}>{v.label} ({v.days}d)</span></div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4">
+                  {[
+                    { title: "Expiry", entries: wastageExpiryEntries, field: "expiry_items", sectionKey: "exp" },
+                    { title: "Complimentary", entries: wastageComplimentaryEntries, field: "complimentary_items", sectionKey: "comp" },
+                  ].map(({ title, entries, field, sectionKey }) => {
+                    const rows = wastageProductBreakdown(entries, field);
+                    return (
+                      <div key={sectionKey}>
+                        <p className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-1.5">{title}</p>
+                        {rows.length === 0 ? <p className="text-xs text-zinc-600">None yet.</p> : (
+                          <div className="space-y-0.5">
+                            {rows.map((v) => {
+                              const expandKey = `${sectionKey}:${v.name}`;
+                              const isOpen = wastageExpanded === expandKey;
+                              return (
+                                <div key={v.name}>
+                                  <button onClick={() => setWastageExpanded(isOpen ? null : expandKey)} className="w-full flex justify-between items-center text-left py-1 hover:bg-zinc-900 transition-colors px-1 -mx-1">
+                                    <span className="text-sm capitalize text-zinc-300 truncate pr-2">{v.name}</span>
+                                    <span className={`text-[10px] font-mono shrink-0 ${v.color}`}>{v.days}d {isOpen ? "▲" : "▼"}</span>
+                                  </button>
+                                  {isOpen && (
+                                    <div className="pl-1 pb-1.5 pt-0.5 border-l border-zinc-800 ml-1">
+                                      <p className={`text-[10px] font-mono mb-1 ${v.color}`}>{v.label}</p>
+                                      {v.outlets.map((o) => (
+                                        <div key={o.outlet} className="flex justify-between text-xs text-zinc-400 pl-2"><span>{o.outlet}</span><span className="font-mono">{o.days}d</span></div>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
               )}
             </div>
 
