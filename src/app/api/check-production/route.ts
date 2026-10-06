@@ -45,7 +45,7 @@ export async function GET() {
     for (const sub of subs) {
       const result = await sendPushToSubscription(sub as any, {
         title: "🏭 Today's production isn't filed yet",
-        body: "It's 10pm — please fill in today's production before the day ends.",
+        body: "It's 10pm — open the Production tab and fill in today's production before the day ends.",
         tag: "production-reminder",
       });
       if (result === "ok") sent++;
