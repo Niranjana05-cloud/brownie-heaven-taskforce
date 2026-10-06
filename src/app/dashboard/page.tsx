@@ -765,6 +765,10 @@ export default function DashboardPage() {
   }, [stDateYm]);
   const stCogsRate = (stCogsPct ?? 29.4) / 100;
   const stCommissionRate = (stCommissionPct ?? 50) / 100;
+  // Plain labels that say whether the % is real or just the fallback guess,
+  // so a placeholder is never presented as if it were measured data.
+  const stCommissionSrc = stCommissionPct === null ? "placeholder — no real payout data for this period" : `real ${fmtWin(stCommissionWindow)}`;
+  const stCogsSrc = stCogsPct === null ? "placeholder — no real purchase data for this period" : `real ${fmtWin(stCogsWindow)}`;
   const [stFiles, setStFiles] = useState<Record<string, { mis?: File; pnl?: File }>>({});
   const [stUpload, setStUpload] = useState<Record<string, any>>({});
   const [stUpBusy, setStUpBusy] = useState<string>("");
@@ -5582,9 +5586,9 @@ else await fetchOutletReportsByDate(outletEntryDate);
                           {row(`Online Sales (Swiggy+Zomato) · ${dayLbl}`, inp("online", dayOnline))}
                           <tr key="_tpldiv" className="border-t border-zinc-800"><td colSpan={2} className="px-4 pt-3 pb-1 text-[10px] font-mono text-yellow-400 uppercase tracking-widest">Today's P&amp;L · {dayLbl} (fixed cost ÷ {daysInThisMonth} days this month)</td></tr>
                           {row("Today's Total Sales", m(todayTotalSales), { bold: true })}
-                          {row(`Less: COGS @ ${(stCogsRate * 100).toFixed(1)}% (real, ${fmtWin(stCogsWindow)})`, m(todayCogs), { neg: true })}
-                          {row("Less: Wastage @ 5%", m(todayWastage), { neg: true })}
-                          {row(`Less: Commission @ ${(stCommissionRate * 100).toFixed(1)}% (online, real ${fmtWin(stCommissionWindow)})`, m(todayComm), { neg: true })}
+                          {row(`Today · Less: COGS @ ${(stCogsRate * 100).toFixed(1)}% (${stCogsSrc})`, m(todayCogs), { neg: true })}
+                          {row("Today · Less: Wastage @ 5%", m(todayWastage), { neg: true })}
+                          {row(`Today · Less: Commission @ ${(stCommissionRate * 100).toFixed(1)}% (online, ${stCommissionSrc})`, m(todayComm), { neg: true })}
                           {row("Today's Contribution", m(todayContrib), { bold: true })}
                           {row(`Less: Fixed cost share (monthly ÷ ${daysInThisMonth})`, m(todayFixedShare), { fixedCost: true })}
                           {row("TODAY'S NET PROFIT / (LOSS)", m(todayNetProfit), { bold: true })}
@@ -5593,9 +5597,9 @@ else await fetchOutletReportsByDate(outletEntryDate);
                           {row(`Net Sales — ${ml} total ${editing ? "✏️ (whole-month override)" : ""}`, editing ? inp("mnet", Number(_moNet) || 0) : m(net))}
                           {row(`Online Sales — ${ml} total ${editing ? "✏️ (whole-month override)" : ""}`, editing ? inp("monline", Number(_moOnline) || 0) : m(online))}
                           {row("Total Sales (shop + online)", m(totalSales), { bold: true })}
-                          {row(`Less: COGS (food cost) @ ${(stCogsRate * 100).toFixed(1)}% of total (real, ${fmtWin(stCogsWindow)})`, m(cogs), { neg: true })}
-                          {row("Less: Wastage @ 5% of total", m(wastage), { neg: true })}
-                          {row(`Less: Commission @ ${(stCommissionRate * 100).toFixed(1)}% (online, real ${fmtWin(stCommissionWindow)})`, m(comm), { neg: true })}
+                          {row(`Month · Less: COGS (food cost) @ ${(stCogsRate * 100).toFixed(1)}% of total (${stCogsSrc})`, m(cogs), { neg: true })}
+                          {row("Month · Less: Wastage @ 5% of total", m(wastage), { neg: true })}
+                          {row(`Month · Less: Commission @ ${(stCommissionRate * 100).toFixed(1)}% (online, ${stCommissionSrc})`, m(comm), { neg: true })}
                           {row("Contribution (before fixed)", m(contrib), { bold: true })}
                           {row("   Contribution margin %", (cMargin * 100).toFixed(1) + "%")}
                           {row("Less: Staff salaries", isSharedFixed ? <span className="text-zinc-600">0</span> : inp("staff", Number(f.staff) || 0), { fixedCost: !isSharedFixed })}
