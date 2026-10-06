@@ -4006,7 +4006,29 @@ else await fetchOutletReportsByDate(outletEntryDate);
               <input type="date" value={kDate} onChange={(e) => { setKDate(e.target.value); fetchKProduction(e.target.value); fetchKPlan(e.target.value); }} className="bg-black border border-zinc-800 text-white px-4 py-2.5 focus:outline-none focus:border-yellow-400 transition-colors font-mono text-sm" />
             </div>
 
-            {user?.role === "Head Chef" && (
+            {/* Dashboard-only: the entry form lives in the Production tab, so here
+                Rafiq gets a clear pointer + today's filing status instead of a
+                second copy of the same form. */}
+            {activeTab === "tasks" && user?.role === "Head Chef" && (() => {
+              const istToday = new Date(Date.now() + 5.5 * 60 * 60 * 1000).toISOString().slice(0, 10);
+              const viewingToday = kDate === istToday;
+              const filed = viewingToday && kRows.length > 0;
+              return (
+                <div className={`mb-8 border p-4 sm:p-5 ${filed ? "border-green-500/40 bg-green-500/5" : "border-yellow-400/50 bg-yellow-400/5"}`}>
+                  <p className={`text-[11px] font-mono uppercase tracking-widest mb-1.5 ${filed ? "text-green-400" : "text-yellow-400"}`}>
+                    {viewingToday ? (filed ? `✓ Today's production filed — ${kDayTotal} units` : "⚠ Today's production not filed yet") : `Viewing ${kDate}`}
+                  </p>
+                  <p className="text-sm text-zinc-200 mb-3">
+                    Rafiq, fill in your daily production from the <span className="font-semibold text-white">Production</span> tab in the left menu — that's where the count boxes are. This Dashboard just shows the summary.
+                  </p>
+                  <button onClick={() => { fireBrownieTransition(); setActiveTab("production"); setSidebarOpen(false); }} className="bg-yellow-400 text-black px-5 py-2.5 text-sm font-bold hover:bg-yellow-300 transition-colors">
+                    Go to Production →
+                  </button>
+                </div>
+              );
+            })()}
+
+            {activeTab === "production" && user?.role === "Head Chef" && (
             <div className="mb-8 border border-zinc-800 p-4 sm:p-5">
               <p className="text-sm font-semibold mb-1">Today's Production</p>
               <p className="text-xs text-zinc-500 mb-4">Every known flavour is already listed under its category — just type the count next to whatever was made. Use "+ Add another flavour" only for something not listed yet, or "+ Add new product" to put it on the list permanently.</p>
