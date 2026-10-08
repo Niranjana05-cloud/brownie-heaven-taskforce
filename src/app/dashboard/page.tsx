@@ -52,7 +52,30 @@ issues: string; action_taken: string; submitted_at: string; is_late: boolean; is
 bh_google_rating: number; bh_swiggy_rating: number; bh_zomato_rating: number;
 cbh_google_rating: number; cbh_swiggy_rating: number; cbh_zomato_rating: number;
 icbh_google_rating: number; icbh_swiggy_rating: number; icbh_zomato_rating: number;
+// Brand-wise sales (from BRAND_SPLIT_FROM onwards). The combined shop/swiggy/zomato fields above stay as BH + CBH totals.
+bh_shop_sales_count?: number | null; bh_shop_sales_value?: number | null;
+bh_swiggy_sales_count?: number | null; bh_swiggy_sales_value?: number | null;
+bh_zomato_sales_count?: number | null; bh_zomato_sales_value?: number | null;
+cbh_shop_sales_count?: number | null; cbh_shop_sales_value?: number | null;
+cbh_swiggy_sales_count?: number | null; cbh_swiggy_sales_value?: number | null;
+cbh_zomato_sales_count?: number | null; cbh_zomato_sales_value?: number | null;
 };
+// Outlet reports for dates on/after this are entered as separate BH and CBH sales. Older dates keep the single combined entry.
+const BRAND_SPLIT_FROM = "2026-10-09";
+// Card rows showing BH vs CBH sales for a report (empty for older reports that only have the combined total).
+const brandSalesItems = (r: any): { label: string; value: string; color?: string }[] => {
+  if (!r || r.bh_shop_sales_value == null) return [];
+  const tot = (b: string) => ["shop", "swiggy", "zomato"].reduce((a, ch) => a + (Number(r[`${b}_${ch}_sales_value`]) || 0), 0);
+  const cnt = (b: string) => ["shop", "swiggy", "zomato"].reduce((a, ch) => a + (Number(r[`${b}_${ch}_sales_count`]) || 0), 0);
+  const line = (b: string) => `Shop ₹${Number(r[`${b}_shop_sales_value`]) || 0} · Swiggy ₹${Number(r[`${b}_swiggy_sales_value`]) || 0} · Zomato ₹${Number(r[`${b}_zomato_sales_value`]) || 0}`;
+  return [
+    { label: "BH Total Sales", value: `₹${tot("bh")} (${cnt("bh")} orders)` },
+    { label: "BH Split", value: line("bh") },
+    { label: "CBH Total Sales", value: `₹${tot("cbh")} (${cnt("cbh")} orders)` },
+    { label: "CBH Split", value: line("cbh") },
+  ];
+};
+const BRAND_SALES_KEYS =["shop", "swiggy", "zomato"].flatMap((ch) => ["bh", "cbh"].flatMap((b) => [`${b}_${ch}_sales_count`, `${b}_${ch}_sales_value`]));
 
 const ALL_STAFF = [
   { id: "nishant", name: "Nishant Vijayakumar", role: "Owner", report_time: null, outlets: [] },
@@ -2869,7 +2892,7 @@ export default function DashboardPage() {
   };
   const exportCSV = () => {
   if (historyOutletReports.length === 0) { alert("No outlet reports for this date."); return; }
-  const headers = ["Outlet", "Manager", "Date", "Shop Sales Value", "Shop Sales Count", "Swiggy Value", "Swiggy Count", "Zomato Value", "Zomato Count", "Total Sales", "Target", "Swiggy Live", "Zomato Live", "Discount Running", "Discount Rate Good", "Unavailable Items", "Expiry Count", "Expiry Items", "Complimentary Count", "Complimentary Product Name", "Complimentary Reason", "Issues", "Action Taken", "Submitted At", "Late"];
+  const headers = ["Outlet", "Manager", "Date", "Shop Sales Value", "Shop Sales Count", "Swiggy Value", "Swiggy Count", "Zomato Value", "Zomato Count", "Total Sales", "BH Sales", "CBH Sales", "Target", "Swiggy Live", "Zomato Live", "Discount Running", "Discount Rate Good", "Unavailable Items", "Expiry Count", "Expiry Items", "Complimentary Count", "Complimentary Product Name", "Complimentary Reason", "Issues", "Action Taken", "Submitted At", "Late"];
   const rows = historyOutletReports.map(r => {
     const manager = ALL_STAFF.find(s => (s.outlets as string[]).includes(r.outlet_id))?.name || "—";
     const total = Number(r.shop_sales_value) + Number(r.swiggy_sales_value) + Number(r.zomato_sales_value);
@@ -2884,6 +2907,8 @@ export default function DashboardPage() {
       r.zomato_sales_value,
       r.zomato_sales_count,
       total,
+      (r as any).bh_shop_sales_value == null ? "" : ["shop", "swiggy", "zomato"].reduce((a, ch) => a + (Number((r as any)[`bh_${ch}_sales_value`]) || 0), 0),
+      (r as any).cbh_shop_sales_value == null ? "" : ["shop", "swiggy", "zomato"].reduce((a, ch) => a + (Number((r as any)[`cbh_${ch}_sales_value`]) || 0), 0),
       r.target,
       r.swiggy_live ? "Yes" : "No",
       r.zomato_live ? "Yes" : "No",
@@ -3205,6 +3230,7 @@ const runTargetCheck = async (u: Staff) => {
     discount_given: String(r.discount_given || ""),
     zomato_sales_count: String(r.zomato_sales_count),
     zomato_sales_value: String(r.zomato_sales_value),
+    ...Object.fromEntries(BRAND_SALES_KEYS.map((k) => [k, (r as any)[k] === null || (r as any)[k] === undefined ? "" : String((r as any)[k])])),
     swiggy_live: r.swiggy_live ? "yes" : "no",
     zomato_live: r.zomato_live ? "yes" : "no",
     discount_running: r.discount_running || "",
@@ -3367,7 +3393,13 @@ const deleteReview = async (id: string) => {
 };
 const submitOutletReport = async () => {
   if (!user || !activeOutlet) return;
-  const _req = [
+  const _brandSplit = outletEntryDate >= BRAND_SPLIT_FROM;
+  const _req: { k: string; label: string }[] = _brandSplit
+    ? ["bh", "cbh"].flatMap((b) => ["shop", "swiggy", "zomato"].flatMap((ch) => [
+        { k: `${b}_${ch}_sales_count`, label: `${b.toUpperCase()} ${ch[0].toUpperCase() + ch.slice(1)} Orders Count (enter 0 if none)` },
+        { k: `${b}_${ch}_sales_value`, label: `${b.toUpperCase()} ${ch[0].toUpperCase() + ch.slice(1)} Sales Value (enter 0 if none)` },
+      ]))
+    : [
     { k: "shop_sales_count", label: "Shop Sales Count" },
     { k: "shop_sales_value", label: "Shop Sales Value" },
     { k: "swiggy_sales_count", label: "Swiggy Sales Count" },
@@ -3404,14 +3436,21 @@ const submitOutletReport = async () => {
   const isBackfill = outletEntryDate < new Date().toISOString().split("T")[0];
   const isLate = !isBackfill && _afterNoon;
 const _clean = (v: any) => String(v ?? "").replace(/[^0-9.]/g, "");
+  // BH + CBH entered separately -> the combined columns (used by every other tab) are their sum, so nothing downstream breaks.
+  const _bn = (k: string) => parseFloat(_clean((d as any)[k])) || 0;
+  const _bi = (k: string) => parseInt(_clean((d as any)[k])) || 0;
+  const _brandCols: Record<string, number> = {};
+  if (_brandSplit) BRAND_SALES_KEYS.forEach((k) => { _brandCols[k] = k.endsWith("_count") ? _bi(k) : _bn(k); });
+  const _sum = (ch: string, kind: "count" | "value") => (_brandCols[`bh_${ch}_sales_${kind}`] || 0) + (_brandCols[`cbh_${ch}_sales_${kind}`] || 0);
   const payload = {
-    shop_sales_count: parseInt(_clean(d.shop_sales_count)) || 0,
-    shop_sales_value: parseFloat(_clean(d.shop_sales_value)) || 0,
-    swiggy_sales_count: parseInt(_clean(d.swiggy_sales_count)) || 0,
-    swiggy_sales_value: parseFloat(_clean(d.swiggy_sales_value)) || 0,
+    ..._brandCols,
+    shop_sales_count: _brandSplit ? _sum("shop", "count") : parseInt(_clean(d.shop_sales_count)) || 0,
+    shop_sales_value: _brandSplit ? _sum("shop", "value") : parseFloat(_clean(d.shop_sales_value)) || 0,
+    swiggy_sales_count: _brandSplit ? _sum("swiggy", "count") : parseInt(_clean(d.swiggy_sales_count)) || 0,
+    swiggy_sales_value: _brandSplit ? _sum("swiggy", "value") : parseFloat(_clean(d.swiggy_sales_value)) || 0,
     discount_given: parseFloat(_clean(d.discount_given)) || 0,
-    zomato_sales_count: parseInt(_clean(d.zomato_sales_count)) || 0,
-    zomato_sales_value: parseFloat(_clean(d.zomato_sales_value)) || 0,
+    zomato_sales_count: _brandSplit ? _sum("zomato", "count") : parseInt(_clean(d.zomato_sales_count)) || 0,
+    zomato_sales_value: _brandSplit ? _sum("zomato", "value") : parseFloat(_clean(d.zomato_sales_value)) || 0,
     target: parseFloat(_clean(d.target)) || 0,
     swiggy_live: (d.swiggy_live || "yes").toLowerCase() === "yes",
     zomato_live: (d.zomato_live || "yes").toLowerCase() === "yes",
@@ -6142,6 +6181,7 @@ else await fetchOutletReportsByDate(outletEntryDate);
                 { label: "Zomato AOV", value: report.zomato_sales_count > 0 ? `₹${Math.round(Number(report.zomato_sales_value) / Number(report.zomato_sales_count))}` : "—" },
                 { label: "Total Sales", value: `₹${Number(report.shop_sales_value) + Number(report.swiggy_sales_value) + Number(report.zomato_sales_value)}` },
                 { label: "Total AOV", value: (() => { const tv = Number(report.shop_sales_value) + Number(report.swiggy_sales_value) + Number(report.zomato_sales_value); const tc = Number(report.shop_sales_count) + Number(report.swiggy_sales_count) + Number(report.zomato_sales_count); return tc > 0 ? `₹${Math.round(tv/tc)}` : "—"; })() },
+                ...brandSalesItems(report),
                  { label: "Target", value: `₹${report.target}` },
                   { label: "Swiggy Live", value: report.swiggy_live ? "✓ Yes" : "✗ No", color: report.swiggy_live ? "text-green-400" : "text-red-500" },
                   { label: "Zomato Live", value: report.zomato_live ? "✓ Yes" : "✗ No", color: report.zomato_live ? "text-green-400" : "text-red-500" },
@@ -6224,6 +6264,7 @@ else await fetchOutletReportsByDate(outletEntryDate);
         { label: "Zomato AOV", value: outletReports[activeOutlet].zomato_sales_count > 0 ? `₹${Math.round(Number(outletReports[activeOutlet].zomato_sales_value) / Number(outletReports[activeOutlet].zomato_sales_count))}` : "—" },
         { label: "Total Sales", value: `₹${Number(outletReports[activeOutlet].shop_sales_value) + Number(outletReports[activeOutlet].swiggy_sales_value) + Number(outletReports[activeOutlet].zomato_sales_value)}`, color: "text-yellow-400" },
         { label: "Total AOV", value: (() => { const totalVal = Number(outletReports[activeOutlet].shop_sales_value) + Number(outletReports[activeOutlet].swiggy_sales_value) + Number(outletReports[activeOutlet].zomato_sales_value); const totalCount = Number(outletReports[activeOutlet].shop_sales_count) + Number(outletReports[activeOutlet].swiggy_sales_count) + Number(outletReports[activeOutlet].zomato_sales_count); return totalCount > 0 ? `₹${Math.round(totalVal / totalCount)}` : "—"; })(), color: "text-yellow-400" },
+        ...brandSalesItems(outletReports[activeOutlet]),
         { label: "Target", value: `₹${outletReports[activeOutlet].target}` },
         { label: "Swiggy Live", value: outletReports[activeOutlet].swiggy_live ? "✓ Yes" : "✗ No", color: outletReports[activeOutlet].swiggy_live ? "text-green-400" : "text-red-500" },
         { label: "Zomato Live", value: outletReports[activeOutlet].zomato_live ? "✓ Yes" : "✗ No", color: outletReports[activeOutlet].zomato_live ? "text-green-400" : "text-red-500" },
@@ -6256,15 +6297,28 @@ else await fetchOutletReportsByDate(outletEntryDate);
           <span className="text-yellow-400 font-mono text-xs">Due: 12:00 PM today</span>
         </div>
         <p className="text-[11px] font-mono text-zinc-400 mb-5 -mt-3">📋 You're filing <span className="text-yellow-400">yesterday's sales</span> ({new Date(Date.now() - 86400000).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}) — recorded under today's date, due by 12 noon.</p>
+        {outletEntryDate >= BRAND_SPLIT_FROM && (
+          <div className="mb-4 border border-yellow-400/40 bg-yellow-400/5 p-3 text-[11px] font-mono text-yellow-400 leading-relaxed">
+            Enter <b>BH (Brownie Heaven)</b> and <b>CBH (Cakes by Brownie Heaven)</b> sales separately. Fields marked * are compulsory — type 0 if there were no sales.<br />
+            Also compulsory: <b>Expired Product Name</b>, <b>Complimentary Product Name</b> and <b>Reason</b> — type "None" if nothing applies. The report cannot be submitted without them.
+          </div>
+        )}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
          {[
   { label: "Yesterday's Target (Rs)", key: "target" },
+  ...(outletEntryDate >= BRAND_SPLIT_FROM
+    ? ["bh", "cbh"].flatMap((b) => [["shop", "Shop"], ["swiggy", "Swiggy"], ["zomato", "Zomato"]].flatMap(([ch, chName]) => [
+        { label: `${b.toUpperCase()} — ${chName} Orders Count *`, key: `${b}_${ch}_sales_count`, hint: "Enter 0 if none" },
+        { label: `${b.toUpperCase()} — ${chName} Sales Value (Rs) *`, key: `${b}_${ch}_sales_value`, hint: "Enter 0 if none" },
+      ]))
+    : [
   { label: "Shop Sales — Orders Count", key: "shop_sales_count" },
   { label: "Shop Sales — Value (Rs)", key: "shop_sales_value" },
   { label: "Swiggy Orders Count", key: "swiggy_sales_count" },
   { label: "Swiggy Sales Value (Rs)", key: "swiggy_sales_value" },
   { label: "Zomato Orders Count", key: "zomato_sales_count" },
   { label: "Zomato Sales Value (Rs)", key: "zomato_sales_value" },
+  ]),
   { label: "Discount/Offer Running", key: "discount_running" },
   { label: "Discount Given (Rs)", key: "discount_given" },
   { label: "Unavailable Items", key: "unavailable_items" },
