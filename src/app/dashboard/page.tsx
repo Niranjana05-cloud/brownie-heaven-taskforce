@@ -429,7 +429,7 @@ export default function DashboardPage() {
   const [reports, setReports] = useState<Report[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
-  const [activeTab, setActiveTab] = useState<"tasks" | "my_report" | "all_reports" | "analytics" | "outlet_reports" | "owner_outlets" | "history" | "attendance" | "sales_target" | "payout" | "reconciliation" | "competition" | "item_perf" | "ceo_report" | "fines" | "niranjana_report" | "pnl" | "contribution_margins" | "net_realisation" | "cash_flow" | "sales_forecast" | "cheques" | "auto_reviews" | "purchase_vendors" | "team_dashboards" | "notify" | "messages" | "active_status" | "help" | "production" | "ops_audits" | "outlet_targets">("tasks");
+  const [activeTab, setActiveTab] = useState<"tasks" | "my_report" | "all_reports" | "analytics" | "outlet_reports" | "owner_outlets" | "history" | "attendance" | "sales_target" | "payout" | "reconciliation" | "competition" | "item_perf" | "ceo_report" | "fines" | "niranjana_report" | "pnl" | "contribution_margins" | "net_realisation" | "cash_flow" | "sales_forecast" | "cheques" | "auto_reviews" | "purchase_vendors" | "team_dashboards" | "notify" | "messages" | "active_status" | "help" | "production" | "ops_audits" | "outlet_targets" | "admin_dq">("tasks");
   // Brownie mode's tab-switch loader — bumping this tick is what tells
   // BrownieLoader to play its whole->broken animation + crack sound. Only
   // does anything when the viewer has Brownie mode turned on (personal,
@@ -991,6 +991,63 @@ export default function DashboardPage() {
   };
   const _isBlank = (v: any) => { const s = String(v ?? "").trim().toLowerCase(); return ["", "none", "nil", "na", "n/a", "-", "no", "nope", "0"].includes(s); };
   const wastageExpiryEntries = wastageRows.filter((r) => (Number(r.expiry_count) || 0) > 0 || !_isBlank(r.expiry_items));
+  // ── Admin & Data Quality (Owner / Founder's Office) ──────────────────────────
+  // Real checks only, on the last 7 full days. Nothing here is estimated: each
+  // number is a count of actual rows (or missing rows) in the database.
+  const [dqLoading, setDqLoading] = useState(false);
+  const [dq, setDq] = useState<any>(null);
+  const fetchDq = async () => {
+    setDqLoading(true);
+    const istNow = new Date(Date.now() + 5.5 * 60 * 60 * 1000);
+    const iso = (d: Date) => d.toISOString().slice(0, 10);
+    const today = iso(istNow);
+    const days: string[] = [];
+    for (let i = 7; i >= 1; i--) days.push(iso(new Date(istNow.getTime() - i * 86400000)));
+    const from = days[0];
+    const [repRes, prodRes, upRes, brandRes] = await Promise.all([
+      supabase.from("outlet_reports").select("outlet_id, report_date, staff_id, is_late, is_backfill, shop_sales_value, swiggy_sales_value, zomato_sales_value, expiry_items, complimentary_items, complimentary_reason").gte("report_date", from).lte("report_date", today),
+      supabase.from("kitchen_production").select("prod_date, qty").gte("prod_date", from).lte("prod_date", today),
+      supabase.from("item_perf_uploads").select("label, created_at").order("created_at", { ascending: false }).limit(1),
+      supabase.from("outlet_reports").select("outlet_id, report_date, bh_shop_sales_value").gte("report_date", BRAND_SPLIT_FROM).lte("report_date", today),
+    ]);
+    const reps = ((repRes.data as any[]) || []);
+    const byKey: Record<string, any[]> = {};
+    reps.forEach((r) => { const k = r.outlet_id + "|" + r.report_date; if (!byKey[k]) byKey[k] = []; byKey[k].push(r); });
+    const matrix = OUTLETS.map((o) => ({
+      outlet: o,
+      cells: days.map((d) => {
+        const rs = byKey[o + "|" + d] || [];
+        if (rs.length === 0) return "missing";
+        if (rs.some((r) => !r.is_late && !r.is_backfill)) return "ok";
+        return rs.some((r) => r.is_late) ? "late" : "backfill";
+      }),
+    }));
+    const nm = (o: string) => OUTLET_NAMES[o] || o.replace(/_/g, " ");
+    const missing: string[] = [];
+    matrix.forEach((m) => m.cells.forEach((c, i) => { if (c === "missing") missing.push(`${nm(m.outlet)} · ${days[i]}`); }));
+    const inWindow = reps.filter((r) => r.report_date <= days[days.length - 1]);
+    const late = inWindow.filter((r) => r.is_late).map((r) => `${nm(r.outlet_id)} · ${r.report_date}`);
+    const backfilled = inWindow.filter((r) => r.is_backfill).map((r) => `${nm(r.outlet_id)} · ${r.report_date}`);
+    const dupes = Object.keys(byKey).filter((k) => byKey[k].length > 1).map((k) => { const [o, d] = k.split("|"); return `${nm(o)} · ${d} (${byKey[k].length} reports)`; });
+    const zero = reps.filter((r) => ((Number(r.shop_sales_value) || 0) + (Number(r.swiggy_sales_value) || 0) + (Number(r.zomato_sales_value) || 0)) === 0 && !r.is_backfill).map((r) => `${nm(r.outlet_id)} · ${r.report_date}`);
+    const _empty = (v: any) => String(v ?? "").trim() === "";
+    const blankReq = reps.filter((r) => r.report_date >= "2026-10-03" && (_empty(r.expiry_items) || _empty(r.complimentary_items) || _empty(r.complimentary_reason))).map((r) => `${nm(r.outlet_id)} · ${r.report_date}`);
+    const prodRows = ((prodRes.data as any[]) || []);
+    const prodDays = new Set(prodRows.map((p) => p.prod_date));
+    const prodMissing = days.filter((d) => !prodDays.has(d));
+    const brandColsMissing = !!brandRes.error;
+    const brandMissing = brandColsMissing ? [] : ((brandRes.data as any[]) || []).filter((r) => r.bh_shop_sales_value === null || r.bh_shop_sales_value === undefined).map((r) => `${nm(r.outlet_id)} · ${r.report_date}`);
+    const filedToday = new Set(reps.filter((r) => r.report_date === today).map((r) => r.outlet_id)).size;
+    setDq({
+      days, today, matrix, filedToday, missing, late, backfilled, dupes, zero, blankReq, prodMissing,
+      brandColsMissing, brandMissing,
+      latestUpload: ((upRes.data as any[]) || [])[0] || null,
+      fetchError: repRes.error?.message || prodRes.error?.message || null,
+      checkedAt: new Date().toLocaleString("en-IN"),
+    });
+    setDqLoading(false);
+  };
+  useEffect(() => { if (activeTab === "admin_dq" && (user?.role === "Owner" || user?.role === "Founder's Office")) fetchDq(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [activeTab, user]);
   const wastageComplimentaryEntries = wastageRows.filter((r) => (Number(r.complimentary_count) || 0) > 0 || !_isBlank(r.complimentary_items) || !_isBlank(r.complimentary_reason));
   // Per-product month-end read. Splits the free-typed field on commas (staff
   // often list several items in one box, e.g. "Tiramisu -1, Butterscotch -2")
@@ -3879,6 +3936,11 @@ else await fetchOutletReportsByDate(outletEntryDate);
           {canViewItemPerf && (
             <div onClick={() => { fireBrownieTransition(); setActiveTab("item_perf"); setSidebarOpen(false); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "item_perf" ? "text-text bg-surface-2 border-l-2 border-accent" : "text-text-muted hover:text-text"}`}>
               <span>📈</span> Item Performance
+            </div>
+          )}
+          {(isOwner || isFO) && (
+            <div onClick={() => { fireBrownieTransition(); setActiveTab("admin_dq"); setSidebarOpen(false); }} className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${activeTab === "admin_dq" ? "text-text bg-surface-2 border-l-2 border-accent" : "text-text-muted hover:text-text"}`}>
+              <span>🛡</span> Admin &amp; Data Quality
             </div>
           )}
                     {canAssign && (
@@ -7017,6 +7079,163 @@ else await fetchOutletReportsByDate(outletEntryDate);
                 </div>
               )}
             </div>
+          </div>
+        )}
+
+        {activeTab === "admin_dq" && (isOwner || isFO) && (
+          <div>
+            <div className="mb-6 pb-5 border-b border-zinc-800 flex justify-between items-end gap-4 flex-wrap">
+              <div>
+                <h2 className="text-2xl font-black tracking-tight">Admin &amp; Data Quality</h2>
+                <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mt-1">Are the numbers complete? · last 7 days · real checks only</p>
+              </div>
+              <button onClick={fetchDq} disabled={dqLoading} className="bg-yellow-400 text-black font-bold text-[10px] px-4 py-2 uppercase tracking-widest disabled:opacity-50">{dqLoading ? "Checking…" : "↻ Re-check"}</button>
+            </div>
+
+            {!dq || dqLoading ? (
+              <p className="text-xs text-zinc-500">Running checks…</p>
+            ) : (
+              <div className="space-y-8 max-w-4xl">
+                {dq.fetchError && <p className="text-xs text-red-400 border border-red-400/40 p-3">Some data could not be read: {dq.fetchError}</p>}
+                {dq.brandColsMissing && <p className="text-xs text-red-400 border border-red-400/40 p-3">The BH / CBH sales columns are not in the database yet — run <b>brand_sales_columns.sql</b>, otherwise outlet reports from {BRAND_SPLIT_FROM} cannot be saved.</p>}
+
+                {/* Summary tiles */}
+                {(() => {
+                  const tiles = [
+                    { label: "Filed today", value: `${dq.filedToday}/${OUTLETS.length}`, note: "outlets (due 12 noon)", bad: false },
+                    { label: "Missing reports", value: String(dq.missing.length), note: "outlet-days, last 7", bad: dq.missing.length > 0 },
+                    { label: "Late reports", value: String(dq.late.length), note: "after 12 noon", bad: dq.late.length > 0 },
+                    { label: "Production gaps", value: String(dq.prodMissing.length), note: "days with no entry", bad: dq.prodMissing.length > 0 },
+                  ];
+                  return (
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                      {tiles.map((t) => (
+                        <div key={t.label} className="border border-zinc-800 p-3">
+                          <p className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest">{t.label}</p>
+                          <p className={`text-2xl font-black mt-1 ${t.bad ? "text-red-400" : "text-green-400"}`}>{t.value}</p>
+                          <p className="text-[10px] text-zinc-500 mt-0.5">{t.note}</p>
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })()}
+
+                {/* Outlet report completeness */}
+                <div>
+                  <p className="text-sm font-semibold mb-1">Outlet report completeness</p>
+                  <p className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-3">✓ on time · L late · B back-filled · ✗ missing (an outlet's off day also shows ✗)</p>
+                  <div className="overflow-x-auto border border-zinc-800">
+                    <table className="w-full text-xs">
+                      <thead>
+                        <tr className="text-zinc-500 text-[10px] font-mono uppercase tracking-widest">
+                          <th className="text-left px-3 py-2">Outlet</th>
+                          {dq.days.map((d: string) => <th key={d} className="px-2 py-2 text-center">{d.slice(8)}/{d.slice(5, 7)}</th>)}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {dq.matrix.map((m: any) => (
+                          <tr key={m.outlet} className="border-t border-zinc-800">
+                            <td className="px-3 py-1.5">{OUTLET_NAMES[m.outlet] || m.outlet}</td>
+                            {m.cells.map((c: string, i: number) => (
+                              <td key={i} className={`px-2 py-1.5 text-center font-bold ${c === "ok" ? "text-green-400" : c === "late" ? "text-yellow-400" : c === "backfill" ? "text-orange-400" : "text-red-400"}`}>
+                                {c === "ok" ? "✓" : c === "late" ? "L" : c === "backfill" ? "B" : "✗"}
+                              </td>
+                            ))}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                {/* Issue list */}
+                <div>
+                  <p className="text-sm font-semibold mb-3">Data-quality checks</p>
+                  <div className="border border-zinc-800 divide-y divide-zinc-800">
+                    {[
+                      { title: "Missing outlet reports", items: dq.missing, hint: "No report filed for that outlet and day." },
+                      { title: "Late outlet reports", items: dq.late, hint: "Filed after the 12 noon cut-off." },
+                      { title: "Back-filled reports", items: dq.backfilled, hint: "Entered for a past date, after that day." },
+                      { title: "Duplicate reports (same outlet, same day)", items: dq.dupes, hint: "Totals may be double-counted — check which one is right." },
+                      { title: "Reports with zero sales", items: dq.zero, hint: "Shop + Swiggy + Zomato are all 0 — a mistake or a closed day?" },
+                      { title: "Compulsory fields left empty (from 3 Oct)", items: dq.blankReq, hint: "Expired product, complimentary product or reason is empty." },
+                      { title: "Reports missing the BH / CBH split", items: dq.brandMissing, hint: `Expected from ${BRAND_SPLIT_FROM}.` },
+                      { title: "Days with no production entry", items: dq.prodMissing.map((d: string) => d), hint: "Head Chef has not filed production for that day." },
+                    ].map((c) => (
+                      <details key={c.title} className="px-3 py-2">
+                        <summary className="cursor-pointer flex items-center gap-2 text-xs">
+                          <span className={`w-2 h-2 rounded-full ${c.items.length === 0 ? "bg-green-400" : "bg-red-400"}`} />
+                          <span className="flex-1">{c.title}</span>
+                          <span className={`font-mono ${c.items.length === 0 ? "text-green-400" : "text-red-400"}`}>{c.items.length === 0 ? "OK" : c.items.length}</span>
+                        </summary>
+                        {c.items.length > 0 && (
+                          <div className="mt-2 pl-4 text-[11px] text-zinc-400">
+                            <p className="text-zinc-500 mb-1">{c.hint}</p>
+                            <ul className="list-disc pl-4 space-y-0.5">{c.items.slice(0, 40).map((it: string, i: number) => <li key={i}>{it}</li>)}</ul>
+                            {c.items.length > 40 && <p className="mt-1 text-zinc-500">…and {c.items.length - 40} more</p>}
+                          </div>
+                        )}
+                      </details>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Data freshness */}
+                <div>
+                  <p className="text-sm font-semibold mb-3">Data freshness</p>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+                    <div className="border border-zinc-800 p-3">
+                      <p className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest">Latest Item Performance (Atlas) upload</p>
+                      <p className="mt-1">{dq.latestUpload ? `${dq.latestUpload.label || "Untitled"} · ${new Date(dq.latestUpload.created_at).toLocaleDateString("en-IN")}` : "No upload yet"}</p>
+                    </div>
+                    <div className="border border-zinc-800 p-3">
+                      <p className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest">Last checked</p>
+                      <p className="mt-1">{dq.checkedAt}</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Users & roles */}
+                <div>
+                  <p className="text-sm font-semibold mb-1">Users &amp; roles</p>
+                  <p className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-3">As set up in the app · {ALL_STAFF.length} users</p>
+                  <div className="overflow-x-auto border border-zinc-800">
+                    <table className="w-full text-xs">
+                      <thead>
+                        <tr className="text-zinc-500 text-[10px] font-mono uppercase tracking-widest">
+                          <th className="text-left px-3 py-2">Name</th>
+                          <th className="text-left px-3 py-2">Role</th>
+                          <th className="text-left px-3 py-2">Outlets</th>
+                          <th className="text-left px-3 py-2">Daily report</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {ALL_STAFF.map((s) => (
+                          <tr key={s.id} className="border-t border-zinc-800">
+                            <td className="px-3 py-1.5">{s.name}</td>
+                            <td className="px-3 py-1.5">{s.role}</td>
+                            <td className="px-3 py-1.5">{(s.outlets as string[]).length ? (s.outlets as string[]).map((o) => OUTLET_NAMES[o] || o).join(", ") : "—"}</td>
+                            <td className="px-3 py-1.5">{s.report_time ? `by ${s.report_time}` : "—"}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                {/* Honest list of what is NOT covered yet */}
+                <div className="border border-zinc-800 p-4">
+                  <p className="text-sm font-semibold mb-2">Not covered yet</p>
+                  <ul className="list-disc pl-5 text-[11px] text-zinc-500 space-y-0.5">
+                    <li>Audit log of who changed what</li>
+                    <li>Backup and data-refresh status</li>
+                    <li>Live health of Swiggy / Zomato / POS / accounting / attendance integrations</li>
+                    <li>Duplicate-transaction and unit-mismatch checks on purchases and stock</li>
+                    <li>Editing users and permissions from this screen (today they are set in the code)</li>
+                  </ul>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
