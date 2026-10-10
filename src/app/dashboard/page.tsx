@@ -1077,6 +1077,34 @@ export default function DashboardPage() {
       return { name: d.label, days: n, outlets, ...verdict };
     }).sort((a, b) => b.days - a.days);
   };
+  // ── Outlet manager review: last full week + month-to-date, own outlets only ──
+  // Reports are filed the day AFTER the sales day (report_date = filing date),
+  // so a Mon–Sun sales week = report dates Tue..next Mon. The week shown is the
+  // most recent one that has ended, and it only rolls forward every Monday.
+  const [ovRows, setOvRows] = useState<any[]>([]);
+  const [ovLoading, setOvLoading] = useState(false);
+  const [ovView, setOvView] = useState<"week" | "mtd">("week");
+  const [ovOpen, setOvOpen] = useState<string | null>(null);
+  const ovAddDays = (s: string, n: number) => { const d = new Date(s + "T00:00:00Z"); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
+  const ovDates = () => {
+    const today = new Date(Date.now() + 5.5 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    const dow = new Date(today + "T00:00:00Z").getUTCDay(); // 0 = Sun
+    const lastMonday = ovAddDays(today, -((dow + 6) % 7));
+    return { today, lastMonday, wkFrom: ovAddDays(lastMonday, -6), wkTo: lastMonday, prevFrom: ovAddDays(lastMonday, -13), prevTo: ovAddDays(lastMonday, -7), monthStart: today.slice(0, 7) + "-01" };
+  };
+  const fetchOv = async () => {
+    const outs = ((user?.outlets || []) as string[]);
+    if (!outs.length) return;
+    setOvLoading(true);
+    const D = ovDates();
+    const from = D.prevFrom < D.monthStart ? D.prevFrom : D.monthStart;
+    const { data } = await supabase.from("outlet_reports")
+      .select("outlet_id, report_date, shop_sales_value, swiggy_sales_value, zomato_sales_value, expiry_count, expiry_items, complimentary_count, complimentary_items, complimentary_reason, bh_google_rating")
+      .in("outlet_id", outs).gte("report_date", from).lte("report_date", D.today);
+    setOvRows(data || []);
+    setOvLoading(false);
+  };
+  useEffect(() => { if (activeTab === "outlet_reports" && ((user?.outlets || []) as string[]).length > 0 && !(user?.role === "Owner" || user?.role === "Manager")) fetchOv(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [activeTab, user]);
   const [wastageExpanded, setWastageExpanded] = useState<string | null>(null);
   const saveFine = async () => {
     if (fineStaff.length === 0) { alert("Pick at least one person to fine."); return; }
@@ -6280,6 +6308,121 @@ else await fetchOutletReportsByDate(outletEntryDate);
     className="bg-black border border-zinc-800 text-white px-4 py-2.5 focus:outline-none focus:border-yellow-400 transition-colors font-mono text-sm"
   />
 </div>
+
+    {/* Outlet manager review — last full week + month to date, own outlets only */}
+    {!canAssign && ((user.outlets || []) as string[]).length > 0 && (() => {
+      const D = ovDates();
+      const outs = (user.outlets || []) as string[];
+      const tot = (r: any) => (Number(r.shop_sales_value) || 0) + (Number(r.swiggy_sales_value) || 0) + (Number(r.zomato_sales_value) || 0);
+      const inRange = (o: string, a: string, b: string) => { const seen = new Set<string>(); return ovRows.filter((r) => { if (r.outlet_id !== o || r.report_date < a || r.report_date > b || seen.has(r.report_date)) return false; seen.add(r.report_date); return true; }); };
+      const money = (n: number) => "₹" + Math.round(n).toLocaleString("en-IN");
+      const fmtDay = (reportDate: string) => new Date(ovAddDays(reportDate, -1) + "T00:00:00Z").toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" });
+      const entriesOf = (rows: any[], f: "expiry" | "comp") => f === "expiry"
+        ? rows.filter((r) => (Number(r.expiry_count) || 0) > 0 || !_isBlank(r.expiry_items))
+        : rows.filter((r) => (Number(r.complimentary_count) || 0) > 0 || !_isBlank(r.complimentary_items) || !_isBlank(r.complimentary_reason));
+      const prodOf = (rows: any[], f: "expiry" | "comp") => { const e = entriesOf(rows, f); return { days: e.length, top: wastageProductBreakdown(e, f === "expiry" ? "expiry_items" : "complimentary_items").slice(0, 3) }; };
+      const verdict = (p: number | null) => p === null ? { t: "No data", c: "text-zinc-500 border-zinc-700" } : p >= 100 ? { t: "On target", c: "text-green-400 border-green-400/50" } : p >= 85 ? { t: "Slightly behind", c: "text-yellow-400 border-yellow-400/50" } : { t: "Behind", c: "text-red-400 border-red-400/50" };
+      const avgRating = (rows: any[]) => { const v = rows.map((r) => Number(r.bh_google_rating)).filter((x) => x > 0); return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null; };
+      const wkLabel = `${fmtDay(D.wkFrom)} – ${fmtDay(D.wkTo)}`;
+      const ProdLine = ({ label, p }: { label: string; p: { days: number; top: any[] } }) => (
+        <p className="text-[11px] text-zinc-400"><span className="text-zinc-500">{label}:</span> {p.days === 0 ? "none reported" : `${p.days} day${p.days > 1 ? "s" : ""}${p.top.length ? " — " + p.top.map((t: any) => `${t.name} (${t.days}d)`).join(", ") : ""}`}</p>
+      );
+      return (
+        <div className="mb-8 border border-zinc-800 p-4">
+          <div className="flex justify-between items-start gap-3 flex-wrap mb-3">
+            <div>
+              <p className="text-sm font-semibold">Your outlets — review</p>
+              <p className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mt-0.5">{ovView === "week" ? `Sales week ${wkLabel} · updates every Monday` : `${new Date(D.today + "T00:00:00Z").toLocaleDateString("en-IN", { month: "long", year: "numeric", timeZone: "UTC" })} · month to date`}</p>
+            </div>
+            <div className="flex gap-1">
+              {([["week", "Last week"], ["mtd", "Month to date"]] as const).map(([k, l]) => (
+                <button key={k} onClick={() => setOvView(k)} className={`font-mono text-[10px] uppercase tracking-widest px-3 py-1.5 border ${ovView === k ? "border-yellow-400 text-yellow-400" : "border-zinc-700 text-zinc-500"}`}>{l}</button>
+              ))}
+            </div>
+          </div>
+          {ovLoading ? <p className="text-xs text-zinc-500">Loading…</p> : (
+            <div className="divide-y divide-zinc-800 border border-zinc-800">
+              {outs.map((o) => {
+                const name = OUTLET_NAMES[o] || o.replace(/_/g, " ");
+                const key = ovView + o;
+                const open = ovOpen === key;
+                if (ovView === "week") {
+                  const wk = inRange(o, D.wkFrom, D.wkTo), pv = inRange(o, D.prevFrom, D.prevTo);
+                  const sales = wk.reduce((a, r) => a + tot(r), 0), pSales = pv.reduce((a, r) => a + tot(r), 0);
+                  const n = wk.length, pn = pv.length;
+                  const daily = dailyTargetFor(o, ovAddDays(D.lastMonday, -3).slice(0, 7));
+                  const pct = daily > 0 && n > 0 ? sales / (daily * n) * 100 : null;
+                  const avg = n ? sales / n : 0, pAvg = pn ? pSales / pn : 0;
+                  const change = pAvg > 0 && n > 0 ? (avg - pAvg) / pAvg * 100 : null;
+                  const v = verdict(pct);
+                  const sorted = [...wk].sort((a, b) => tot(b) - tot(a));
+                  const mix = (f: string) => sales > 0 ? Math.round(wk.reduce((a, r) => a + (Number(r[f]) || 0), 0) / sales * 100) : 0;
+                  const rNow = avgRating(wk), rPrev = avgRating(pv);
+                  return (
+                    <div key={key} className="px-3 py-2.5">
+                      <div onClick={() => setOvOpen(open ? null : key)} className="flex items-center gap-3 cursor-pointer flex-wrap">
+                        <span className="text-xs font-semibold w-28">{name}</span>
+                        <span className="text-xs font-mono">{n ? money(sales) : "—"}</span>
+                        <span className={`text-[10px] font-mono uppercase tracking-widest px-2 py-0.5 border ${v.c}`}>{v.t}{pct !== null ? ` · ${Math.round(pct)}%` : ""}</span>
+                        {change !== null && <span className={`text-[11px] font-mono ${change >= 0 ? "text-green-400" : "text-red-400"}`}>{change >= 0 ? "▲" : "▼"} {Math.abs(Math.round(change))}% vs prev week</span>}
+                        <span className="ml-auto text-zinc-600 text-xs">{open ? "−" : "+"}</span>
+                      </div>
+                      {open && (
+                        <div className="mt-2 pl-1 space-y-1">
+                          <p className="text-[11px] text-zinc-400"><span className="text-zinc-500">Reports filed:</span> {n} of 7 days{n < 7 ? " (missing days are not counted against the target)" : ""}</p>
+                          <p className="text-[11px] text-zinc-400"><span className="text-zinc-500">Target:</span> {daily > 0 ? `${money(daily)}/day (monthly target ÷ 30) · this week ${money(daily * n)} for ${n} day${n === 1 ? "" : "s"}` : "not set"}</p>
+                          {pn > 0 && <p className="text-[11px] text-zinc-400"><span className="text-zinc-500">Previous week:</span> {money(pSales)} over {pn} day{pn === 1 ? "" : "s"} ({money(pAvg)}/day)</p>}
+                          {sorted.length > 1 && <p className="text-[11px] text-zinc-400"><span className="text-zinc-500">Best day:</span> {fmtDay(sorted[0].report_date)} {money(tot(sorted[0]))} · <span className="text-zinc-500">Weakest:</span> {fmtDay(sorted[sorted.length - 1].report_date)} {money(tot(sorted[sorted.length - 1]))}</p>}
+                          {sales > 0 && <p className="text-[11px] text-zinc-400"><span className="text-zinc-500">Channel mix:</span> Shop {mix("shop_sales_value")}% · Swiggy {mix("swiggy_sales_value")}% · Zomato {mix("zomato_sales_value")}%</p>}
+                          <ProdLine label={`Expiry (prev week: ${prodOf(pv, "expiry").days} day${prodOf(pv, "expiry").days === 1 ? "" : "s"})`} p={prodOf(wk, "expiry")} />
+                          <ProdLine label={`Complimentary (prev week: ${prodOf(pv, "comp").days} day${prodOf(pv, "comp").days === 1 ? "" : "s"})`} p={prodOf(wk, "comp")} />
+                          {rNow !== null && <p className="text-[11px] text-zinc-400"><span className="text-zinc-500">BH Google rating (avg):</span> ⭐ {rNow.toFixed(2)}{rPrev !== null ? ` (prev week ${rPrev.toFixed(2)})` : ""}</p>}
+                        </div>
+                      )}
+                    </div>
+                  );
+                }
+                // Month to date
+                const mr = inRange(o, D.monthStart, D.today);
+                const n = mr.length, sales = mr.reduce((a, r) => a + tot(r), 0);
+                const ym = D.today.slice(0, 7);
+                const mt = monthlyTargetFor(o, ym);
+                const dim = new Date(Number(ym.slice(0, 4)), Number(ym.slice(5, 7)), 0).getDate();
+                const expected = mt * n / dim;
+                const pace = expected > 0 ? sales / expected * 100 : null;
+                const achieved = mt > 0 ? sales / mt * 100 : null;
+                const left = Math.max(1, dim - n);
+                const need = mt > sales ? (mt - sales) / left : 0;
+                const v = verdict(pace);
+                return (
+                  <div key={key} className="px-3 py-2.5">
+                    <div onClick={() => setOvOpen(open ? null : key)} className="flex items-center gap-3 cursor-pointer flex-wrap">
+                      <span className="text-xs font-semibold w-28">{name}</span>
+                      <span className="text-xs font-mono">{n ? money(sales) : "—"}{mt > 0 ? ` / ${money(mt)}` : ""}</span>
+                      <span className={`text-[10px] font-mono uppercase tracking-widest px-2 py-0.5 border ${v.c}`}>{v.t}{pace !== null ? ` · ${Math.round(pace)}% of pace` : ""}</span>
+                      <span className="ml-auto text-zinc-600 text-xs">{open ? "−" : "+"}</span>
+                    </div>
+                    {mt > 0 && (
+                      <div className="mt-2 h-1.5 bg-zinc-800"><div className={`h-1.5 ${pace !== null && pace >= 100 ? "bg-green-400" : pace !== null && pace >= 85 ? "bg-yellow-400" : "bg-red-400"}`} style={{ width: `${Math.min(100, achieved || 0)}%` }} /></div>
+                    )}
+                    {open && (
+                      <div className="mt-2 pl-1 space-y-1">
+                        <p className="text-[11px] text-zinc-400"><span className="text-zinc-500">Achieved so far:</span> {achieved !== null ? `${achieved.toFixed(1)}% of the monthly target` : "no target set"} · {n} report{n === 1 ? "" : "s"} filed</p>
+                        {expected > 0 && <p className="text-[11px] text-zinc-400"><span className="text-zinc-500">Should be at by now:</span> {money(expected)} ({n}/{dim} days of the month reported)</p>}
+                        <p className="text-[11px] text-zinc-400"><span className="text-zinc-500">To reach the target:</span> {mt <= 0 ? "—" : need === 0 ? "target reached 🎉" : `about ${money(need)} per remaining day (${left} days)`}</p>
+                        <ProdLine label="Expiry this month" p={prodOf(mr, "expiry")} />
+                        <ProdLine label="Complimentary this month" p={prodOf(mr, "comp")} />
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+          <p className="text-[10px] text-zinc-600 mt-2">Weekly target = monthly target ÷ 30 per day. "Pace" compares sales with the share of the month already reported. Reports are counted by the date they were filed.</p>
+        </div>
+      );
+    })()}
 
     {/* Outlet selector tabs */}
     <div className="flex gap-2 flex-wrap mb-6">
