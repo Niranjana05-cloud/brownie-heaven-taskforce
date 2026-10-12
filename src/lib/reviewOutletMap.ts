@@ -23,7 +23,7 @@ const STAFF_BY_OUTLET: Record<string, string> = {
   velachery: "vishnu", perumbakkam: "vishnu", tambaram: "vishnu", porur: "vishnu",
   anna_nagar: "vishnu", vadapalani: "vishnu",
   royapettah: "ahila", adayar: "ahila", bsr_mall: "ahila", pallavaram: "ahila", ra_puram: "ahila",
-  besant_nagar: "bharani",
+  besant_nagar: "ahila",
 };
 
 // Finds the outlet_id whose display name appears inside the raw outlet name text
