@@ -74,6 +74,10 @@ const lakh = (n: number) => "₹" + (n / 100000).toFixed(2) + " L";
   const monthStart = `${d0.getFullYear()}-${String(d0.getMonth() + 1).padStart(2, "0")}-01`;
   const daysInMonth = new Date(d0.getFullYear(), d0.getMonth() + 1, 0).getDate();
   const dayOfMonth = d0.getDate();
+  // Reports are filed the day AFTER the sales day (report_date = sales day + 1).
+  // So month-to-date sales = reports filed from the 2nd of the month up to the selected date.
+  const salesDays = Math.max(dayOfMonth - 1, 0);
+  const monthFiledFrom = `${monthStart.slice(0, 8)}02`;
   const yDate = new Date(d0.getTime() - 86400000);
   const yDateStr = `${yDate.getFullYear()}-${String(yDate.getMonth() + 1).padStart(2, "0")}-${String(yDate.getDate()).padStart(2, "0")}`;
   const prevMonthDate = new Date(d0.getFullYear(), d0.getMonth() - 1, 1);
@@ -85,7 +89,7 @@ const lakh = (n: number) => "₹" + (n / 100000).toFixed(2) + " L";
       setLoading(true);
      const [o, mo, d, r, p, off, st, atlasRaw, tasksRaw, staffRaw, yRaw, pmRaw, mrRaw] = await Promise.all([
         supabase.from("outlet_reports").select("*").eq("report_date", date),
-        supabase.from("outlet_reports").select("outlet_id,report_date,shop_sales_value,swiggy_sales_value,zomato_sales_value,swiggy_sales_count,zomato_sales_count").gte("report_date", monthStart).lte("report_date", date),
+        supabase.from("outlet_reports").select("outlet_id,report_date,shop_sales_value,swiggy_sales_value,zomato_sales_value,swiggy_sales_count,zomato_sales_count").gte("report_date", monthFiledFrom).lte("report_date", date),
         supabase.from("reports").select("staff_id,report_date,is_late,is_backfill,no_points").eq("report_date", date),
         supabase.from("outlet_reviews").select("*").eq("report_date", date),
         supabase.from("outlet_payouts").select("outlet_id,platform,period_start,amount_transferable,net_payout").order("period_start", { ascending: false }).limit(60),
@@ -95,7 +99,7 @@ const lakh = (n: number) => "₹" + (n / 100000).toFixed(2) + " L";
         supabase.from("tasks").select("id,title,description,assigned_to,priority,status,due_at,outlet_id").neq("status", "completed").order("due_at", { ascending: true }),
         supabase.from("staff").select("id,name"),
         supabase.from("outlet_reports").select("outlet_id,shop_sales_value,swiggy_sales_value,zomato_sales_value").eq("report_date", yDateStr),
-        supabase.from("outlet_reports").select("outlet_id,shop_sales_value,swiggy_sales_value,zomato_sales_value").gte("report_date", prevMonthStart).lte("report_date", prevMonthEnd),
+        supabase.from("outlet_reports").select("outlet_id,shop_sales_value,swiggy_sales_value,zomato_sales_value").gte("report_date", `${prevMonthStart.slice(0, 8)}02`).lte("report_date", monthStart),
         supabase.from("outlet_reviews").select("outlet_id,rating,valid_complaint,refund_given,report_date").gte("report_date", monthStart).lte("report_date", date),
       ]);
       setOut(o.data || []); setMonth(mo.data || []); setDaily(d.data || []); setRevs(r.data || []); setPayouts(p.data || []); setOffRows((off.data || []).map((x: any) => x.staff_id));
@@ -195,9 +199,9 @@ const lakh = (n: number) => "₹" + (n / 100000).toFixed(2) + " L";
   const mOnline = _stVals.reduce((s, v) => s + (v.online || 0), 0);
   const mtd = mShop + mOnline;
   const mtdFin = companyFinancials(mtd, mOnline, totalFixedAllOutlets);
-  const runRate = dayOfMonth > 0 ? mtd / dayOfMonth : 0;
+  const runRate = salesDays > 0 ? mtd / salesDays : 0;
   const projected = runRate * daysInMonth;
-  const daysLeft = Math.max(daysInMonth - dayOfMonth, 0);
+  const daysLeft = Math.max(daysInMonth - salesDays, 0);
   const required = daysLeft > 0 ? (MONTHLY_TARGET - mtd) / daysLeft : 0;
   const targetPct = MONTHLY_TARGET > 0 ? (mtd / MONTHLY_TARGET) * 100 : 0;
   const shortfall = projected - MONTHLY_TARGET;
@@ -286,7 +290,7 @@ const lakh = (n: number) => "₹" + (n / 100000).toFixed(2) + " L";
     const profitabilityPct = curTotal > 0 ? (p.netProfit / curTotal) * 100 : null;
     const rt = ratingsByOutlet[p.o];
     const avgRating = rt && rt.count > 0 ? rt.sum / rt.count : null;
-    const compliancePct = dayOfMonth > 0 ? Math.min(100, ((filedDaysByOutlet[p.o] || 0) / dayOfMonth) * 100) : 0;
+    const compliancePct = salesDays > 0 ? Math.min(100, ((filedDaysByOutlet[p.o] || 0) / salesDays) * 100) : 0;
     return { ...p, growthPct, profitabilityPct, avgRating, ratingCount: rt?.count || 0, compliancePct };
   });
 
@@ -421,7 +425,7 @@ const downloadPDF = async () => {
 
         <div style="display:flex;gap:14px;margin-bottom:18px">
           ${kpi("📅", "Today's sales", rsF(tTotal), `${dayOfMonth}/${daysInMonth} reported`)}
-          ${kpi("💰", "Month to date", lk(mtd), `${dayOfMonth} days`)}
+          ${kpi("💰", "Month to date", lk(mtd), `${salesDays} days`)}
           ${kpi("📈", "Projected end", lk(projected), onTrack ? "on target" : "below target")}
         </div>
 
@@ -590,7 +594,7 @@ const downloadPDF = async () => {
         <>
           <div className="flex flex-wrap gap-3 mb-5">
             <Hero label="Today's sales" value={inr(tTotal)} sub={`${out.length}/12 reported`} accent="text-accent" />
-            <Hero label="Month to date" value={lakh(mtd)} sub={`${dayOfMonth} days`} />
+            <Hero label="Month to date" value={lakh(mtd)} sub={`${salesDays} days`} />
             <Hero label="Projected month-end" value={lakh(projected)} sub={onTrack ? "on track" : "below target"} accent={onTrack ? "text-green-400" : "text-red-400"} />
           </div>
 
