@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 
 const STAFF_NAMES: Record<string, string> = {
   arun: "Arun", ahila: "Ahila", vishnu: "Vishnu",
-  nilani: "Nilani", bharani: "Bharani", rafiq: "Rafiq", gowtham: "Gowtham",
+  nilani: "Nilani", bharani: "Bharani", stephen: "Stephen", rafiq: "Rafiq", gowtham: "Gowtham",
 };
 
 const POLL_INTERVAL_MS = 30 * 1000;
