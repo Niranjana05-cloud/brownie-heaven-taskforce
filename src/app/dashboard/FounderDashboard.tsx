@@ -17,12 +17,12 @@ const OUTLET_TARGETS: Record<string, number> = {
 const MONTHLY_TARGET = 8750000; // ₹87.5 L company-wide
 const DUTY_STAFF = [
   { id: "arun", name: "Arun" }, { id: "nilani", name: "Nilani" }, { id: "vishnu", name: "Vishnu" },
-  { id: "ahila", name: "Ahila" }, { id: "gowtham", name: "Gowtham" }, { id: "bharani", name: "Bharani" },
+  { id: "ahila", name: "Ahila" }, { id: "gowtham", name: "Gowtham" }
 ];
 const OUTLET_OWNER: Record<string, string> = {
   ra_puram: "ahila", anna_nagar: "vishnu", pallavaram: "ahila", vadapalani: "vishnu",
   velachery: "vishnu", perumbakkam: "vishnu", tambaram: "vishnu", porur: "vishnu",
-  royapettah: "ahila", adayar: "ahila", bsr_mall: "ahila", besant_nagar: "ahila",
+  royapettah: "stephen", adayar: "ahila", bsr_mall: "ahila", besant_nagar: "ahila",
 };
 const reviewPoints = (rating: number, valid: boolean) => {
   let p = 0;
@@ -144,13 +144,13 @@ const lakh = (n: number) => "₹" + (n / 100000).toFixed(2) + " L";
   const pts: Record<string, number> = {};
   daily.forEach(x => { if (x.no_points) return; pts[x.staff_id] = (pts[x.staff_id] || 0) + (x.is_backfill || x.is_late ? -5 : 10); });
   out.forEach(r => {
-    const owner = OUTLET_OWNER[r.outlet_id]; if (!owner) return;
+    const owner = r.outlet_id === "royapettah" ? (r.staff_id || OUTLET_OWNER[r.outlet_id]) : OUTLET_OWNER[r.outlet_id]; if (!owner) return;
     let p = 0;
     if (r.no_points) p = 0; else if (r.is_backfill) p = -30; else if (r.is_late) p = 0;
     else { const t = n(r.target) || OUTLET_TARGETS[r.outlet_id]; const tot = n(r.shop_sales_value) + n(r.swiggy_sales_value) + n(r.zomato_sales_value); p = 20 + (t > 0 && tot >= t ? 30 : 0); }
     pts[owner] = (pts[owner] || 0) + p;
   });
-  revs.forEach(rv => { const owner = OUTLET_OWNER[rv.outlet_id] || rv.staff_id; pts[owner] = (pts[owner] || 0) + reviewPoints(n(rv.rating), rv.valid_complaint); });
+  revs.forEach(rv => { const owner = rv.outlet_id === "royapettah" ? (rv.staff_id || OUTLET_OWNER[rv.outlet_id]) : (OUTLET_OWNER[rv.outlet_id] || rv.staff_id); pts[owner] = (pts[owner] || 0) + reviewPoints(n(rv.rating), rv.valid_complaint); });
 
   const latestPay: Record<string, any> = {};
   payouts.forEach(p => { const k = p.outlet_id + "_" + p.platform; if (!latestPay[k]) latestPay[k] = p; });
