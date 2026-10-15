@@ -83,12 +83,14 @@ const ALL_STAFF = [
   { id: "nilani", name: "Nilani Nallamuthu", role: "HR", report_time: "22:00", outlets: [] },
   { id: "gowtham", name: "Gowtham", role: "Purchase Manager", report_time: "22:00", outlets: [] },
   { id: "vishnu", name: "Vishnu", role: "Asst. Ops Manager", report_time: "22:00", outlets: ["velachery","perumbakkam","tambaram","porur","anna_nagar","vadapalani"] },
-  { id: "ahila", name: "Ahila", role: "Custom Cakes & Asst Ops", report_time: "22:00", outlets: ["royapettah","adayar","bsr_mall","pallavaram","ra_puram","besant_nagar"] },
+  { id: "ahila", name: "Ahila", role: "Custom Cakes & Asst Ops", report_time: "22:00", outlets: ["adayar","bsr_mall","pallavaram","ra_puram","besant_nagar"] },
+  { id: "stephen", name: "Stephen", role: "Outlet Manager", report_time: null, outlets: ["royapettah"] },
   { id: "niranjana", name: "Niranjana", role: "Founder's Office", report_time: null, outlets: [] },
   { id: "rafiq", name: "Rafiq", role: "Head Chef", report_time: null, outlets: [] },
   { id: "ajay", name: "Ajay", role: "Financial Analyst", report_time: null, outlets: [] },
-  { id: "bharani", name: "Bharani", role: "Auditor", report_time: "22:00", outlets: [] },
 ];
+// Former staff: no longer in the app, but their old reports/tasks still show their name.
+const FORMER_STAFF: Record<string, string> = { bharani: "Bharani" };
 
 const OUTLETS = ["royapettah","adayar","bsr_mall","velachery","ra_puram","anna_nagar","pallavaram","vadapalani","besant_nagar","perumbakkam","tambaram","porur"];
 const OUTLET_NAMES: Record<string, string> = {
@@ -4128,7 +4130,7 @@ else await fetchOutletReportsByDate(outletEntryDate);
        )}
        {activeTab === "tasks" && user && user.role === "Founder's Office" && <FounderDashboard user={user} />}
        {activeTab === "tasks" && user && user.role === "Owner" && <CommandCentre user={user} />}
-       {activeTab === "tasks" && user && (user.role === "Asst. Ops Manager" || user.role === "Custom Cakes & Asst Ops") && <div className="mb-8"><MyOutletsDashboard user={user} /></div>}
+       {activeTab === "tasks" && user && (user.role === "Asst. Ops Manager" || user.role === "Custom Cakes & Asst Ops" || user.role === "Outlet Manager") && <div className="mb-8"><MyOutletsDashboard user={user} /></div>}
         {((activeTab === "tasks" && user?.role === "Head Chef") || (activeTab === "production" && (user?.role === "Head Chef" || user?.role === "Owner" || isFO))) && (
           <div>
             <div className="flex justify-between items-end mb-6 pb-5 border-b border-zinc-800">
@@ -5405,7 +5407,7 @@ else await fetchOutletReportsByDate(outletEntryDate);
                         <div className="flex-1 min-w-0">
                           <p className="font-semibold text-sm">{t.title}</p>
                           {t.description && <p className="text-[11px] text-zinc-400 mt-0.5">{t.description}</p>}
-                          <p className="text-[10px] font-mono text-zinc-500 mt-0.5">From {ALL_STAFF.find(s => s.id === t.assigned_by)?.name || t.assigned_by} · Due {t.due_at ? new Date(t.due_at).toLocaleString("en-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "—"}{isOverdue ? " · OVERDUE" : ""}{t.outlet_id ? ` · ${OUTLET_NAMES[t.outlet_id] || t.outlet_id}` : ""}</p>
+                          <p className="text-[10px] font-mono text-zinc-500 mt-0.5">From {ALL_STAFF.find(s => s.id === t.assigned_by)?.name || FORMER_STAFF[t.assigned_by] || t.assigned_by} · Due {t.due_at ? new Date(t.due_at).toLocaleString("en-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "—"}{isOverdue ? " · OVERDUE" : ""}{t.outlet_id ? ` · ${OUTLET_NAMES[t.outlet_id] || t.outlet_id}` : ""}</p>
                         </div>
                         <div className="flex gap-2">
                           {t.status === "assigned" && <button onClick={() => updateStatus(t.id, "in_progress")} className="text-[10px] font-mono uppercase px-2 py-1 border border-zinc-700 hover:border-yellow-400 hover:text-yellow-400 transition-colors">Start</button>}
@@ -5538,7 +5540,7 @@ else await fetchOutletReportsByDate(outletEntryDate);
             ) : (
               <div className="bg-[#131316] border border-zinc-800">
                 {tasks.filter(t => (outletFilter === "all" || t.outlet_id === outletFilter) && t.status !== "completed").map((t) => {
-                  const assigneeName = ALL_STAFF.find(s => s.id === t.assigned_to)?.name || t.assigned_to;
+                  const assigneeName = ALL_STAFF.find(s => s.id === t.assigned_to)?.name || FORMER_STAFF[t.assigned_to] || t.assigned_to;
                   const isOverdue = t.status !== "completed" && new Date(t.due_at) < new Date();
                   return (
                     <div key={t.id} className={`flex flex-wrap gap-2 items-center px-4 py-3 border-b border-zinc-800 last:border-0 hover:bg-zinc-900 transition-colors ${isOverdue ? "border-l-2 border-l-red-500" : ""}`}>
@@ -6030,7 +6032,7 @@ else await fetchOutletReportsByDate(outletEntryDate);
                   <p className="text-zinc-600 font-mono text-sm uppercase tracking-widest">No reports yet</p>
                 </div>
               ) : reports.map((r) => {
-                const staffName = ALL_STAFF.find(s => s.id === r.staff_id)?.name || r.staff_id;
+                const staffName = ALL_STAFF.find(s => s.id === r.staff_id)?.name || FORMER_STAFF[r.staff_id] || r.staff_id;
                 const staffFields = REPORT_FIELDS[r.staff_id] || [];
                 return (
                   <div key={r.id} className="border-b border-zinc-800 last:border-0">
@@ -6662,7 +6664,7 @@ else await fetchOutletReportsByDate(outletEntryDate);
             <p className="text-zinc-600 font-mono text-sm uppercase tracking-widest">No reports for this date</p>
           </div>
         ) : historyReports.map((r) => {
-          const staffName = ALL_STAFF.find(s => s.id === r.staff_id)?.name || r.staff_id;
+          const staffName = ALL_STAFF.find(s => s.id === r.staff_id)?.name || FORMER_STAFF[r.staff_id] || r.staff_id;
           const staffFields = REPORT_FIELDS[r.staff_id] || [];
           return (
             <div key={r.id} className="border-b border-zinc-800 last:border-0">
@@ -6701,7 +6703,7 @@ else await fetchOutletReportsByDate(outletEntryDate);
             <p className="text-zinc-600 font-mono text-sm uppercase tracking-widest">No outlet reports for this date</p>
           </div>
         ) : historyOutletReports.map((r) => {
-          const staffName = ALL_STAFF.find(s => s.id === r.staff_id)?.name || r.staff_id;
+          const staffName = ALL_STAFF.find(s => s.id === r.staff_id)?.name || FORMER_STAFF[r.staff_id] || r.staff_id;
           return (
             <div key={r.id} className="bg-[#131316] border border-zinc-800 p-5">
               <div className="flex items-center justify-between mb-4">
