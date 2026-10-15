@@ -15,7 +15,7 @@ const STAFF = [
   { id: "gowtham", name: "Gowtham", role: "Purchase Manager" },
   { id: "vishnu", name: "Vishnu", role: "Asst. Ops Manager" },
   { id: "ahila", name: "Ahila", role: "Custom Cakes & Asst Ops" },
-  { id: "bharani", name: "Bharani", role: "Auditor" },
+  { id: "stephen", name: "Stephen", role: "Outlet Manager" },
   { id: "niranjana", name: "Niranjana", role: "Founder's Office" },
   { id: "rafiq", name: "Rafiq", role: "Head Chef" },
   { id: "ajay", name: "Ajay", role: "Financial Analyst" },
