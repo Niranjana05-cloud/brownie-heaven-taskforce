@@ -3673,7 +3673,7 @@ else await fetchOutletReportsByDate(outletEntryDate);
   };
   const canUploadItemPerf = true;
   const canViewItemPerf = canAssign || canUploadItemPerf;
-  const hasReportDuty = user?.role !== "Owner" && user?.role !== "Founder's Office" && user?.role !== "Head Chef" && user?.role !== "Financial Analyst";
+  const hasReportDuty = user?.role !== "Owner" && user?.role !== "Founder's Office" && user?.role !== "Head Chef" && user?.role !== "Financial Analyst" && user?.role !== "Outlet Manager";
   const [kChefs, setKChefs] = useState<any[]>([]);
   const [kRows, setKRows] = useState<any[]>([]);
   const [kDate, setKDate] = useState(new Date().toISOString().slice(0, 10));
