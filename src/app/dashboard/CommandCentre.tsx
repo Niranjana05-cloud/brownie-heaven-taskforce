@@ -198,7 +198,9 @@ const lakh = (n: number) => "₹" + (n / 100000).toFixed(2) + " L";
   const mShop = _stVals.reduce((s, v) => s + (v.net || 0), 0);
   const mOnline = _stVals.reduce((s, v) => s + (v.online || 0), 0);
   const mtd = mShop + mOnline;
-  const mtdFin = companyFinancials(mtd, mOnline, totalFixedAllOutlets);
+  // Fixed costs are monthly, but MTD sales only cover the days elapsed — so charge the same share of fixed costs.
+  const fixedFrac = daysInMonth > 0 ? salesDays / daysInMonth : 0;
+  const mtdFin = companyFinancials(mtd, mOnline, totalFixedAllOutlets * fixedFrac);
   const runRate = salesDays > 0 ? mtd / salesDays : 0;
   const projected = runRate * daysInMonth;
   const daysLeft = Math.max(daysInMonth - salesDays, 0);
@@ -215,7 +217,7 @@ const lakh = (n: number) => "₹" + (n / 100000).toFixed(2) + " L";
     const oOnline = _ms.online;
     const f = stFixed[o] || {};
     const _abs = (v: any) => Math.abs(Number(v) || 0);
-    const fixed = _abs(f.staff) + _abs(f.rent) + _abs(f.eb) + _abs(f.transport) + 0.2 * _abs(f.rent) + _abs(f.pest) + _abs(f.water) + _abs(f.airtel);
+    const fixed = (_abs(f.staff) + _abs(f.rent) + _abs(f.eb) + _abs(f.transport) + 0.2 * _abs(f.rent) + _abs(f.pest) + _abs(f.water) + _abs(f.airtel)) * fixedFrac;
     const oTotal = oNet + oOnline;
     const comm = commissionRate * oOnline;
     const contribution = oTotal - cogsRate * oTotal - 0.05 * oTotal - comm;
@@ -617,7 +619,7 @@ const downloadPDF = async () => {
                 </tbody>
               </table>
             </div>
-            <p className="text-[10px] text-text-faint mt-3">Uses a real {(cogsRate * 100).toFixed(1)}% COGS (from actual purchase data, {fmtWin(foodCostWindow)}, company-wide — not yet per-outlet), 5% wastage, {(commissionRate * 100).toFixed(1)}% online commission (real, {fmtWin(commissionWindow)}). Both reset to the 1st of the month — COGS is this month to date; commission also includes last month since Swiggy/Zomato payouts settle slowly. EBITDA = contribution minus fixed costs; this business has no separate interest/depreciation line to strip out.</p>
+            <p className="text-[10px] text-text-faint mt-3">Uses a real {(cogsRate * 100).toFixed(1)}% COGS (from actual purchase data, {fmtWin(foodCostWindow)}, company-wide — not yet per-outlet), 5% wastage, {(commissionRate * 100).toFixed(1)}% online commission (real, {fmtWin(commissionWindow)}). Both reset to the 1st of the month — COGS is this month to date; commission also includes last month since Swiggy/Zomato payouts settle slowly. EBITDA = contribution minus fixed costs; this business has no separate interest/depreciation line to strip out. Month-to-date fixed costs are counted for {salesDays} of {daysInMonth} days (the days of sales included).</p>
           </Card>
 
           <Card title="Budget vs Actual — profit (month)">
